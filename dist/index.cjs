@@ -47652,12 +47652,29 @@ var GcpSdkClient = class {
         "CES toolset list",
         (body) => ({ items: body.toolsets ?? [], nextPageToken: body.nextPageToken })
       ) : [];
+      const standaloneTools = app.name ? await this.collectPages(
+        () => resourceUrl("https://ces.googleapis.com/", `${app.name}/tools`),
+        "CES tool list",
+        (body) => ({ items: body.tools ?? [], nextPageToken: body.nextPageToken })
+      ) : [];
       for (const value of [...embedded, ...listed]) {
         const item = value ?? {};
         if (!item.name) continue;
-        const schemas = [item.openApiToolset?.openApiSchema, ...(item.openApiToolset?.tools ?? []).map((tool) => tool.openApiTool?.openApiSchema), ...(item.tools ?? []).map((tool) => tool.openApiTool?.openApiSchema)].filter((schema) => Boolean(schema?.trim()));
-        schemas.forEach((openApiSchema, index) => toolsets.push({ name: index === 0 ? item.name : `${item.name}/tools/${index + 1}`, displayName: item.displayName, openApiSchema }));
-        if (schemas.length === 0) toolsets.push({ name: item.name, displayName: item.displayName });
+        const directSchema = item.openApiToolset?.openApiSchema?.trim();
+        if (directSchema) toolsets.push({ name: item.name, displayName: item.displayName, openApiSchema: directSchema });
+        const nested = [...item.openApiToolset?.tools ?? [], ...item.tools ?? []].filter((tool) => Boolean(tool.openApiTool?.openApiSchema?.trim()));
+        if (!directSchema && nested.length > 0) {
+          const first = nested[0];
+          toolsets.push({ name: first.name ?? item.name, displayName: first.displayName ?? item.displayName, openApiSchema: first.openApiTool.openApiSchema });
+        }
+        for (const tool of nested.slice(directSchema ? 0 : 1)) {
+          if (tool.name) toolsets.push({ name: tool.name, displayName: tool.displayName ?? item.displayName, openApiSchema: tool.openApiTool.openApiSchema });
+        }
+        if (!directSchema && nested.length === 0) toolsets.push({ name: item.name, displayName: item.displayName });
+      }
+      for (const value of standaloneTools) {
+        const tool = value ?? {};
+        if (tool.name) toolsets.push({ name: tool.name, displayName: tool.displayName, openApiSchema: tool.openApiTool?.openApiSchema });
       }
     }
     return toolsets;
@@ -49980,7 +49997,7 @@ var DialogflowToolsProvider = class {
 };
 
 // src/lib/providers/ces-toolsets.ts
-var PATTERN5 = /^projects\/([^/]+)\/locations\/global\/apps\/([^/]+)\/toolsets\/([^/]+)(?:\/tools\/[^/]+)?$/;
+var PATTERN5 = /^projects\/([^/]+)\/locations\/global\/apps\/[^/]+\/(?:toolsets|tools)\/[^/]+$/;
 var CesToolsetsProvider = class {
   constructor(client, scope) {
     this.client = client;
@@ -50000,7 +50017,7 @@ var CesToolsetsProvider = class {
   async listCandidates() {
     const parsed = this.scope.apiId ? PATTERN5.exec(this.scope.apiId) : void 0;
     if (this.scope.apiId && !parsed) return [];
-    if (parsed?.[1] !== void 0 && parsed[1] !== this.scope.projectId) throw new Error("api-id CES toolset does not belong to configured project-id");
+    if (parsed?.[1] !== void 0 && parsed[1] !== this.scope.projectId) throw new Error("api-id CES resource does not belong to configured project-id");
     let toolsets = await this.client.listCesToolsets(this.scope.projectId);
     if (this.scope.apiId) toolsets = toolsets.filter((toolset) => toolset.name === this.scope.apiId);
     return toolsets.map((toolset) => this.toCandidate(toolset));

@@ -9,7 +9,7 @@ import { buildExecutionOutputs, resolveInputs } from '../src/runtime.js';
 const repoRoot = resolve(import.meta.dirname, '..');
 const actionManifest = parse(readFileSync(resolve(repoRoot, 'action.yml'), 'utf8')) as {
   inputs: Record<string, { required?: boolean; default?: string }>;
-  outputs: Record<string, unknown>;
+  outputs: Record<string, { description?: string }>;
 };
 
 const LOCKED_OUTPUT_ORDER = [
@@ -55,6 +55,10 @@ describe('action contract', () => {
     expect(Object.keys(actionManifest.outputs)).toEqual(LOCKED_OUTPUT_ORDER);
     expect(contractOutputNames).toEqual(LOCKED_OUTPUT_ORDER);
     expect(actionContract.name).toBe('Postman Onboarding: GCP Spec Discovery');
+  });
+
+  it('keeps every action.yml output description aligned with the contract', () => {
+    for (const name of contractOutputNames) expect(actionManifest.outputs[name]?.description).toBe(actionContract.outputs[name].description);
   });
 
   it('GCP-CONTRACT-002: mode/project/location defaults and validation are locked', () => {

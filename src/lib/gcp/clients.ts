@@ -393,12 +393,32 @@ export class GcpSdkClient implements GcpDiscoveryClient {
           (body: { toolsets?: unknown[]; nextPageToken?: string }) => ({ items: body.toolsets ?? [], nextPageToken: body.nextPageToken })
         )
         : [];
+      const standaloneTools = app.name
+        ? await this.collectPages(
+          () => resourceUrl('https://ces.googleapis.com/', `${app.name}/tools`),
+          'CES tool list',
+          (body: { tools?: unknown[]; nextPageToken?: string }) => ({ items: body.tools ?? [], nextPageToken: body.nextPageToken })
+        )
+        : [];
       for (const value of [...embedded, ...listed]) {
-        const item = (value ?? {}) as { name?: string; displayName?: string; openApiToolset?: { openApiSchema?: string; tools?: Array<{ openApiTool?: { openApiSchema?: string } }> }; tools?: Array<{ openApiTool?: { openApiSchema?: string } }> };
+        const item = (value ?? {}) as { name?: string; displayName?: string; openApiToolset?: { openApiSchema?: string; tools?: Array<{ name?: string; displayName?: string; openApiTool?: { openApiSchema?: string } }> }; tools?: Array<{ name?: string; displayName?: string; openApiTool?: { openApiSchema?: string } }> };
         if (!item.name) continue;
-        const schemas = [item.openApiToolset?.openApiSchema, ...(item.openApiToolset?.tools ?? []).map((tool) => tool.openApiTool?.openApiSchema), ...(item.tools ?? []).map((tool) => tool.openApiTool?.openApiSchema)].filter((schema): schema is string => Boolean(schema?.trim()));
-        schemas.forEach((openApiSchema, index) => toolsets.push({ name: index === 0 ? item.name! : `${item.name}/tools/${index + 1}`, displayName: item.displayName, openApiSchema }));
-        if (schemas.length === 0) toolsets.push({ name: item.name, displayName: item.displayName });
+        const directSchema = item.openApiToolset?.openApiSchema?.trim();
+        if (directSchema) toolsets.push({ name: item.name, displayName: item.displayName, openApiSchema: directSchema });
+        const nested = [...(item.openApiToolset?.tools ?? []), ...(item.tools ?? [])]
+          .filter((tool) => Boolean(tool.openApiTool?.openApiSchema?.trim()));
+        if (!directSchema && nested.length > 0) {
+          const first = nested[0]!;
+          toolsets.push({ name: first.name ?? item.name, displayName: first.displayName ?? item.displayName, openApiSchema: first.openApiTool!.openApiSchema });
+        }
+        for (const tool of nested.slice(directSchema ? 0 : 1)) {
+          if (tool.name) toolsets.push({ name: tool.name, displayName: tool.displayName ?? item.displayName, openApiSchema: tool.openApiTool!.openApiSchema });
+        }
+        if (!directSchema && nested.length === 0) toolsets.push({ name: item.name, displayName: item.displayName });
+      }
+      for (const value of standaloneTools) {
+        const tool = (value ?? {}) as { name?: string; displayName?: string; openApiTool?: { openApiSchema?: string } };
+        if (tool.name) toolsets.push({ name: tool.name, displayName: tool.displayName, openApiSchema: tool.openApiTool?.openApiSchema });
       }
     }
     return toolsets;

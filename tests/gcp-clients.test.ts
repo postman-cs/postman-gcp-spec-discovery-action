@@ -117,6 +117,27 @@ describe('GCP authenticated REST client', () => {
     expect(urls).toContain('https://europe-west1-dialogflow.googleapis.com/v1/projects/sample-project-123/locations/europe-west1/agents/support/tools?pageSize=1000');
   });
 
+  it('lists CES toolsets and standalone app tools as real resource candidates', async () => {
+    const app = 'projects/sample-project-123/locations/global/apps/support';
+    const toolset = `${app}/toolsets/payments`;
+    const tool = `${app}/tools/refunds`;
+    const { client, request } = clientWith(async (options) => {
+      if (options.url.includes('/apps?')) return { data: { apps: [{ name: app }] } };
+      if (options.url.includes('/toolsets?')) return { data: { toolsets: [{ name: toolset, openApiToolset: { openApiSchema: 'toolset-schema' } }] } };
+      if (options.url.includes('/tools?')) return { data: { tools: [{ name: tool, openApiTool: { openApiSchema: 'tool-schema' } }] } };
+      return { data: {} };
+    });
+
+    await expect(client.listCesToolsets('sample-project-123')).resolves.toEqual([
+      { name: toolset, openApiSchema: 'toolset-schema' },
+      { name: tool, openApiSchema: 'tool-schema' }
+    ]);
+    expect(request.mock.calls.map((call) => call[0].url)).toEqual(expect.arrayContaining([
+      `https://ces.googleapis.com/v1/${app}/toolsets?pageSize=1000`,
+      `https://ces.googleapis.com/v1/${app}/tools?pageSize=1000`
+    ]));
+  });
+
   it('paginates location enumeration and merges both pages', async () => {
     const { client, request } = clientWith(async (options) => {
       const token = new URL(options.url).searchParams.get('pageToken');

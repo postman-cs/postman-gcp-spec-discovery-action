@@ -107,16 +107,16 @@ npx @postman-cse/onboarding-gcp-spec-discovery \
 | --- | --- |
 | `resolution-json` | JSON resolution result describing status, source type, confidence, and evidence. |
 | `resolution-status` | Resolution status: resolved or unresolved. |
-| `source-type` | Resolved source type: repo-spec, api-gateway-config, cloud-endpoints-config, apigee-proxy, api-hub-spec, app-integration-trigger, connectors-custom-spec, apigee-portal-doc, vertex-extension-manifest, dialogflow-tool-schema, iac-embedded, manual-review, or discover-many. |
+| `source-type` | Resolved source type: repo-spec, api-gateway-config, cloud-endpoints-config, apigee-proxy, api-hub-spec, app-integration-trigger, connectors-custom-spec, apigee-portal-doc, vertex-extension-manifest, dialogflow-tool-schema, ces-toolset-schema, iac-embedded, manual-review, or discover-many. |
 | `mapping-confidence` | Numeric confidence score for the selected service candidate. |
 | `spec-path` | Path to the resolved or generated specification when available. |
-| `api-id` | Full API Gateway, Cloud Endpoints config, or Apigee proxy revision resource name; empty for repo or IaC-local resolutions. |
+| `api-id` | Full API Gateway, Cloud Endpoints config, Apigee proxy revision, or API Hub spec resource name; empty for repo, generated, or IaC-local resolutions. |
 | `service-name` | Resolved service name. |
 | `services-json` | discover-many output: JSON array of exported services. |
 | `service-count` | discover-many output: number of exported services. |
 | `export-summary-json` | JSON summary of attempted, exported, failed, and skipped candidates. |
 | `candidates-json` | Ranked ambiguous candidates as JSON when resolution is unresolved with at least two candidates; empty otherwise. |
-| `provider-type` | Provider that produced the resolved spec: api-gateway, cloud-endpoints, apigee, api-hub, app-integration, connectors-custom, apigee-portal, vertex-extensions, dialogflow-tools, or iac-local. |
+| `provider-type` | Provider that produced the resolved spec: api-gateway, cloud-endpoints, apigee, api-hub, app-integration, connectors-custom, apigee-portal, vertex-extensions, dialogflow-tools, ces-toolsets, or iac-local. |
 | `spec-format` | Format of the resolved spec: openapi-yaml or openapi-json. |
 | `contract-origin` | Compatibility output; always empty in v1. |
 | `contract-metadata-path` | Compatibility output; always empty in v1. |

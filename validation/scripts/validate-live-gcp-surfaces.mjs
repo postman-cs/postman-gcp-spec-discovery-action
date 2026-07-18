@@ -135,11 +135,12 @@ async function provision({ runner, token, env, manifest }) {
     // API Gateway and Cloud Endpoints accept OpenAPI 2.0 (Swagger) documents only.
     const gatewaySpecPath = path.join(managed, 'gateway.yaml');
     await writeFile(gatewaySpecPath, swagger2Document({ title: manifest.gatewayName, backend: true }));
-    gcloud(runner, ['api-gateway', 'apis', 'create', manifest.gatewayName, '--project', env.projectId, '--labels', `postman-run-marker=${manifest.runMarker},postman-project-name=${manifest.gatewayName},postman-repo=${manifest.repoLabel}`]);
+    // API-level labels merge into every config's tags; keep selection labels config-scoped so B/C do not inherit them.
+    gcloud(runner, ['api-gateway', 'apis', 'create', manifest.gatewayName, '--project', env.projectId, '--labels', `postman-run-marker=${manifest.runMarker}`]);
     gcloud(runner, ['api-gateway', 'api-configs', 'create', manifest.gatewayConfigName, '--api', manifest.gatewayName, '--openapi-spec', gatewaySpecPath, '--project', env.projectId, '--labels', `postman-run-marker=${manifest.runMarker},postman-project-name=${manifest.gatewayName},postman-repo=${manifest.repoLabel}`]);
     // Two extra configs sharing one postman-repo label: proves identical-label collisions narrow but never auto-select.
-    gcloud(runner, ['api-gateway', 'api-configs', 'create', `${manifest.gatewayConfigName}-b`, '--api', manifest.gatewayName, '--openapi-spec', gatewaySpecPath, '--project', env.projectId, '--labels', `postman-run-marker=${manifest.runMarker},postman-project-name=${manifest.gatewayName},postman-repo=${manifest.conflictLabel}`]);
-    gcloud(runner, ['api-gateway', 'api-configs', 'create', `${manifest.gatewayConfigName}-c`, '--api', manifest.gatewayName, '--openapi-spec', gatewaySpecPath, '--project', env.projectId, '--labels', `postman-run-marker=${manifest.runMarker},postman-project-name=${manifest.gatewayName},postman-repo=${manifest.conflictLabel}`]);
+    gcloud(runner, ['api-gateway', 'api-configs', 'create', `${manifest.gatewayConfigName}-b`, '--api', manifest.gatewayName, '--openapi-spec', gatewaySpecPath, '--project', env.projectId, '--labels', `postman-run-marker=${manifest.runMarker},postman-project-name=${manifest.gatewayName}-alt,postman-repo=${manifest.conflictLabel}`]);
+    gcloud(runner, ['api-gateway', 'api-configs', 'create', `${manifest.gatewayConfigName}-c`, '--api', manifest.gatewayName, '--openapi-spec', gatewaySpecPath, '--project', env.projectId, '--labels', `postman-run-marker=${manifest.runMarker},postman-project-name=${manifest.gatewayName}-alt,postman-repo=${manifest.conflictLabel}`]);
     const endpointsPath = path.join(managed, 'endpoints.yaml');
     await writeFile(endpointsPath, swagger2Document({ title: manifest.endpointsService, host: manifest.endpointsService }));
     gcloud(runner, ['endpoints', 'services', 'deploy', endpointsPath, '--project', env.projectId]);

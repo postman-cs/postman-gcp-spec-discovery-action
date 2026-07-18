@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "capturedAt": "2026-07-18",
-  "cases": 8,
-  "passed": 8,
+  "cases": 10,
+  "passed": 10,
   "failed": 0,
   "results": [
     {
@@ -18,6 +18,20 @@
       "sourceType": "api-gateway-config",
       "providerType": "api-gateway",
       "specFormat": "openapi-yaml"
+    },
+    {
+      "name": "gateway-repo-label",
+      "status": "pass",
+      "sourceType": "api-gateway-config",
+      "providerType": "api-gateway",
+      "specFormat": "openapi-yaml"
+    },
+    {
+      "name": "gateway-label-conflict",
+      "status": "pass",
+      "sourceType": "manual-review",
+      "providerType": "",
+      "specFormat": ""
     },
     {
       "name": "endpoints-explicit-api-id",
