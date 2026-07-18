@@ -1,3 +1,36 @@
-import type { ProviderProbeStatus } from '../../contracts.js'; import type { DialogflowToolSummary,GcpDiscoveryClient } from '../gcp/clients.js'; import { decodeUtf8OpenApi } from './source-document.js'; import { probeFailureStatus } from './probe.js'; import type { SpecCandidate,SpecExportResult,SpecProvider } from './types.js';
-const PATTERN=/^projects\/([^/]+)\/locations\/([^/]+)\/agents\/([^/]+)\/tools\/([^/]+)$/;export function parseDialogflowToolName(v:string){const m=PATTERN.exec(v);return m?{projectId:m[1]!,location:m[2]!,agentId:m[3]!,toolId:m[4]!}:undefined;}
-export class DialogflowToolsProvider implements SpecProvider{public readonly type='dialogflow-tools' as const;public constructor(private readonly client:GcpDiscoveryClient,private readonly scope:{projectId:string;apiId?:string}){}public async probe():Promise<ProviderProbeStatus>{try{await this.client.probeDialogflow(this.scope.projectId);return'available';}catch(e){return probeFailureStatus(e)}}public async listCandidates(){const p=this.scope.apiId?parseDialogflowToolName(this.scope.apiId):undefined;if(this.scope.apiId&&!p)return[];if(p&&p.projectId!==this.scope.projectId)throw new Error('api-id Dialogflow tool does not belong to configured project-id');let tools:DialogflowToolSummary[]=[];if(p){tools=(await this.client.listDialogflowTools(`projects/${p.projectId}/locations/${p.location}/agents/${p.agentId}`)).filter(x=>x.name===this.scope.apiId);}else for(const a of await this.client.listDialogflowAgents(this.scope.projectId))tools.push(...await this.client.listDialogflowTools(a.name));return tools.filter(x=>x.textSchema?.trim()).map(x=>{let supported=true;try{decodeUtf8OpenApi(x.textSchema!)}catch{supported=false}return{id:x.name,apiId:x.name,name:x.displayName||x.name.split('/').pop()!,providerType:this.type,projectId:this.scope.projectId,tags:{},supported,evidence:['Dialogflow tool stores an OpenAPI text schema'],meta:{textSchema:x.textSchema!}}});}public async exportSpec(c:SpecCandidate):Promise<SpecExportResult>{return{...decodeUtf8OpenApi(c.meta.textSchema??''),evidence:['Exported original Dialogflow tool OpenAPI text schema']};}}
+import type { ProviderProbeStatus } from '../../contracts.js';
+import type { DialogflowToolSummary, GcpDiscoveryClient } from '../gcp/clients.js';
+import { decodeUtf8OpenApi } from './source-document.js';
+import { probeFailureStatus } from './probe.js';
+import type { SpecCandidate, SpecExportResult, SpecProvider } from './types.js';
+
+const PATTERN = /^projects\/([^/]+)\/locations\/([^/]+)\/agents\/([^/]+)\/tools\/([^/]+)$/;
+export function parseDialogflowToolName(value: string) {
+  const match = PATTERN.exec(value);
+  return match ? { projectId: match[1]!, location: match[2]!, agentId: match[3]!, toolId: match[4]! } : undefined;
+}
+
+export class DialogflowToolsProvider implements SpecProvider {
+  public readonly type = 'dialogflow-tools' as const;
+  public constructor(private readonly client: GcpDiscoveryClient, private readonly scope: { projectId: string; apiId?: string }) {}
+  public async probe(): Promise<ProviderProbeStatus> {
+    try { await this.client.probeDialogflow(this.scope.projectId); return 'available'; } catch (error) { return probeFailureStatus(error); }
+  }
+  public async listCandidates(): Promise<SpecCandidate[]> {
+    const parsed = this.scope.apiId ? parseDialogflowToolName(this.scope.apiId) : undefined;
+    if (this.scope.apiId && !parsed) return [];
+    if (parsed && parsed.projectId !== this.scope.projectId) throw new Error('api-id Dialogflow tool does not belong to configured project-id');
+    let tools: DialogflowToolSummary[] = [];
+    if (parsed) tools = (await this.client.listDialogflowTools(`projects/${parsed.projectId}/locations/${parsed.location}/agents/${parsed.agentId}`)).filter((tool) => tool.name === this.scope.apiId);
+    else for (const agent of await this.client.listDialogflowAgents(this.scope.projectId)) tools.push(...await this.client.listDialogflowTools(agent.name));
+    return tools.map((tool) => {
+      const schema = tool.textSchema?.trim();
+      let supported = Boolean(schema);
+      if (schema) try { decodeUtf8OpenApi(schema); } catch { supported = false; }
+      return { id: tool.name, apiId: tool.name, name: tool.displayName || tool.name.split('/').pop()!, providerType: this.type, projectId: this.scope.projectId, tags: {}, supported, evidence: [schema ? 'Dialogflow tool stores an OpenAPI text schema' : 'Dialogflow tool has no OpenAPI text schema; only OPEN_API_TOOL tools are exportable'], meta: { textSchema: schema ?? '' } };
+    });
+  }
+  public async exportSpec(candidate: SpecCandidate): Promise<SpecExportResult> {
+    return { ...decodeUtf8OpenApi(candidate.meta.textSchema ?? ''), evidence: ['Exported original Dialogflow tool OpenAPI text schema'] };
+  }
+}

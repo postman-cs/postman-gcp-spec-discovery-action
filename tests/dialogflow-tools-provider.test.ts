@@ -19,9 +19,13 @@ describe('Dialogflow tools provider', () => {
     await expect(provider.exportSpec(candidate)).resolves.toMatchObject({ content: OAS, format: 'openapi-yaml' });
   });
 
-  it('skips tools without openApiSpec', async () => {
-    const provider = new DialogflowToolsProvider(client({ listDialogflowTools: vi.fn(async () => [{ name: ID }]) }), { projectId: 'sample-project-123' });
-    await expect(provider.listCandidates()).resolves.toEqual([]);
+  it('surfaces tools without openApiSpec as unsupported', async () => {
+    const datastoreId = `${AGENT}/tools/datastore`;
+    const provider = new DialogflowToolsProvider(client({ listDialogflowTools: vi.fn(async () => [{ name: ID, textSchema: OAS }, { name: datastoreId }]) }), { projectId: 'sample-project-123' });
+    await expect(provider.listCandidates()).resolves.toEqual([
+      expect.objectContaining({ id: ID, supported: true }),
+      expect.objectContaining({ id: datastoreId, supported: false, evidence: ['Dialogflow tool has no OpenAPI text schema; only OPEN_API_TOOL tools are exportable'] })
+    ]);
   });
 
   it('supports explicit api-id and rejects a foreign project', async () => {

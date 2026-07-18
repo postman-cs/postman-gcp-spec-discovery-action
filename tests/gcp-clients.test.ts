@@ -101,4 +101,19 @@ describe('GCP authenticated REST client', () => {
     expect(request.mock.calls[0]?.[0].url).toContain('/organizations/sample-project-123/apis/proxy%20name/revisions');
     expect(request.mock.calls[1]?.[0]).toMatchObject({ responseType: 'arraybuffer' });
   });
+
+  it('regionalizes Vertex Extensions and Dialogflow agents and tools', async () => {
+    const { client, request } = clientWith(async (options) => {
+      if (options.url.endsWith('/locations?pageSize=200')) return { data: { locations: [{ locationId: 'global' }, { locationId: 'europe-west1' }] } };
+      return { data: {} };
+    });
+    await client.listVertexExtensions('sample-project-123', 'europe-west1');
+    await client.listDialogflowAgents('sample-project-123');
+    await client.listDialogflowTools('projects/sample-project-123/locations/europe-west1/agents/support');
+    const urls = request.mock.calls.map((call) => call[0].url);
+    expect(urls).toContain('https://europe-west1-aiplatform.googleapis.com/v1/projects/sample-project-123/locations/europe-west1/extensions?pageSize=1000');
+    expect(urls).toContain('https://dialogflow.googleapis.com/v1/projects/sample-project-123/locations/global/agents?pageSize=1000');
+    expect(urls).toContain('https://europe-west1-dialogflow.googleapis.com/v1/projects/sample-project-123/locations/europe-west1/agents?pageSize=1000');
+    expect(urls).toContain('https://europe-west1-dialogflow.googleapis.com/v1/projects/sample-project-123/locations/europe-west1/agents/support/tools?pageSize=1000');
+  });
 });

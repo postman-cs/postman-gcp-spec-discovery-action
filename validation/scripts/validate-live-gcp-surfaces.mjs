@@ -25,12 +25,22 @@ export function requiredEnv(env) {
   };
 }
 
-export function shouldDeleteGatewayResource({ manifest, resourceName, marker }) {
-  return Boolean(manifest?.runMarker && manifest?.gatewayName && resourceName === manifest.gatewayName && marker === manifest.runMarker);
+export function verifyRemoteGatewayOwnership(manifest, described) {
+  if (described?.labels?.['postman-run-marker'] !== manifest.runMarker) throw new Error('REFUSING Gateway deletion: remote marker mismatch');
+  return true;
 }
 
-export function shouldDeleteApigeeProxy({ manifest, proxyName, marker }) {
-  return Boolean(manifest?.runMarker && manifest?.proxyName && proxyName === manifest.proxyName && marker === manifest.runMarker);
+export function verifyRemoteEndpointsOwnership(manifest, serviceName) {
+  // Service Management does not expose labels for Endpoints services, so exact
+  // manifest equality plus the unguessable run-scoped name is the ownership proof.
+  if (serviceName !== manifest.endpointsService || !serviceName.startsWith(`postman-live-${manifest.runId}.`)) throw new Error('REFUSING Endpoints deletion: remote name is not run-scoped');
+  return true;
+}
+
+export function verifyRemoteApigeeOwnership(manifest, described) {
+  const name = described?.name;
+  if (name !== manifest.proxyName || !name.includes(`postman-live-${manifest.runId}`)) throw new Error('REFUSING Apigee proxy deletion: remote name is not run-scoped');
+  return true;
 }
 
 export function classifyProbeError(message) {
@@ -149,11 +159,18 @@ async function provision({ runner, token, env, manifest }) {
 async function teardown({ runner, env, manifest, log }) {
   // Mint a fresh token: the run can outlive the one issued before provisioning.
   const token = accessToken(runner);
-  if (!shouldDeleteGatewayResource({ manifest, resourceName: manifest.gatewayName, marker: manifest.runMarker })) throw new Error('REFUSING Gateway deletion: marker or name mismatch');
+  try {
+    const described = JSON.parse(gcloud(runner, ['api-gateway', 'apis', 'describe', manifest.gatewayName, '--project', env.projectId, '--format', 'json']));
+    verifyRemoteGatewayOwnership(manifest, described);
+  } catch (error) { if (isResourceNotFoundError(error)) return; throw error; }
   try { gcloud(runner, ['api-gateway', 'api-configs', 'delete', manifest.gatewayConfigName, '--api', manifest.gatewayName, '--project', env.projectId, '--quiet']); } catch (error) { if (!isResourceNotFoundError(error)) throw error; }
   try { gcloud(runner, ['api-gateway', 'apis', 'delete', manifest.gatewayName, '--project', env.projectId, '--quiet']); } catch (error) { if (!isResourceNotFoundError(error)) throw error; }
+  verifyRemoteEndpointsOwnership(manifest, manifest.endpointsService);
   try { gcloud(runner, ['endpoints', 'services', 'delete', manifest.endpointsService, '--project', env.projectId, '--quiet']); } catch (error) { if (!isResourceNotFoundError(error)) throw error; }
-  if (!shouldDeleteApigeeProxy({ manifest, proxyName: manifest.proxyName, marker: manifest.runMarker })) throw new Error('REFUSING Apigee proxy deletion: marker or name mismatch');
+  try {
+    const described = JSON.parse(rest(runner, token, 'GET', `https://apigee.googleapis.com/v1/organizations/${env.apigeeOrg}/apis/${manifest.proxyName}`));
+    verifyRemoteApigeeOwnership(manifest, described);
+  } catch (error) { if (isResourceNotFoundError(error)) return; throw error; }
   try { rest(runner, token, 'DELETE', `https://apigee.googleapis.com/v1/organizations/${env.apigeeOrg}/apis/${manifest.proxyName}`); } catch (error) { if (!isResourceNotFoundError(error)) throw error; }
   log('Deleted only current-run Gateway, Endpoints, and Apigee resources');
 }
@@ -200,7 +217,7 @@ export async function runLiveValidation({ argv = process.argv.slice(2), env: raw
   const runner = deps.runner ?? defaultRunner;
   const log = deps.log ?? ((line) => console.error(line));
   const suffix = randomBytes(4).toString('hex');
-  const manifest = { runMarker: `postman-${suffix}`, gatewayName: `postman-live-${suffix}`, gatewayConfigName: `postman-live-config-${suffix}`, endpointsService: `postman-live-${suffix}.endpoints.${env.projectId}.cloud.goog`, proxyName: `postman-live-${suffix}` };
+  const manifest = { runId: suffix, runMarker: `postman-${suffix}`, gatewayName: `postman-live-${suffix}`, gatewayConfigName: `postman-live-config-${suffix}`, endpointsService: `postman-live-${suffix}.endpoints.${env.projectId}.cloud.goog`, proxyName: `postman-live-${suffix}` };
   const cliPath = path.join(repoRoot, 'dist/cli.cjs');
   if (!existsSync(cliPath)) throw new Error(`Missing CLI bundle at ${cliPath}; run npm run build first`);
   const token = accessToken(runner);

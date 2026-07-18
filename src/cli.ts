@@ -1,6 +1,7 @@
 import { realpathSync } from 'node:fs';
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import { resolvePathWithinRoot } from './lib/utils/resolve-path-within-root.js';
 
 import { createTelemetryContext } from '@postman-cse/automation-telemetry-core';
 
@@ -228,12 +229,7 @@ async function writeOptionalFile(filePath: string | undefined, content: string):
   if (!filePath) {
     return;
   }
-  const workspaceRoot = path.resolve(process.cwd());
-  const resolved = path.resolve(workspaceRoot, filePath);
-  const relative = path.relative(workspaceRoot, resolved);
-  if (relative.startsWith('..') || path.isAbsolute(relative)) {
-    throw new Error(`Output path must stay within workspace: ${filePath}`);
-  }
+  const resolved = resolvePathWithinRoot(process.cwd(), filePath, 'Output path');
   await mkdir(path.dirname(resolved), { recursive: true });
   await writeFile(resolved, content, 'utf8');
 }

@@ -401,7 +401,7 @@ function buildProviders(inputs: ResolvedInputs, dependencies: GCPDependencies, i
     new AppIntegrationProvider(dependencies.client, { projectId: inputs.projectId, apiId: inputs.apiId }),
     new ConnectorsCustomProvider(dependencies.client, { projectId: inputs.projectId, apiId: inputs.apiId }),
     new ApigeePortalProvider(dependencies.client, { projectId: inputs.projectId, apiId: inputs.apiId }),
-    new VertexExtensionsProvider(dependencies.client, { projectId: inputs.projectId, apiId: inputs.apiId }),
+    new VertexExtensionsProvider(dependencies.client, { projectId: inputs.projectId, location: inputs.location === 'global' ? 'us-central1' : inputs.location, apiId: inputs.apiId }),
     new DialogflowToolsProvider(dependencies.client, { projectId: inputs.projectId, apiId: inputs.apiId }),
     new IacLocalProvider(iacScan)
   ];

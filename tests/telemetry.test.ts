@@ -8,6 +8,8 @@ import { createTelemetryContext } from '@postman-cse/automation-telemetry-core';
 import { runAction, type CoreLike, type GitHubActionDependencies } from '../src/index.js';
 import type { GcpDiscoveryClient } from '../src/lib/gcp/clients.js';
 import type { SpecProvider } from '../src/lib/providers/types.js';
+import { AccessTokenProvider } from '../src/lib/postman/token-provider.js';
+import { __resetIdentityMemo, resolveSessionIdentity } from '../src/lib/postman/credential-identity.js';
 
 let repoRoot: string;
 
@@ -71,6 +73,23 @@ function deps(overrides: Partial<GitHubActionDependencies> = {}): GitHubActionDe
 }
 
 describe('telemetry contract', () => {
+  it('bounds telemetry credential fetches with AbortSignals', async () => {
+    const mintInits: Array<RequestInit | undefined> = [];
+    const mintFetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+      mintInits.push(init);
+      return new Response(JSON.stringify({ access_token: 'fresh-token' }));
+    }) as typeof fetch;
+    await new AccessTokenProvider({ apiKey: 'pmak', fetchImpl: mintFetch }).refresh();
+    expect(mintInits[0]?.signal).toBeInstanceOf(AbortSignal);
+    __resetIdentityMemo();
+    const identityInits: Array<RequestInit | undefined> = [];
+    const identityFetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+      identityInits.push(init);
+      return new Response('{}');
+    }) as typeof fetch;
+    await resolveSessionIdentity({ iapubBaseUrl: 'https://iapub.test', accessToken: 'token', fetchImpl: identityFetch, maxAttempts: 1 });
+    expect(identityInits[0]?.signal).toBeInstanceOf(AbortSignal);
+  });
   it('GCP-TELEMETRY-001: opt-out env suppresses the transport entirely', () => {
     for (const env of [{ POSTMAN_ACTIONS_TELEMETRY: 'off' }, { DO_NOT_TRACK: '1' }]) {
       const transport = vi.fn();

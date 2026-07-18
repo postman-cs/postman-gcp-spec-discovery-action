@@ -24,6 +24,8 @@ describe('Vertex extensions provider', () => {
     const exported = await provider.exportSpec((await provider.listCandidates())[0]!);
     expect(getStorageObjectText).toHaveBeenCalledWith('spec-bucket', 'ext/openapi.yaml');
     expect(exported.content).toBe(OAS);
+    expect(exported.evidence.join(' ')).toContain('[gs-object]');
+    expect(exported.evidence.join(' ')).not.toContain('gs://');
   });
 
   it('marks a manifest with neither OpenAPI source unsupported', async () => {
@@ -31,7 +33,9 @@ describe('Vertex extensions provider', () => {
   });
 
   it('supports explicit api-id and rejects a foreign project', async () => {
-    expect((await new VertexExtensionsProvider(client(), { projectId: 'sample-project-123', apiId: ID }).listCandidates())[0]?.id).toBe(ID);
+    const list = vi.fn(async () => [{ name: ID, openApiYaml: OAS }]);
+    expect((await new VertexExtensionsProvider(client({ listVertexExtensions: list }), { projectId: 'sample-project-123', location: 'europe-west1', apiId: ID }).listCandidates())[0]?.id).toBe(ID);
+    expect(list).toHaveBeenCalledWith('sample-project-123', 'us-central1');
     await expect(new VertexExtensionsProvider(client(), { projectId: 'sample-project-123', apiId: ID.replace('sample-project-123', 'other-project') }).listCandidates()).rejects.toThrow('does not belong');
   });
 });

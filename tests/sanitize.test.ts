@@ -18,6 +18,7 @@ describe('gcp log sanitization', () => {
       `caller ${SERVICE_ACCOUNT} denied`,
       `auth header ${BEARER}`,
       `download ${SIGNED_URL}`
+      , 'object gs://private-bucket/private/object.yaml'
     ].join('; ');
 
     const sanitized = sanitizeLogMessage(message);
@@ -31,6 +32,8 @@ describe('gcp log sanitization', () => {
     expect(sanitized).toContain('[redacted-service-account]');
     expect(sanitized).toContain('[redacted-project-number]');
     expect(sanitized).toContain('[redacted-token]');
+    expect(sanitized).toContain('[gs-object]');
+    expect(sanitized).not.toContain('gs://');
     // Query-free HTTPS origin/path survives so operators can identify the endpoint.
     expect(sanitized).toContain('https://storage.googleapis.com/exports/payments.json');
   });

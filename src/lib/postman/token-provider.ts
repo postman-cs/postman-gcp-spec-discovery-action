@@ -118,7 +118,8 @@ export class AccessTokenProvider {
         'Content-Type': 'application/json',
         'x-api-key': this.apiKey
       },
-      body: JSON.stringify({ apiKey: this.apiKey })
+      body: JSON.stringify({ apiKey: this.apiKey }),
+      signal: AbortSignal.timeout(10000)
     });
 
     const body = await response.text().catch(() => '');

@@ -4,8 +4,10 @@ export interface EvidenceResult { name: string; status: string; sourceType: stri
 export interface Evidence { schemaVersion: number; capturedAt: string; cases: number; passed: number; failed: number; results: EvidenceResult[] }
 export function parseFlags(argv: string[]): LiveFlags;
 export function requiredEnv(env: Record<string, string | undefined>): LiveEnv;
-export function shouldDeleteGatewayResource(input: { manifest?: { runMarker?: string; gatewayName?: string }; resourceName?: string; marker?: string }): boolean;
-export function shouldDeleteApigeeProxy(input: { manifest?: { runMarker?: string; proxyName?: string }; proxyName?: string; marker?: string }): boolean;
+export interface LiveManifest { runId: string; runMarker: string; gatewayName: string; gatewayConfigName?: string; endpointsService: string; proxyName: string }
+export function verifyRemoteGatewayOwnership(manifest: LiveManifest, described: { labels?: Record<string, string> } | undefined): boolean;
+export function verifyRemoteEndpointsOwnership(manifest: LiveManifest, serviceName: string | undefined): boolean;
+export function verifyRemoteApigeeOwnership(manifest: LiveManifest, described: { name?: string } | undefined): boolean;
 export function classifyProbeError(message: unknown): 'fatal' | 'retryable';
 export function isResourceNotFoundError(error: unknown): boolean;
 export function toEvidenceResult(name: string, status: string, resolution?: Partial<EvidenceResult>): EvidenceResult;

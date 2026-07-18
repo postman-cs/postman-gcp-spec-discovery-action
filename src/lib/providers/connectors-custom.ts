@@ -58,14 +58,14 @@ export class ConnectorsCustomProvider implements SpecProvider {
     const decoded = decodeUtf8OpenApi(content);
     return {
       ...decoded,
-      evidence: [`Fetched custom connector source spec from ${location}`]
+      evidence: ['Fetched custom connector source spec from [gs-object]']
     };
   }
 
   private toCandidate(version: CustomConnectorVersionSummary): SpecCandidate {
     const specLocation = version.specLocation ?? '';
     const gcs = parseGcsSpecLocation(specLocation);
-    const evidence = [`Custom connector version ${shortName(version.name)} records specLocation ${specLocation || '(none)'}`];
+    const evidence = [`Custom connector version ${shortName(version.name)} records specLocation ${gcs ? '[gs-object]' : specLocation || '(none)'}`];
     let supported = true;
     if (!specLocation) {
       supported = false;

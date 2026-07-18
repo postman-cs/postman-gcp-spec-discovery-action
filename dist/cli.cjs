@@ -25122,19 +25122,19 @@ var require_node_domexception = __commonJS({
 });
 
 // node_modules/fetch-blob/from.js
-var import_node_fs2, import_node_path2, import_node_domexception, stat, blobFromSync, blobFrom, fileFrom, fileFromSync, fromBlob, fromFile, BlobDataItem;
+var import_node_fs3, import_node_path3, import_node_domexception, stat, blobFromSync, blobFrom, fileFrom, fileFromSync, fromBlob, fromFile, BlobDataItem;
 var init_from = __esm({
   "node_modules/fetch-blob/from.js"() {
-    import_node_fs2 = require("node:fs");
-    import_node_path2 = require("node:path");
+    import_node_fs3 = require("node:fs");
+    import_node_path3 = require("node:path");
     import_node_domexception = __toESM(require_node_domexception(), 1);
     init_file();
     init_fetch_blob();
-    ({ stat } = import_node_fs2.promises);
-    blobFromSync = (path8, type) => fromBlob((0, import_node_fs2.statSync)(path8), path8, type);
+    ({ stat } = import_node_fs3.promises);
+    blobFromSync = (path8, type) => fromBlob((0, import_node_fs3.statSync)(path8), path8, type);
     blobFrom = (path8, type) => stat(path8).then((stat4) => fromBlob(stat4, path8, type));
     fileFrom = (path8, type) => stat(path8).then((stat4) => fromFile(stat4, path8, type));
-    fileFromSync = (path8, type) => fromFile((0, import_node_fs2.statSync)(path8), path8, type);
+    fileFromSync = (path8, type) => fromFile((0, import_node_fs3.statSync)(path8), path8, type);
     fromBlob = (stat4, path8, type = "") => new fetch_blob_default([new BlobDataItem({
       path: path8,
       size: stat4.size,
@@ -25146,7 +25146,7 @@ var init_from = __esm({
       size: stat4.size,
       lastModified: stat4.mtimeMs,
       start: 0
-    })], (0, import_node_path2.basename)(path8), { type, lastModified: stat4.mtimeMs });
+    })], (0, import_node_path3.basename)(path8), { type, lastModified: stat4.mtimeMs });
     BlobDataItem = class _BlobDataItem {
       #path;
       #start;
@@ -25173,7 +25173,7 @@ var init_from = __esm({
         if (mtimeMs > this.lastModified) {
           throw new import_node_domexception.default("The requested file could not be read, typically due to permission problems that have occurred after a reference to a file was acquired.", "NotReadableError");
         }
-        yield* (0, import_node_fs2.createReadStream)(this.#path, {
+        yield* (0, import_node_fs3.createReadStream)(this.#path, {
           start: this.#start,
           end: this.#start + this.size - 1
         });
@@ -44340,9 +44340,40 @@ __export(cli_exports, {
   toDotenv: () => toDotenv
 });
 module.exports = __toCommonJS(cli_exports);
-var import_node_fs3 = require("node:fs");
+var import_node_fs4 = require("node:fs");
 var import_promises6 = require("node:fs/promises");
 var import_node_path9 = __toESM(require("node:path"), 1);
+
+// src/lib/utils/resolve-path-within-root.ts
+var import_node_fs = require("node:fs");
+var import_node_path = __toESM(require("node:path"), 1);
+function nearestExistingAncestor(candidate) {
+  let current = candidate;
+  for (; ; ) {
+    try {
+      return (0, import_node_fs.realpathSync)(current);
+    } catch {
+      const parent = import_node_path.default.dirname(current);
+      if (parent === current) return current;
+      current = parent;
+    }
+  }
+}
+function resolvePathWithinRoot(rootPath, targetPath, fieldName) {
+  const base = import_node_path.default.resolve(rootPath);
+  const resolved = import_node_path.default.resolve(base, targetPath);
+  const relative = import_node_path.default.relative(base, resolved);
+  if (relative.startsWith("..") || import_node_path.default.isAbsolute(relative)) {
+    throw new Error(`${fieldName} must stay within repo-root/workspace; received ${targetPath}`);
+  }
+  const realBase = nearestExistingAncestor(base);
+  const realResolved = nearestExistingAncestor(resolved);
+  const realRelative = import_node_path.default.relative(realBase, realResolved);
+  if (realRelative.startsWith("..") || import_node_path.default.isAbsolute(realRelative)) {
+    throw new Error(`${fieldName} must stay within repo-root/workspace after resolving symlinks; received ${targetPath}`);
+  }
+  return resolved;
+}
 
 // node_modules/@postman-cse/automation-telemetry-core/dist/ci-context.js
 function norm(value) {
@@ -44721,11 +44752,11 @@ function createTelemetryContext(options) {
 }
 
 // src/action-version.ts
-var import_node_fs = require("node:fs");
-var import_node_path = require("node:path");
+var import_node_fs2 = require("node:fs");
+var import_node_path2 = require("node:path");
 function resolveActionVersion2() {
   try {
-    const raw = (0, import_node_fs.readFileSync)((0, import_node_path.join)(__dirname, "..", "package.json"), "utf8");
+    const raw = (0, import_node_fs2.readFileSync)((0, import_node_path2.join)(__dirname, "..", "package.json"), "utf8");
     return JSON.parse(raw).version ?? "unknown";
   } catch {
     return "unknown";
@@ -44941,13 +44972,13 @@ var GcpSdkClient = class {
     }
     return { type: "missing" };
   }
-  async probeVertexExtensions(projectId) {
-    const url = resourceUrl("https://us-central1-aiplatform.googleapis.com/", `projects/${projectId}/locations/us-central1/extensions`);
+  async probeVertexExtensions(projectId, location) {
+    const url = resourceUrl(`https://${location}-aiplatform.googleapis.com/`, `projects/${projectId}/locations/${location}/extensions`);
     url.searchParams.set("pageSize", "1");
     await this.getJson(url, "Vertex Extensions probe");
   }
-  async listVertexExtensions(projectId) {
-    return this.collectPages(() => resourceUrl("https://us-central1-aiplatform.googleapis.com/", `projects/${projectId}/locations/us-central1/extensions`), "Vertex Extensions list", (body) => ({ items: (body.extensions ?? []).filter((x2) => x2.name).map((x2) => ({ name: x2.name, displayName: x2.displayName, openApiYaml: x2.manifest?.apiSpec?.openApiYaml, openApiGcsUri: x2.manifest?.apiSpec?.openApiGcsUri })), nextPageToken: body.nextPageToken }));
+  async listVertexExtensions(projectId, location) {
+    return this.collectPages(() => resourceUrl(`https://${location}-aiplatform.googleapis.com/`, `projects/${projectId}/locations/${location}/extensions`), "Vertex Extensions list", (body) => ({ items: (body.extensions ?? []).filter((x2) => x2.name).map((x2) => ({ name: x2.name, displayName: x2.displayName, openApiYaml: x2.manifest?.apiSpec?.openApiYaml, openApiGcsUri: x2.manifest?.apiSpec?.openApiGcsUri })), nextPageToken: body.nextPageToken }));
   }
   async probeDialogflow(projectId) {
     const url = resourceUrl("https://dialogflow.googleapis.com/", `projects/${projectId}/locations/global/agents`);
@@ -44955,10 +44986,17 @@ var GcpSdkClient = class {
     await this.getJson(url, "Dialogflow probe");
   }
   async listDialogflowAgents(projectId) {
-    return this.collectPages(() => resourceUrl("https://dialogflow.googleapis.com/", `projects/${projectId}/locations/global/agents`), "Dialogflow agent list", (body) => ({ items: body.agents ?? [], nextPageToken: body.nextPageToken }));
+    const agents = [];
+    for (const location of await this.listLocations("https://dialogflow.googleapis.com/", projectId, "Dialogflow location list")) {
+      const origin = location === "global" ? "https://dialogflow.googleapis.com/" : `https://${location}-dialogflow.googleapis.com/`;
+      agents.push(...await this.collectPages(() => resourceUrl(origin, `projects/${projectId}/locations/${location}/agents`), "Dialogflow agent list", (body) => ({ items: body.agents ?? [], nextPageToken: body.nextPageToken })));
+    }
+    return agents;
   }
   async listDialogflowTools(agentName) {
-    return this.collectPages(() => resourceUrl("https://dialogflow.googleapis.com/", `${agentName}/tools`), "Dialogflow tool list", (body) => ({ items: (body.tools ?? []).map((x2) => ({ name: x2.name, displayName: x2.displayName, textSchema: x2.openApiSpec?.textSchema })), nextPageToken: body.nextPageToken }));
+    const location = /\/locations\/([^/]+)\//.exec(agentName)?.[1] ?? "global";
+    const origin = location === "global" ? "https://dialogflow.googleapis.com/" : `https://${location}-dialogflow.googleapis.com/`;
+    return this.collectPages(() => resourceUrl(origin, `${agentName}/tools`), "Dialogflow tool list", (body) => ({ items: (body.tools ?? []).map((x2) => ({ name: x2.name, displayName: x2.displayName, textSchema: x2.openApiSpec?.textSchema })), nextPageToken: body.nextPageToken }));
   }
   async probeAppIntegration(projectId) {
     await this.getJson(this.locationsUrl("https://integrations.googleapis.com/", projectId), "Application Integration probe");
@@ -45213,8 +45251,9 @@ var SERVICE_ACCOUNT_RE = /\b[a-z0-9._%+-]+@[a-z0-9.-]+\.iam\.gserviceaccount\.co
 var PROJECT_NUMBER_RE = /\b\d{10,15}\b/g;
 var PRIVATE_KEY_RE = /-----BEGIN PRIVATE KEY-----[\s\S]*?-----END PRIVATE KEY-----/g;
 var ABS_PATH_RE = /(?:^|(?<=[\s'"=([{,]))(?:[A-Za-z]:\\|\/)[^\s'"]+/g;
+var GS_URI_RE = /\bgs:\/\/[^\s'"]+/gi;
 function sanitizeLogMessage(message) {
-  return message.replace(URL_QUERY_RE, "$1").replace(PRIVATE_KEY_RE, "[redacted-credential]").replace(BEARER_TOKEN_RE, "[redacted-token]").replace(GOOGLE_RESOURCE_RE, "[redacted-gcp-resource]").replace(SERVICE_ACCOUNT_RE, "[redacted-service-account]").replace(PROJECT_NUMBER_RE, "[redacted-project-number]").replace(ABS_PATH_RE, (match) => match.startsWith("https://") ? match : "[redacted-path]");
+  return message.replace(URL_QUERY_RE, "$1").replace(GS_URI_RE, "[gs-object]").replace(PRIVATE_KEY_RE, "[redacted-credential]").replace(BEARER_TOKEN_RE, "[redacted-token]").replace(GOOGLE_RESOURCE_RE, "[redacted-gcp-resource]").replace(SERVICE_ACCOUNT_RE, "[redacted-service-account]").replace(PROJECT_NUMBER_RE, "[redacted-project-number]").replace(ABS_PATH_RE, (match) => match.startsWith("https://") ? match : "[redacted-path]");
 }
 function errorMessage(error) {
   return error instanceof Error ? error.message : String(error);
@@ -45362,7 +45401,8 @@ async function probeSessionIdentity(baseUrl, accessToken, fetchImpl, maxAttempts
     try {
       response = await fetchImpl(`${baseUrl}${sessionPath}`, {
         method: "GET",
-        headers: { "x-access-token": accessToken }
+        headers: { "x-access-token": accessToken },
+        signal: AbortSignal.timeout(1e4)
       });
     } catch {
       failure = "unavailable";
@@ -45534,7 +45574,8 @@ var AccessTokenProvider = class {
         "Content-Type": "application/json",
         "x-api-key": this.apiKey
       },
-      body: JSON.stringify({ apiKey: this.apiKey })
+      body: JSON.stringify({ apiKey: this.apiKey }),
+      signal: AbortSignal.timeout(1e4)
     });
     const body = await response.text().catch(() => "");
     if (!response.ok) {
@@ -45780,7 +45821,7 @@ function detectRepoContext2(input, env = process.env) {
 
 // src/lib/repo/specs.ts
 var import_promises = require("node:fs/promises");
-var import_node_path3 = __toESM(require("node:path"), 1);
+var import_node_path4 = __toESM(require("node:path"), 1);
 var import_yaml = __toESM(require_dist3(), 1);
 var DIRECT_SPEC_CANDIDATES = [
   "openapi.yaml",
@@ -45854,7 +45895,7 @@ function formatFor(candidate) {
 async function findExistingRepoSpecTyped(repoRoot) {
   const candidates = await collectSpecCandidates(repoRoot);
   for (const candidate of candidates) {
-    const fullPath = import_node_path3.default.resolve(repoRoot, candidate);
+    const fullPath = import_node_path4.default.resolve(repoRoot, candidate);
     try {
       const fileStat = await (0, import_promises.stat)(fullPath);
       if (!fileStat.isFile()) {
@@ -45885,12 +45926,12 @@ async function collectSpecCandidates(repoRoot) {
   }
   const count = { value: 0 };
   for (const dir of COMMON_SCAN_DIRS) {
-    const root = import_node_path3.default.resolve(repoRoot, dir);
+    const root = import_node_path4.default.resolve(repoRoot, dir);
     const fileStat = await (0, import_promises.stat)(root).catch(() => void 0);
     if (!fileStat) continue;
     if (fileStat.isFile()) {
-      const relative = import_node_path3.default.relative(repoRoot, root);
-      if (isSpecLikeFilename(import_node_path3.default.basename(relative))) {
+      const relative = import_node_path4.default.relative(repoRoot, root);
+      if (isSpecLikeFilename(import_node_path4.default.basename(relative))) {
         candidates.add(relative);
       }
       continue;
@@ -45910,7 +45951,7 @@ async function walkSpecCandidates(repoRoot, current, count, depth = 0) {
   for (const entry of entries) {
     if (count.value >= MAX_SPEC_SCAN_FILES) break;
     if (SKIP_DIRS.has(entry)) continue;
-    const fullPath = import_node_path3.default.join(current, entry);
+    const fullPath = import_node_path4.default.join(current, entry);
     const info = await (0, import_promises.stat)(fullPath).catch(() => void 0);
     if (!info) continue;
     if (info.isDirectory()) {
@@ -45919,14 +45960,14 @@ async function walkSpecCandidates(repoRoot, current, count, depth = 0) {
     }
     if (info.isFile() && isSpecLikeFilename(entry)) {
       count.value += 1;
-      results.push(import_node_path3.default.relative(repoRoot, fullPath));
+      results.push(import_node_path4.default.relative(repoRoot, fullPath));
     }
   }
   return results;
 }
 function specCandidateScore(candidate) {
   const normalized = candidate.replace(/\\/g, "/").toLowerCase();
-  const basename2 = import_node_path3.default.basename(normalized);
+  const basename2 = import_node_path4.default.basename(normalized);
   let score = 0;
   if (DIRECT_SPEC_CANDIDATES.includes(normalized)) score += 200;
   if (/^(openapi|swagger)(?:[.-]v?\d+(?:\.\d+)*)?\.(?:ya?ml|json)$/.test(basename2)) score += 90;
@@ -45938,11 +45979,11 @@ function specCandidateScore(candidate) {
 
 // src/lib/repo/signals.ts
 var import_promises3 = require("node:fs/promises");
-var import_node_path5 = __toESM(require("node:path"), 1);
+var import_node_path6 = __toESM(require("node:path"), 1);
 
 // src/lib/repo/scan.ts
 var import_promises2 = require("node:fs/promises");
-var import_node_path4 = __toESM(require("node:path"), 1);
+var import_node_path5 = __toESM(require("node:path"), 1);
 var SKIP_DIRS2 = /* @__PURE__ */ new Set([
   ".git",
   "node_modules",
@@ -45964,7 +46005,7 @@ async function findIaCFiles(root, extensions, depth = 0, globalCount = { value: 
   for (const entry of entries) {
     if (globalCount.value >= MAX_FILES) break;
     if (SKIP_DIRS2.has(entry)) continue;
-    const fullPath = import_node_path4.default.join(root, entry);
+    const fullPath = import_node_path5.default.join(root, entry);
     const info = await (0, import_promises2.stat)(fullPath).catch(() => null);
     if (!info) continue;
     if (info.isDirectory()) {
@@ -46013,12 +46054,12 @@ async function collectRepoSignals(input) {
     const ids = extractConfigNames(content);
     if (ids.length > 0) {
       inferredApiIds.push(...ids);
-      evidence.push(`Found Google Cloud API config reference(s) in ${import_node_path5.default.relative(input.repoRoot, file)}`);
+      evidence.push(`Found Google Cloud API config reference(s) in ${import_node_path6.default.relative(input.repoRoot, file)}`);
     }
     const hints = extractServiceHints(content);
     if (hints.length > 0) {
       serviceHints.push(...hints);
-      evidence.push(`Found Google Cloud API service hint(s) in ${import_node_path5.default.relative(input.repoRoot, file)}`);
+      evidence.push(`Found Google Cloud API service hint(s) in ${import_node_path6.default.relative(input.repoRoot, file)}`);
     }
   }
   return {
@@ -46031,7 +46072,7 @@ async function collectRepoSignals(input) {
 
 // src/lib/repo/gcp-iac-scanner.ts
 var import_promises4 = require("node:fs/promises");
-var import_node_path6 = __toESM(require("node:path"), 1);
+var import_node_path7 = __toESM(require("node:path"), 1);
 
 // src/lib/spec/validate-openapi.ts
 var import_yaml2 = __toESM(require_dist3(), 1);
@@ -46081,14 +46122,14 @@ var MAX_SCAN_DEPTH = 6;
 var SKIP_DIRS3 = /* @__PURE__ */ new Set([".git", "node_modules", "dist"]);
 var CANDIDATE_EXTENSIONS = /* @__PURE__ */ new Set([".tf", ".json", ".yaml", ".yml"]);
 async function scanGCPIac(repoRoot, outputDir) {
-  const resolvedRoot = await (0, import_promises4.realpath)(import_node_path6.default.resolve(repoRoot)).catch(() => import_node_path6.default.resolve(repoRoot));
-  const outputRoot = import_node_path6.default.resolve(resolvedRoot, outputDir);
+  const resolvedRoot = await (0, import_promises4.realpath)(import_node_path7.default.resolve(repoRoot)).catch(() => import_node_path7.default.resolve(repoRoot));
+  const outputRoot = import_node_path7.default.resolve(resolvedRoot, outputDir);
   const scannedFiles = await collectIacFiles(resolvedRoot, resolvedRoot, outputRoot);
   const candidates = /* @__PURE__ */ new Map();
   const fingerprint = { resourceIds: [], serviceNames: [], projectIds: [], evidence: [] };
   for (const relativePath of scannedFiles) {
-    if (import_node_path6.default.extname(relativePath).toLowerCase() !== ".tf") continue;
-    const content = await (0, import_promises4.readFile)(import_node_path6.default.join(resolvedRoot, relativePath), "utf8").catch(() => void 0);
+    if (import_node_path7.default.extname(relativePath).toLowerCase() !== ".tf") continue;
+    const content = await (0, import_promises4.readFile)(import_node_path7.default.join(resolvedRoot, relativePath), "utf8").catch(() => void 0);
     if (!content) continue;
     for (const block of extractTerraformResourceBlocks(content)) {
       if (block.type === "google_api_gateway_api_config") {
@@ -46129,17 +46170,17 @@ async function collectIacFiles(root, current, outputRoot, depth = 0, count = { v
   for (const entry of entries) {
     if (count.value >= MAX_SCAN_FILES) break;
     if (SKIP_DIRS3.has(entry)) continue;
-    const fullPath = import_node_path6.default.join(current, entry);
-    if (fullPath === outputRoot || fullPath.startsWith(`${outputRoot}${import_node_path6.default.sep}`)) continue;
+    const fullPath = import_node_path7.default.join(current, entry);
+    if (fullPath === outputRoot || fullPath.startsWith(`${outputRoot}${import_node_path7.default.sep}`)) continue;
     const stat4 = await (0, import_promises4.lstat)(fullPath).catch(() => void 0);
     if (!stat4 || stat4.isSymbolicLink()) continue;
     if (stat4.isDirectory()) {
       results.push(...await collectIacFiles(root, fullPath, outputRoot, depth + 1, count));
       continue;
     }
-    if (!stat4.isFile() || !CANDIDATE_EXTENSIONS.has(import_node_path6.default.extname(entry).toLowerCase())) continue;
+    if (!stat4.isFile() || !CANDIDATE_EXTENSIONS.has(import_node_path7.default.extname(entry).toLowerCase())) continue;
     count.value += 1;
-    results.push(import_node_path6.default.relative(root, fullPath).split(import_node_path6.default.sep).join("/"));
+    results.push(import_node_path7.default.relative(root, fullPath).split(import_node_path7.default.sep).join("/"));
   }
   return results;
 }
@@ -46194,11 +46235,11 @@ function heredocAssignment(body, key) {
   return match && !match[2].includes("${") ? match[2] : void 0;
 }
 async function addReferencedDocument(root, terraformPath, block, reference, candidates, fingerprint) {
-  const relative = import_node_path6.default.posix.normalize(import_node_path6.default.posix.join(import_node_path6.default.posix.dirname(terraformPath), reference.split(import_node_path6.default.sep).join("/")));
-  if (relative === ".." || relative.startsWith("../") || import_node_path6.default.posix.isAbsolute(relative)) return;
-  const absolute = import_node_path6.default.join(root, relative);
+  const relative = import_node_path7.default.posix.normalize(import_node_path7.default.posix.join(import_node_path7.default.posix.dirname(terraformPath), reference.split(import_node_path7.default.sep).join("/")));
+  if (relative === ".." || relative.startsWith("../") || import_node_path7.default.posix.isAbsolute(relative)) return;
+  const absolute = import_node_path7.default.join(root, relative);
   const resolved = await (0, import_promises4.realpath)(absolute).catch(() => void 0);
-  if (!resolved || !(resolved === root || resolved.startsWith(`${root}${import_node_path6.default.sep}`))) return;
+  if (!resolved || !(resolved === root || resolved.startsWith(`${root}${import_node_path7.default.sep}`))) return;
   const content = await (0, import_promises4.readFile)(resolved, "utf8").catch(() => void 0);
   if (!content) return;
   try {
@@ -46784,7 +46825,21 @@ var import_node_zlib2 = require("node:zlib");
 var MAX_EXTRACTED_BYTES = 10 * 1024 * 1024;
 function addEntry(files, total, name, method, compressed) {
   if (name.endsWith("/")) return total;
-  const content = method === 0 ? Buffer.from(compressed) : method === 8 ? (0, import_node_zlib2.inflateRawSync)(compressed) : void 0;
+  const remaining = MAX_EXTRACTED_BYTES - total;
+  if (method === 0 && compressed.length > remaining) throw new Error("ZIP extracted contents exceed 10 MiB");
+  let content;
+  if (method === 0) {
+    content = Buffer.from(compressed);
+  } else if (method === 8) {
+    try {
+      content = (0, import_node_zlib2.inflateRawSync)(compressed, { maxOutputLength: remaining + 1 });
+    } catch (error) {
+      if (error.code === "ERR_BUFFER_TOO_LARGE") {
+        throw new Error("ZIP extracted contents exceed 10 MiB");
+      }
+      throw error;
+    }
+  }
   if (!content) throw new Error(`Unsupported ZIP compression method ${method}`);
   const next = total + content.length;
   if (next > MAX_EXTRACTED_BYTES) throw new Error("ZIP extracted contents exceed 10 MiB");
@@ -46952,13 +47007,13 @@ var ConnectorsCustomProvider = class {
     const decoded = decodeUtf8OpenApi(content);
     return {
       ...decoded,
-      evidence: [`Fetched custom connector source spec from ${location}`]
+      evidence: ["Fetched custom connector source spec from [gs-object]"]
     };
   }
   toCandidate(version) {
     const specLocation = version.specLocation ?? "";
     const gcs = parseGcsSpecLocation(specLocation);
-    const evidence = [`Custom connector version ${shortName2(version.name)} records specLocation ${specLocation || "(none)"}`];
+    const evidence = [`Custom connector version ${shortName2(version.name)} records specLocation ${gcs ? "[gs-object]" : specLocation || "(none)"}`];
     let supported = true;
     if (!specLocation) {
       supported = false;
@@ -47189,9 +47244,9 @@ var ApigeePortalProvider = class {
 
 // src/lib/providers/vertex-extensions.ts
 var PATTERN3 = /^projects\/([^/]+)\/locations\/([^/]+)\/extensions\/([^/]+)$/;
-function parseVertexExtensionName(v) {
-  const m2 = PATTERN3.exec(v);
-  return m2 ? { projectId: m2[1], location: m2[2], extensionId: m2[3] } : void 0;
+function parseVertexExtensionName(value) {
+  const match = PATTERN3.exec(value);
+  return match ? { projectId: match[1], location: match[2], extensionId: match[3] } : void 0;
 }
 var VertexExtensionsProvider = class {
   constructor(client, scope) {
@@ -47203,50 +47258,53 @@ var VertexExtensionsProvider = class {
   type = "vertex-extensions";
   async probe() {
     try {
-      await this.client.probeVertexExtensions(this.scope.projectId);
+      await this.client.probeVertexExtensions(this.scope.projectId, this.scope.location ?? "us-central1");
       return "available";
-    } catch (e2) {
-      return probeFailureStatus(e2);
+    } catch (error) {
+      return probeFailureStatus(error);
     }
   }
   async listCandidates() {
-    const p = this.scope.apiId ? parseVertexExtensionName(this.scope.apiId) : void 0;
-    if (this.scope.apiId && !p) return [];
-    if (p && p.projectId !== this.scope.projectId) throw new Error("api-id Vertex extension does not belong to configured project-id");
-    const xs = p ? [await this.findExplicit(this.scope.apiId)] : await this.client.listVertexExtensions(this.scope.projectId);
-    return xs.map((x2) => this.toCandidate(x2));
+    const parsed = this.scope.apiId ? parseVertexExtensionName(this.scope.apiId) : void 0;
+    if (this.scope.apiId && !parsed) return [];
+    if (parsed && parsed.projectId !== this.scope.projectId) throw new Error("api-id Vertex extension does not belong to configured project-id");
+    const location = parsed?.location ?? this.scope.location ?? "us-central1";
+    const extensions = parsed ? [await this.findExplicit(this.scope.apiId, location)] : await this.client.listVertexExtensions(this.scope.projectId, location);
+    return extensions.map((extension) => this.toCandidate(extension));
   }
-  async findExplicit(id) {
-    const xs = await this.client.listVertexExtensions(this.scope.projectId);
-    return xs.find((x2) => x2.name === id) ?? { name: id };
+  async findExplicit(id, location) {
+    const extensions = await this.client.listVertexExtensions(this.scope.projectId, location);
+    return extensions.find((extension) => extension.name === id) ?? { name: id };
   }
-  toCandidate(x2) {
-    const count = Number(Boolean(x2.openApiYaml?.trim())) + Number(Boolean(x2.openApiGcsUri));
+  toCandidate(extension) {
+    const count = Number(Boolean(extension.openApiYaml?.trim())) + Number(Boolean(extension.openApiGcsUri));
     let supported = count === 1;
-    if (x2.openApiYaml?.trim()) try {
-      decodeUtf8OpenApi(x2.openApiYaml);
+    if (extension.openApiYaml?.trim()) try {
+      decodeUtf8OpenApi(extension.openApiYaml);
     } catch {
       supported = false;
     }
-    if (x2.openApiGcsUri && !parseGcsSpecLocation(x2.openApiGcsUri)) supported = false;
-    return { id: x2.name, apiId: x2.name, name: x2.displayName || x2.name.split("/").pop(), providerType: this.type, projectId: this.scope.projectId, tags: {}, supported, evidence: [count === 0 ? "Vertex extension manifest has no OpenAPI source" : count > 1 ? "Vertex extension manifest has multiple OpenAPI sources" : "Vertex extension manifest has one OpenAPI source"], meta: { openApiYaml: x2.openApiYaml ?? "", openApiGcsUri: x2.openApiGcsUri ?? "" } };
+    if (extension.openApiGcsUri && !parseGcsSpecLocation(extension.openApiGcsUri)) supported = false;
+    return { id: extension.name, apiId: extension.name, name: extension.displayName || extension.name.split("/").pop(), providerType: this.type, projectId: this.scope.projectId, tags: {}, supported, evidence: [count === 0 ? "Vertex extension manifest has no OpenAPI source" : count > 1 ? "Vertex extension manifest has multiple OpenAPI sources" : "Vertex extension manifest has one OpenAPI source"], meta: { openApiYaml: extension.openApiYaml ?? "", openApiGcsUri: extension.openApiGcsUri ?? "" } };
   }
-  async exportSpec(c) {
-    let text = c.meta.openApiYaml ?? "";
+  async exportSpec(candidate) {
+    let text = candidate.meta.openApiYaml ?? "";
+    const evidence = ["Exported original Vertex extension OpenAPI document"];
     if (!text) {
-      const g = parseGcsSpecLocation(c.meta.openApiGcsUri ?? "");
-      if (!g) throw new Error("Vertex extension has no supported OpenAPI source");
-      text = await this.client.getStorageObjectText(g.bucket, g.object);
+      const gcs = parseGcsSpecLocation(candidate.meta.openApiGcsUri ?? "");
+      if (!gcs) throw new Error("Vertex extension has no supported OpenAPI source");
+      text = await this.client.getStorageObjectText(gcs.bucket, gcs.object);
+      evidence.push("Fetched Vertex extension OpenAPI source from [gs-object]");
     }
-    return { ...decodeUtf8OpenApi(text), evidence: ["Exported original Vertex extension manifest OpenAPI source"] };
+    return { ...decodeUtf8OpenApi(text), evidence };
   }
 };
 
 // src/lib/providers/dialogflow-tools.ts
 var PATTERN4 = /^projects\/([^/]+)\/locations\/([^/]+)\/agents\/([^/]+)\/tools\/([^/]+)$/;
-function parseDialogflowToolName(v) {
-  const m2 = PATTERN4.exec(v);
-  return m2 ? { projectId: m2[1], location: m2[2], agentId: m2[3], toolId: m2[4] } : void 0;
+function parseDialogflowToolName(value) {
+  const match = PATTERN4.exec(value);
+  return match ? { projectId: match[1], location: match[2], agentId: match[3], toolId: match[4] } : void 0;
 }
 var DialogflowToolsProvider = class {
   constructor(client, scope) {
@@ -47260,30 +47318,30 @@ var DialogflowToolsProvider = class {
     try {
       await this.client.probeDialogflow(this.scope.projectId);
       return "available";
-    } catch (e2) {
-      return probeFailureStatus(e2);
+    } catch (error) {
+      return probeFailureStatus(error);
     }
   }
   async listCandidates() {
-    const p = this.scope.apiId ? parseDialogflowToolName(this.scope.apiId) : void 0;
-    if (this.scope.apiId && !p) return [];
-    if (p && p.projectId !== this.scope.projectId) throw new Error("api-id Dialogflow tool does not belong to configured project-id");
+    const parsed = this.scope.apiId ? parseDialogflowToolName(this.scope.apiId) : void 0;
+    if (this.scope.apiId && !parsed) return [];
+    if (parsed && parsed.projectId !== this.scope.projectId) throw new Error("api-id Dialogflow tool does not belong to configured project-id");
     let tools = [];
-    if (p) {
-      tools = (await this.client.listDialogflowTools(`projects/${p.projectId}/locations/${p.location}/agents/${p.agentId}`)).filter((x2) => x2.name === this.scope.apiId);
-    } else for (const a of await this.client.listDialogflowAgents(this.scope.projectId)) tools.push(...await this.client.listDialogflowTools(a.name));
-    return tools.filter((x2) => x2.textSchema?.trim()).map((x2) => {
-      let supported = true;
-      try {
-        decodeUtf8OpenApi(x2.textSchema);
+    if (parsed) tools = (await this.client.listDialogflowTools(`projects/${parsed.projectId}/locations/${parsed.location}/agents/${parsed.agentId}`)).filter((tool) => tool.name === this.scope.apiId);
+    else for (const agent of await this.client.listDialogflowAgents(this.scope.projectId)) tools.push(...await this.client.listDialogflowTools(agent.name));
+    return tools.map((tool) => {
+      const schema = tool.textSchema?.trim();
+      let supported = Boolean(schema);
+      if (schema) try {
+        decodeUtf8OpenApi(schema);
       } catch {
         supported = false;
       }
-      return { id: x2.name, apiId: x2.name, name: x2.displayName || x2.name.split("/").pop(), providerType: this.type, projectId: this.scope.projectId, tags: {}, supported, evidence: ["Dialogflow tool stores an OpenAPI text schema"], meta: { textSchema: x2.textSchema } };
+      return { id: tool.name, apiId: tool.name, name: tool.displayName || tool.name.split("/").pop(), providerType: this.type, projectId: this.scope.projectId, tags: {}, supported, evidence: [schema ? "Dialogflow tool stores an OpenAPI text schema" : "Dialogflow tool has no OpenAPI text schema; only OPEN_API_TOOL tools are exportable"], meta: { textSchema: schema ?? "" } };
     });
   }
-  async exportSpec(c) {
-    return { ...decodeUtf8OpenApi(c.meta.textSchema ?? ""), evidence: ["Exported original Dialogflow tool OpenAPI text schema"] };
+  async exportSpec(candidate) {
+    return { ...decodeUtf8OpenApi(candidate.meta.textSchema ?? ""), evidence: ["Exported original Dialogflow tool OpenAPI text schema"] };
   }
 };
 
@@ -47314,18 +47372,6 @@ var IacLocalProvider = class {
     });
   }
 };
-
-// src/lib/utils/resolve-path-within-root.ts
-var import_node_path7 = __toESM(require("node:path"), 1);
-function resolvePathWithinRoot(rootPath, targetPath, fieldName) {
-  const base = import_node_path7.default.resolve(rootPath);
-  const resolved = import_node_path7.default.resolve(base, targetPath);
-  const relative = import_node_path7.default.relative(base, resolved);
-  if (relative.startsWith("..") || import_node_path7.default.isAbsolute(relative)) {
-    throw new Error(`${fieldName} must stay within repo-root/workspace; received ${targetPath}`);
-  }
-  return resolved;
-}
 
 // src/runtime.ts
 var DEFAULT_OUTPUT_DIR = "discovered-specs";
@@ -47576,7 +47622,7 @@ function buildProviders(inputs, dependencies, iacScan) {
     new AppIntegrationProvider(dependencies.client, { projectId: inputs.projectId, apiId: inputs.apiId }),
     new ConnectorsCustomProvider(dependencies.client, { projectId: inputs.projectId, apiId: inputs.apiId }),
     new ApigeePortalProvider(dependencies.client, { projectId: inputs.projectId, apiId: inputs.apiId }),
-    new VertexExtensionsProvider(dependencies.client, { projectId: inputs.projectId, apiId: inputs.apiId }),
+    new VertexExtensionsProvider(dependencies.client, { projectId: inputs.projectId, location: inputs.location === "global" ? "us-central1" : inputs.location, apiId: inputs.apiId }),
     new DialogflowToolsProvider(dependencies.client, { projectId: inputs.projectId, apiId: inputs.apiId }),
     new IacLocalProvider(iacScan)
   ];
@@ -48193,12 +48239,7 @@ async function writeOptionalFile(filePath, content) {
   if (!filePath) {
     return;
   }
-  const workspaceRoot = import_node_path9.default.resolve(process.cwd());
-  const resolved = import_node_path9.default.resolve(workspaceRoot, filePath);
-  const relative = import_node_path9.default.relative(workspaceRoot, resolved);
-  if (relative.startsWith("..") || import_node_path9.default.isAbsolute(relative)) {
-    throw new Error(`Output path must stay within workspace: ${filePath}`);
-  }
+  const resolved = resolvePathWithinRoot(process.cwd(), filePath, "Output path");
   await (0, import_promises6.mkdir)(import_node_path9.default.dirname(resolved), { recursive: true });
   await (0, import_promises6.writeFile)(resolved, content, "utf8");
 }
@@ -48264,7 +48305,7 @@ function shouldRunMain() {
     return false;
   }
   try {
-    return (0, import_node_fs3.realpathSync)(currentModulePath) === (0, import_node_fs3.realpathSync)(entrypointPath);
+    return (0, import_node_fs4.realpathSync)(currentModulePath) === (0, import_node_fs4.realpathSync)(entrypointPath);
   } catch {
     return import_node_path9.default.resolve(currentModulePath) === import_node_path9.default.resolve(entrypointPath);
   }

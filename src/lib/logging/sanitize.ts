@@ -5,6 +5,7 @@ const SERVICE_ACCOUNT_RE = /\b[a-z0-9._%+-]+@[a-z0-9.-]+\.iam\.gserviceaccount\.
 const PROJECT_NUMBER_RE = /\b\d{10,15}\b/g;
 const PRIVATE_KEY_RE = /-----BEGIN PRIVATE KEY-----[\s\S]*?-----END PRIVATE KEY-----/g;
 const ABS_PATH_RE = /(?:^|(?<=[\s'"=([{,]))(?:[A-Za-z]:\\|\/)[^\s'"]+/g;
+const GS_URI_RE = /\bgs:\/\/[^\s'"]+/gi;
 
 /**
  * Redact GCP-sensitive material from a log line:
@@ -17,6 +18,7 @@ const ABS_PATH_RE = /(?:^|(?<=[\s'"=([{,]))(?:[A-Za-z]:\\|\/)[^\s'"]+/g;
 export function sanitizeLogMessage(message: string): string {
   return message
     .replace(URL_QUERY_RE, '$1')
+    .replace(GS_URI_RE, '[gs-object]')
     .replace(PRIVATE_KEY_RE, '[redacted-credential]')
     .replace(BEARER_TOKEN_RE, '[redacted-token]')
     .replace(GOOGLE_RESOURCE_RE, '[redacted-gcp-resource]')

@@ -47596,13 +47596,13 @@ var GcpSdkClient = class {
     }
     return { type: "missing" };
   }
-  async probeVertexExtensions(projectId) {
-    const url = resourceUrl("https://us-central1-aiplatform.googleapis.com/", `projects/${projectId}/locations/us-central1/extensions`);
+  async probeVertexExtensions(projectId, location) {
+    const url = resourceUrl(`https://${location}-aiplatform.googleapis.com/`, `projects/${projectId}/locations/${location}/extensions`);
     url.searchParams.set("pageSize", "1");
     await this.getJson(url, "Vertex Extensions probe");
   }
-  async listVertexExtensions(projectId) {
-    return this.collectPages(() => resourceUrl("https://us-central1-aiplatform.googleapis.com/", `projects/${projectId}/locations/us-central1/extensions`), "Vertex Extensions list", (body) => ({ items: (body.extensions ?? []).filter((x2) => x2.name).map((x2) => ({ name: x2.name, displayName: x2.displayName, openApiYaml: x2.manifest?.apiSpec?.openApiYaml, openApiGcsUri: x2.manifest?.apiSpec?.openApiGcsUri })), nextPageToken: body.nextPageToken }));
+  async listVertexExtensions(projectId, location) {
+    return this.collectPages(() => resourceUrl(`https://${location}-aiplatform.googleapis.com/`, `projects/${projectId}/locations/${location}/extensions`), "Vertex Extensions list", (body) => ({ items: (body.extensions ?? []).filter((x2) => x2.name).map((x2) => ({ name: x2.name, displayName: x2.displayName, openApiYaml: x2.manifest?.apiSpec?.openApiYaml, openApiGcsUri: x2.manifest?.apiSpec?.openApiGcsUri })), nextPageToken: body.nextPageToken }));
   }
   async probeDialogflow(projectId) {
     const url = resourceUrl("https://dialogflow.googleapis.com/", `projects/${projectId}/locations/global/agents`);
@@ -47610,10 +47610,17 @@ var GcpSdkClient = class {
     await this.getJson(url, "Dialogflow probe");
   }
   async listDialogflowAgents(projectId) {
-    return this.collectPages(() => resourceUrl("https://dialogflow.googleapis.com/", `projects/${projectId}/locations/global/agents`), "Dialogflow agent list", (body) => ({ items: body.agents ?? [], nextPageToken: body.nextPageToken }));
+    const agents = [];
+    for (const location of await this.listLocations("https://dialogflow.googleapis.com/", projectId, "Dialogflow location list")) {
+      const origin = location === "global" ? "https://dialogflow.googleapis.com/" : `https://${location}-dialogflow.googleapis.com/`;
+      agents.push(...await this.collectPages(() => resourceUrl(origin, `projects/${projectId}/locations/${location}/agents`), "Dialogflow agent list", (body) => ({ items: body.agents ?? [], nextPageToken: body.nextPageToken })));
+    }
+    return agents;
   }
   async listDialogflowTools(agentName) {
-    return this.collectPages(() => resourceUrl("https://dialogflow.googleapis.com/", `${agentName}/tools`), "Dialogflow tool list", (body) => ({ items: (body.tools ?? []).map((x2) => ({ name: x2.name, displayName: x2.displayName, textSchema: x2.openApiSpec?.textSchema })), nextPageToken: body.nextPageToken }));
+    const location = /\/locations\/([^/]+)\//.exec(agentName)?.[1] ?? "global";
+    const origin = location === "global" ? "https://dialogflow.googleapis.com/" : `https://${location}-dialogflow.googleapis.com/`;
+    return this.collectPages(() => resourceUrl(origin, `${agentName}/tools`), "Dialogflow tool list", (body) => ({ items: (body.tools ?? []).map((x2) => ({ name: x2.name, displayName: x2.displayName, textSchema: x2.openApiSpec?.textSchema })), nextPageToken: body.nextPageToken }));
   }
   async probeAppIntegration(projectId) {
     await this.getJson(this.locationsUrl("https://integrations.googleapis.com/", projectId), "Application Integration probe");
@@ -47868,8 +47875,9 @@ var SERVICE_ACCOUNT_RE = /\b[a-z0-9._%+-]+@[a-z0-9.-]+\.iam\.gserviceaccount\.co
 var PROJECT_NUMBER_RE = /\b\d{10,15}\b/g;
 var PRIVATE_KEY_RE = /-----BEGIN PRIVATE KEY-----[\s\S]*?-----END PRIVATE KEY-----/g;
 var ABS_PATH_RE = /(?:^|(?<=[\s'"=([{,]))(?:[A-Za-z]:\\|\/)[^\s'"]+/g;
+var GS_URI_RE = /\bgs:\/\/[^\s'"]+/gi;
 function sanitizeLogMessage(message) {
-  return message.replace(URL_QUERY_RE, "$1").replace(PRIVATE_KEY_RE, "[redacted-credential]").replace(BEARER_TOKEN_RE, "[redacted-token]").replace(GOOGLE_RESOURCE_RE, "[redacted-gcp-resource]").replace(SERVICE_ACCOUNT_RE, "[redacted-service-account]").replace(PROJECT_NUMBER_RE, "[redacted-project-number]").replace(ABS_PATH_RE, (match) => match.startsWith("https://") ? match : "[redacted-path]");
+  return message.replace(URL_QUERY_RE, "$1").replace(GS_URI_RE, "[gs-object]").replace(PRIVATE_KEY_RE, "[redacted-credential]").replace(BEARER_TOKEN_RE, "[redacted-token]").replace(GOOGLE_RESOURCE_RE, "[redacted-gcp-resource]").replace(SERVICE_ACCOUNT_RE, "[redacted-service-account]").replace(PROJECT_NUMBER_RE, "[redacted-project-number]").replace(ABS_PATH_RE, (match) => match.startsWith("https://") ? match : "[redacted-path]");
 }
 function errorMessage(error2) {
   return error2 instanceof Error ? error2.message : String(error2);
@@ -48071,7 +48079,8 @@ async function probeSessionIdentity(baseUrl, accessToken, fetchImpl, maxAttempts
     try {
       response = await fetchImpl(`${baseUrl}${sessionPath}`, {
         method: "GET",
-        headers: { "x-access-token": accessToken }
+        headers: { "x-access-token": accessToken },
+        signal: AbortSignal.timeout(1e4)
       });
     } catch {
       failure = "unavailable";
@@ -48243,7 +48252,8 @@ var AccessTokenProvider = class {
         "Content-Type": "application/json",
         "x-api-key": this.apiKey
       },
-      body: JSON.stringify({ apiKey: this.apiKey })
+      body: JSON.stringify({ apiKey: this.apiKey }),
+      signal: AbortSignal.timeout(1e4)
     });
     const body = await response.text().catch(() => "");
     if (!response.ok) {
@@ -49381,7 +49391,21 @@ var import_node_zlib2 = require("node:zlib");
 var MAX_EXTRACTED_BYTES = 10 * 1024 * 1024;
 function addEntry(files, total, name, method, compressed) {
   if (name.endsWith("/")) return total;
-  const content = method === 0 ? Buffer.from(compressed) : method === 8 ? (0, import_node_zlib2.inflateRawSync)(compressed) : void 0;
+  const remaining = MAX_EXTRACTED_BYTES - total;
+  if (method === 0 && compressed.length > remaining) throw new Error("ZIP extracted contents exceed 10 MiB");
+  let content;
+  if (method === 0) {
+    content = Buffer.from(compressed);
+  } else if (method === 8) {
+    try {
+      content = (0, import_node_zlib2.inflateRawSync)(compressed, { maxOutputLength: remaining + 1 });
+    } catch (error2) {
+      if (error2.code === "ERR_BUFFER_TOO_LARGE") {
+        throw new Error("ZIP extracted contents exceed 10 MiB");
+      }
+      throw error2;
+    }
+  }
   if (!content) throw new Error(`Unsupported ZIP compression method ${method}`);
   const next = total + content.length;
   if (next > MAX_EXTRACTED_BYTES) throw new Error("ZIP extracted contents exceed 10 MiB");
@@ -49549,13 +49573,13 @@ var ConnectorsCustomProvider = class {
     const decoded = decodeUtf8OpenApi(content);
     return {
       ...decoded,
-      evidence: [`Fetched custom connector source spec from ${location}`]
+      evidence: ["Fetched custom connector source spec from [gs-object]"]
     };
   }
   toCandidate(version) {
     const specLocation = version.specLocation ?? "";
     const gcs = parseGcsSpecLocation(specLocation);
-    const evidence = [`Custom connector version ${shortName2(version.name)} records specLocation ${specLocation || "(none)"}`];
+    const evidence = [`Custom connector version ${shortName2(version.name)} records specLocation ${gcs ? "[gs-object]" : specLocation || "(none)"}`];
     let supported = true;
     if (!specLocation) {
       supported = false;
@@ -49786,9 +49810,9 @@ var ApigeePortalProvider = class {
 
 // src/lib/providers/vertex-extensions.ts
 var PATTERN3 = /^projects\/([^/]+)\/locations\/([^/]+)\/extensions\/([^/]+)$/;
-function parseVertexExtensionName(v) {
-  const m2 = PATTERN3.exec(v);
-  return m2 ? { projectId: m2[1], location: m2[2], extensionId: m2[3] } : void 0;
+function parseVertexExtensionName(value) {
+  const match = PATTERN3.exec(value);
+  return match ? { projectId: match[1], location: match[2], extensionId: match[3] } : void 0;
 }
 var VertexExtensionsProvider = class {
   constructor(client, scope) {
@@ -49800,50 +49824,53 @@ var VertexExtensionsProvider = class {
   type = "vertex-extensions";
   async probe() {
     try {
-      await this.client.probeVertexExtensions(this.scope.projectId);
+      await this.client.probeVertexExtensions(this.scope.projectId, this.scope.location ?? "us-central1");
       return "available";
-    } catch (e2) {
-      return probeFailureStatus(e2);
+    } catch (error2) {
+      return probeFailureStatus(error2);
     }
   }
   async listCandidates() {
-    const p = this.scope.apiId ? parseVertexExtensionName(this.scope.apiId) : void 0;
-    if (this.scope.apiId && !p) return [];
-    if (p && p.projectId !== this.scope.projectId) throw new Error("api-id Vertex extension does not belong to configured project-id");
-    const xs = p ? [await this.findExplicit(this.scope.apiId)] : await this.client.listVertexExtensions(this.scope.projectId);
-    return xs.map((x2) => this.toCandidate(x2));
+    const parsed = this.scope.apiId ? parseVertexExtensionName(this.scope.apiId) : void 0;
+    if (this.scope.apiId && !parsed) return [];
+    if (parsed && parsed.projectId !== this.scope.projectId) throw new Error("api-id Vertex extension does not belong to configured project-id");
+    const location = parsed?.location ?? this.scope.location ?? "us-central1";
+    const extensions = parsed ? [await this.findExplicit(this.scope.apiId, location)] : await this.client.listVertexExtensions(this.scope.projectId, location);
+    return extensions.map((extension) => this.toCandidate(extension));
   }
-  async findExplicit(id) {
-    const xs = await this.client.listVertexExtensions(this.scope.projectId);
-    return xs.find((x2) => x2.name === id) ?? { name: id };
+  async findExplicit(id, location) {
+    const extensions = await this.client.listVertexExtensions(this.scope.projectId, location);
+    return extensions.find((extension) => extension.name === id) ?? { name: id };
   }
-  toCandidate(x2) {
-    const count = Number(Boolean(x2.openApiYaml?.trim())) + Number(Boolean(x2.openApiGcsUri));
+  toCandidate(extension) {
+    const count = Number(Boolean(extension.openApiYaml?.trim())) + Number(Boolean(extension.openApiGcsUri));
     let supported = count === 1;
-    if (x2.openApiYaml?.trim()) try {
-      decodeUtf8OpenApi(x2.openApiYaml);
+    if (extension.openApiYaml?.trim()) try {
+      decodeUtf8OpenApi(extension.openApiYaml);
     } catch {
       supported = false;
     }
-    if (x2.openApiGcsUri && !parseGcsSpecLocation(x2.openApiGcsUri)) supported = false;
-    return { id: x2.name, apiId: x2.name, name: x2.displayName || x2.name.split("/").pop(), providerType: this.type, projectId: this.scope.projectId, tags: {}, supported, evidence: [count === 0 ? "Vertex extension manifest has no OpenAPI source" : count > 1 ? "Vertex extension manifest has multiple OpenAPI sources" : "Vertex extension manifest has one OpenAPI source"], meta: { openApiYaml: x2.openApiYaml ?? "", openApiGcsUri: x2.openApiGcsUri ?? "" } };
+    if (extension.openApiGcsUri && !parseGcsSpecLocation(extension.openApiGcsUri)) supported = false;
+    return { id: extension.name, apiId: extension.name, name: extension.displayName || extension.name.split("/").pop(), providerType: this.type, projectId: this.scope.projectId, tags: {}, supported, evidence: [count === 0 ? "Vertex extension manifest has no OpenAPI source" : count > 1 ? "Vertex extension manifest has multiple OpenAPI sources" : "Vertex extension manifest has one OpenAPI source"], meta: { openApiYaml: extension.openApiYaml ?? "", openApiGcsUri: extension.openApiGcsUri ?? "" } };
   }
-  async exportSpec(c) {
-    let text = c.meta.openApiYaml ?? "";
+  async exportSpec(candidate) {
+    let text = candidate.meta.openApiYaml ?? "";
+    const evidence = ["Exported original Vertex extension OpenAPI document"];
     if (!text) {
-      const g = parseGcsSpecLocation(c.meta.openApiGcsUri ?? "");
-      if (!g) throw new Error("Vertex extension has no supported OpenAPI source");
-      text = await this.client.getStorageObjectText(g.bucket, g.object);
+      const gcs = parseGcsSpecLocation(candidate.meta.openApiGcsUri ?? "");
+      if (!gcs) throw new Error("Vertex extension has no supported OpenAPI source");
+      text = await this.client.getStorageObjectText(gcs.bucket, gcs.object);
+      evidence.push("Fetched Vertex extension OpenAPI source from [gs-object]");
     }
-    return { ...decodeUtf8OpenApi(text), evidence: ["Exported original Vertex extension manifest OpenAPI source"] };
+    return { ...decodeUtf8OpenApi(text), evidence };
   }
 };
 
 // src/lib/providers/dialogflow-tools.ts
 var PATTERN4 = /^projects\/([^/]+)\/locations\/([^/]+)\/agents\/([^/]+)\/tools\/([^/]+)$/;
-function parseDialogflowToolName(v) {
-  const m2 = PATTERN4.exec(v);
-  return m2 ? { projectId: m2[1], location: m2[2], agentId: m2[3], toolId: m2[4] } : void 0;
+function parseDialogflowToolName(value) {
+  const match = PATTERN4.exec(value);
+  return match ? { projectId: match[1], location: match[2], agentId: match[3], toolId: match[4] } : void 0;
 }
 var DialogflowToolsProvider = class {
   constructor(client, scope) {
@@ -49857,30 +49884,30 @@ var DialogflowToolsProvider = class {
     try {
       await this.client.probeDialogflow(this.scope.projectId);
       return "available";
-    } catch (e2) {
-      return probeFailureStatus(e2);
+    } catch (error2) {
+      return probeFailureStatus(error2);
     }
   }
   async listCandidates() {
-    const p = this.scope.apiId ? parseDialogflowToolName(this.scope.apiId) : void 0;
-    if (this.scope.apiId && !p) return [];
-    if (p && p.projectId !== this.scope.projectId) throw new Error("api-id Dialogflow tool does not belong to configured project-id");
+    const parsed = this.scope.apiId ? parseDialogflowToolName(this.scope.apiId) : void 0;
+    if (this.scope.apiId && !parsed) return [];
+    if (parsed && parsed.projectId !== this.scope.projectId) throw new Error("api-id Dialogflow tool does not belong to configured project-id");
     let tools = [];
-    if (p) {
-      tools = (await this.client.listDialogflowTools(`projects/${p.projectId}/locations/${p.location}/agents/${p.agentId}`)).filter((x2) => x2.name === this.scope.apiId);
-    } else for (const a of await this.client.listDialogflowAgents(this.scope.projectId)) tools.push(...await this.client.listDialogflowTools(a.name));
-    return tools.filter((x2) => x2.textSchema?.trim()).map((x2) => {
-      let supported = true;
-      try {
-        decodeUtf8OpenApi(x2.textSchema);
+    if (parsed) tools = (await this.client.listDialogflowTools(`projects/${parsed.projectId}/locations/${parsed.location}/agents/${parsed.agentId}`)).filter((tool) => tool.name === this.scope.apiId);
+    else for (const agent of await this.client.listDialogflowAgents(this.scope.projectId)) tools.push(...await this.client.listDialogflowTools(agent.name));
+    return tools.map((tool) => {
+      const schema = tool.textSchema?.trim();
+      let supported = Boolean(schema);
+      if (schema) try {
+        decodeUtf8OpenApi(schema);
       } catch {
         supported = false;
       }
-      return { id: x2.name, apiId: x2.name, name: x2.displayName || x2.name.split("/").pop(), providerType: this.type, projectId: this.scope.projectId, tags: {}, supported, evidence: ["Dialogflow tool stores an OpenAPI text schema"], meta: { textSchema: x2.textSchema } };
+      return { id: tool.name, apiId: tool.name, name: tool.displayName || tool.name.split("/").pop(), providerType: this.type, projectId: this.scope.projectId, tags: {}, supported, evidence: [schema ? "Dialogflow tool stores an OpenAPI text schema" : "Dialogflow tool has no OpenAPI text schema; only OPEN_API_TOOL tools are exportable"], meta: { textSchema: schema ?? "" } };
     });
   }
-  async exportSpec(c) {
-    return { ...decodeUtf8OpenApi(c.meta.textSchema ?? ""), evidence: ["Exported original Dialogflow tool OpenAPI text schema"] };
+  async exportSpec(candidate) {
+    return { ...decodeUtf8OpenApi(candidate.meta.textSchema ?? ""), evidence: ["Exported original Dialogflow tool OpenAPI text schema"] };
   }
 };
 
@@ -49913,13 +49940,32 @@ var IacLocalProvider = class {
 };
 
 // src/lib/utils/resolve-path-within-root.ts
+var import_node_fs3 = require("node:fs");
 var import_node_path7 = __toESM(require("node:path"), 1);
+function nearestExistingAncestor(candidate) {
+  let current = candidate;
+  for (; ; ) {
+    try {
+      return (0, import_node_fs3.realpathSync)(current);
+    } catch {
+      const parent = import_node_path7.default.dirname(current);
+      if (parent === current) return current;
+      current = parent;
+    }
+  }
+}
 function resolvePathWithinRoot(rootPath, targetPath, fieldName) {
   const base = import_node_path7.default.resolve(rootPath);
   const resolved = import_node_path7.default.resolve(base, targetPath);
   const relative2 = import_node_path7.default.relative(base, resolved);
   if (relative2.startsWith("..") || import_node_path7.default.isAbsolute(relative2)) {
     throw new Error(`${fieldName} must stay within repo-root/workspace; received ${targetPath}`);
+  }
+  const realBase = nearestExistingAncestor(base);
+  const realResolved = nearestExistingAncestor(resolved);
+  const realRelative = import_node_path7.default.relative(realBase, realResolved);
+  if (realRelative.startsWith("..") || import_node_path7.default.isAbsolute(realRelative)) {
+    throw new Error(`${fieldName} must stay within repo-root/workspace after resolving symlinks; received ${targetPath}`);
   }
   return resolved;
 }
@@ -50183,7 +50229,7 @@ function buildProviders(inputs, dependencies, iacScan) {
     new AppIntegrationProvider(dependencies.client, { projectId: inputs.projectId, apiId: inputs.apiId }),
     new ConnectorsCustomProvider(dependencies.client, { projectId: inputs.projectId, apiId: inputs.apiId }),
     new ApigeePortalProvider(dependencies.client, { projectId: inputs.projectId, apiId: inputs.apiId }),
-    new VertexExtensionsProvider(dependencies.client, { projectId: inputs.projectId, apiId: inputs.apiId }),
+    new VertexExtensionsProvider(dependencies.client, { projectId: inputs.projectId, location: inputs.location === "global" ? "us-central1" : inputs.location, apiId: inputs.apiId }),
     new DialogflowToolsProvider(dependencies.client, { projectId: inputs.projectId, apiId: inputs.apiId }),
     new IacLocalProvider(iacScan)
   ];

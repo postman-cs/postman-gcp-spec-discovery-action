@@ -4,7 +4,23 @@ const MAX_EXTRACTED_BYTES = 10 * 1024 * 1024;
 
 function addEntry(files: Map<string, Buffer>, total: number, name: string, method: number, compressed: Buffer): number {
   if (name.endsWith('/')) return total;
-  const content = method === 0 ? Buffer.from(compressed) : method === 8 ? inflateRawSync(compressed) : undefined;
+  const remaining = MAX_EXTRACTED_BYTES - total;
+  if (method === 0 && compressed.length > remaining) throw new Error('ZIP extracted contents exceed 10 MiB');
+  let content: Buffer | undefined;
+  if (method === 0) {
+    content = Buffer.from(compressed);
+  } else if (method === 8) {
+    try {
+      // maxOutputLength caps allocation during inflation, so a decompression
+      // bomb fails before it can materialize beyond the extraction budget.
+      content = inflateRawSync(compressed, { maxOutputLength: remaining + 1 });
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ERR_BUFFER_TOO_LARGE') {
+        throw new Error('ZIP extracted contents exceed 10 MiB');
+      }
+      throw error;
+    }
+  }
   if (!content) throw new Error(`Unsupported ZIP compression method ${method}`);
   const next = total + content.length;
   if (next > MAX_EXTRACTED_BYTES) throw new Error('ZIP extracted contents exceed 10 MiB');
