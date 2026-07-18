@@ -48235,11 +48235,11 @@ function toDotenv(outputs) {
   };
   return Object.entries(envPairs).map(([key, value]) => `${key}=${JSON.stringify(value)}`).join("\n");
 }
-async function writeOptionalFile(filePath, content) {
+async function writeOptionalFile(rootPath, filePath, content) {
   if (!filePath) {
     return;
   }
-  const resolved = resolvePathWithinRoot(process.cwd(), filePath, "Output path");
+  const resolved = resolvePathWithinRoot(rootPath, filePath, "Output path");
   await (0, import_promises6.mkdir)(import_node_path9.default.dirname(resolved), { recursive: true });
   await (0, import_promises6.writeFile)(resolved, content, "utf8");
 }
@@ -48281,8 +48281,8 @@ async function runCli(argv = process.argv.slice(2), runtime = {}) {
         writeSpecFile: defaultWriteSpecFile
       }
     );
-    await writeOptionalFile(config.resultJsonPath, JSON.stringify(result, null, 2));
-    await writeOptionalFile(config.dotenvPath, toDotenv(result.outputs));
+    await writeOptionalFile(inputs.repoRoot, config.resultJsonPath, JSON.stringify(result, null, 2));
+    await writeOptionalFile(inputs.repoRoot, config.dotenvPath, toDotenv(result.outputs));
     writeStdout(`${JSON.stringify(result, null, 2)}
 `);
     telemetry.setAccountType(accountType);

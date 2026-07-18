@@ -225,11 +225,11 @@ export function toDotenv(outputs: Record<string, string>): string {
     .join('\n');
 }
 
-async function writeOptionalFile(filePath: string | undefined, content: string): Promise<void> {
+async function writeOptionalFile(rootPath: string, filePath: string | undefined, content: string): Promise<void> {
   if (!filePath) {
     return;
   }
-  const resolved = resolvePathWithinRoot(process.cwd(), filePath, 'Output path');
+  const resolved = resolvePathWithinRoot(rootPath, filePath, 'Output path');
   await mkdir(path.dirname(resolved), { recursive: true });
   await writeFile(resolved, content, 'utf8');
 }
@@ -280,8 +280,8 @@ export async function runCli(
           }
     );
 
-    await writeOptionalFile(config.resultJsonPath, JSON.stringify(result, null, 2));
-    await writeOptionalFile(config.dotenvPath, toDotenv(result.outputs));
+    await writeOptionalFile(inputs.repoRoot, config.resultJsonPath, JSON.stringify(result, null, 2));
+    await writeOptionalFile(inputs.repoRoot, config.dotenvPath, toDotenv(result.outputs));
 
     writeStdout(`${JSON.stringify(result, null, 2)}\n`);
     telemetry.setAccountType(accountType);
