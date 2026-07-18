@@ -175,13 +175,15 @@ export function resolveInputs(env: NodeJS.ProcessEnv = process.env): ResolvedInp
     const endpoints = parseEndpointConfigName(apiId);
     const apigee = parseApigeeRevisionName(apiId);
     const apiHub = parseApiHubSpecName(apiId);
-    if (!gateway && !endpoints && !apigee && !apiHub) {
-      throw new Error('api-id must be a full API Gateway config, Cloud Endpoints config, Apigee proxy revision, or API Hub spec resource name');
+    const ces = /^projects\/([^/]+)\/locations\/global\/apps\/[^/]+\/(?:toolsets|tools)\/[^/]+$/.exec(apiId);
+    if (!gateway && !endpoints && !apigee && !apiHub && !ces) {
+      throw new Error('api-id must be a full API Gateway config, Cloud Endpoints config, Apigee proxy revision, API Hub spec, or CES tool/toolset resource name');
     }
     if (apiHub && apiHub.projectId !== projectId) {
       throw new Error('api-id must belong to the configured project-id API Hub instance');
     }
     if (apigee && apigee.org !== projectId) throw new Error('api-id must belong to the configured project-id Apigee org');
+    if (ces?.[1] !== undefined && ces[1] !== projectId) throw new Error('api-id CES resource must belong to the configured project-id');
     if (gateway && (gateway.projectId !== projectId || gateway.location !== location)) {
       throw new Error('api-id must belong to the configured project-id and global location');
     }
@@ -282,8 +284,10 @@ function resolveServiceName(candidate: SpecCandidate, serviceMapping: Record<str
 }
 
 function sourceTypeForProvider(
-  provider: ProviderType
+  provider: ProviderType,
+  candidateSourceType?: import('./contracts.js').SourceType
 ): import('./contracts.js').SourceType {
+  if (candidateSourceType) return candidateSourceType;
   if (provider === 'api-gateway') return 'api-gateway-config';
   if (provider === 'cloud-endpoints') return 'cloud-endpoints-config';
   if (provider === 'apigee') return 'apigee-proxy';
@@ -358,6 +362,7 @@ function toCandidateInput(candidate: SpecCandidate): GCPCandidateInput {
     id: candidate.id,
     name: candidate.name,
     providerType: candidate.providerType,
+    sourceType: candidate.sourceType,
     apiId: candidate.apiId,
     tags: candidate.tags,
     supported: candidate.supported,
@@ -577,7 +582,7 @@ async function runResolveOne(inputs: ResolvedInputs, dependencies: GCPDependenci
         const written = await writeSpecExport(inputs, serviceName, exportResult, dependencies.writeSpecFile);
         const resolution: ResolutionResult = {
           status: 'resolved',
-          sourceType: sourceTypeForProvider(target.providerType),
+          sourceType: sourceTypeForProvider(target.providerType, target.sourceType),
           serviceName,
           confidence: 100,
           specPath: written.specPath,
@@ -675,7 +680,7 @@ async function runResolveOne(inputs: ResolvedInputs, dependencies: GCPDependenci
         const written = await writeSpecExport(inputs, serviceName, exportResult, dependencies.writeSpecFile);
         const resolution: ResolutionResult = {
           status: 'resolved',
-          sourceType: sourceTypeForProvider(target.providerType),
+          sourceType: sourceTypeForProvider(target.providerType, target.sourceType),
           serviceName,
           confidence: best.confidence,
           specPath: written.specPath,

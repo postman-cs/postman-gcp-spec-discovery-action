@@ -72,7 +72,7 @@ export function chooseSource(input: SourceSelectionInput): ResolutionResult {
   if (resolved) {
     return {
       status: 'resolved',
-      sourceType: sourceTypeFor(resolved.providerType),
+      sourceType: resolved.sourceType ?? sourceTypeFor(resolved.providerType),
       serviceName: resolved.serviceName,
       confidence: resolved.confidence,
       ...(resolved.apiId ? { apiId: resolved.apiId } : {}),
