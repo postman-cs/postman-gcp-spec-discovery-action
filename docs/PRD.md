@@ -19,7 +19,8 @@ The action discovers or derives an OpenAPI 3.x or Swagger 2.0 document from one 
 | `mode` | false | `resolve-one` | `resolve-one` or `discover-many`. |
 | `project-id` | true | none | Exact Google Cloud project ID; never inferred from ambient ADC. |
 | `location` | false | `global` | API Gateway location; v1 accepts only `global`. |
-| `api-id` | false | `''` | Exact full API Gateway config or Cloud Endpoints config resource name. |
+| `api-id` | false | `''` | Exact full API Gateway config, Cloud Endpoints config, or Apigee proxy revision resource name. |
+| `repo-slug` | false | `''` | Repository slug (owner/name) for repository-association matching against `postman-repo` labels; defaults to the CI-detected repository. |
 | `output-dir` | false | `discovered-specs` | Confined repository-relative write root. |
 | `postman-api-key` | false | `''` | Optional telemetry enrichment only. |
 | `postman-access-token` | false | `''` | Optional telemetry enrichment only. |
