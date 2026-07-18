@@ -47421,6 +47421,19 @@ function normalizeLabels(value) {
     Object.entries(value).filter((entry) => typeof entry[1] === "string")
   );
 }
+function flattenApiHubAttributes(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  const flattened = {};
+  for (const [attributeName, attributeValue] of Object.entries(value)) {
+    const attributeId = attributeName.split("/").pop();
+    if (!attributeId) continue;
+    const values = attributeValue;
+    if (!values || typeof values !== "object") continue;
+    const scalar = values.stringValues?.values?.find((entry) => typeof entry === "string") ?? values.uriValues?.values?.find((entry) => typeof entry === "string") ?? values.enumValues?.values?.map((entry) => entry.id).find((id) => typeof id === "string");
+    if (typeof scalar === "string" && scalar.length > 0) flattened[attributeId] = scalar;
+  }
+  return flattened;
+}
 var GcpSdkClient = class {
   requesterPromise;
   options;
@@ -47839,7 +47852,7 @@ var GcpSdkClient = class {
       displayName: typeof item.displayName === "string" ? item.displayName : void 0,
       apiDisplayName,
       specTypeIds: (specType?.enumValues?.values ?? []).map((entry) => entry.id ?? "").filter((id) => id.length > 0),
-      attributes: normalizeLabels(item.attributes),
+      attributes: flattenApiHubAttributes(item.attributes),
       createTime: typeof item.createTime === "string" ? item.createTime : void 0,
       sourceUri: typeof item.sourceUri === "string" ? item.sourceUri : void 0
     };
@@ -49164,7 +49177,7 @@ function tierLabels(candidates, context) {
   if (exact.length > 0) {
     return {
       ids: exact,
-      ...exact.length === 1 ? { selectId: exact[0] } : {},
+      ...exact.length === 1 ? { selectId: exact[0] } : { conflict: true },
       evidence: [`Found ${exact.length} exact postman-repo=${canonical} label match(es)`]
     };
   }
@@ -49200,6 +49213,7 @@ async function runNarrowingPipeline(context, candidates) {
       tier,
       mode: select ? "select" : "narrow",
       droppedCount,
+      ...hit.conflict ? { conflict: true } : {},
       evidence: [...hit.evidence, `Narrowing (${tier}) ranked ${intersecting.length} candidate(s) first and demoted ${droppedCount} (not deleted)`]
     };
   }
@@ -50497,7 +50511,7 @@ async function collectCandidates(providers, core) {
 }
 async function runResolveOne(inputs, dependencies) {
   const core = dependencies.core;
-  const existingSpec = await findExistingRepoSpecTyped(inputs.repoRoot);
+  const existingSpec = inputs.apiId ? void 0 : await findExistingRepoSpecTyped(inputs.repoRoot);
   if (existingSpec) {
     const resolution2 = chooseSource({
       existingSpecPath: existingSpec.path,
@@ -50514,7 +50528,7 @@ async function runResolveOne(inputs, dependencies) {
   }
   const iacScan = await scanGCPIac(inputs.repoRoot, inputs.outputDir);
   const iacCandidates = iacScan.candidates;
-  if (iacCandidates.length === 1 && iacCandidates[0]) {
+  if (!inputs.apiId && iacCandidates.length === 1 && iacCandidates[0]) {
     const only = iacCandidates[0];
     const provider = new IacLocalProvider(iacScan);
     const exportResult = await provider.exportSpec(only);
@@ -50544,7 +50558,7 @@ async function runResolveOne(inputs, dependencies) {
       outputs: buildExecutionOutputs({ mode: inputs.mode, discovered: [], resolution: resolution2 })
     };
   }
-  if (iacCandidates.length > 1) {
+  if (!inputs.apiId && iacCandidates.length > 1) {
     const signals2 = await collectRepoSignals({
       repoRoot: inputs.repoRoot,
       expectedServiceName: inputs.expectedServiceName,
@@ -50638,6 +50652,7 @@ async function runResolveOne(inputs, dependencies) {
       serviceName: inputs.expectedServiceName ?? "unknown-service",
       confidence: 0,
       providerProbes: probes,
+      rankedCandidates: toAmbiguousViews(rankServiceCandidates(enumerated.map(toCandidateInput), signals).slice(0, inputs.maxCandidates)),
       evidence: [`Requested api-id was not found among ${enumerated.length} enumerated candidate(s)`]
     };
     return {
@@ -50680,7 +50695,7 @@ async function runResolveOne(inputs, dependencies) {
     }
   }
   const narrowingMetadata = narrowing ? { tier: narrowing.tier, mode: narrowing.mode, droppedCount: narrowing.droppedCount } : void 0;
-  if (best && !best.ambiguous && best.supported && best.confidence >= MINIMUM_RESOLVED_CONFIDENCE2) {
+  if (best && !best.ambiguous && !narrowing?.conflict && best.supported && best.confidence >= MINIMUM_RESOLVED_CONFIDENCE2) {
     const target = partitioned.find((candidate) => candidate.id === best?.resourceId);
     const provider = target ? availableProviders.find((p) => p.type === target.providerType) : void 0;
     if (target && provider) {
@@ -50823,7 +50838,7 @@ async function runDiscoverMany(inputs, dependencies) {
     mode: inputs.mode,
     discovered,
     exportSummary: summary2,
-    outputs: buildExecutionOutputs({ mode: inputs.mode, discovered, exportSummary: summary2, providerProbes: probes })
+    outputs: buildExecutionOutputs({ mode: inputs.mode, discovered, exportSummary: summary2, providerProbes: probes, narrowing })
   };
 }
 function buildExecutionOutputs(result) {
@@ -50859,7 +50874,7 @@ function buildExecutionOutputs(result) {
       "derived-openapi-completeness": "",
       "derived-openapi-format": "",
       "derived-openapi-evidence-json": "",
-      "narrowing-strategy": "none"
+      "narrowing-strategy": result.narrowing?.tier ?? "none"
     };
   }
   const resolution = result.resolution ?? {
