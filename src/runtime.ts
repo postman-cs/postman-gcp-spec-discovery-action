@@ -33,10 +33,10 @@ import { ApigeeProvider, parseApigeeRevisionName } from './lib/providers/apigee.
 import { ApiHubProvider, parseApiHubSpecName } from './lib/providers/api-hub.js';
 import { AppIntegrationProvider } from './lib/providers/app-integration.js';
 import { ConnectorsCustomProvider } from './lib/providers/connectors-custom.js';
-import { ApigeePortalProvider } from './lib/providers/apigee-portal.js';
-import { VertexExtensionsProvider } from './lib/providers/vertex-extensions.js';
+import { ApigeePortalProvider, parseApigeePortalApidocName } from './lib/providers/apigee-portal.js';
+import { DialogflowToolsProvider, parseDialogflowToolName } from './lib/providers/dialogflow-tools.js';
+import { VertexExtensionsProvider, parseVertexExtensionName } from './lib/providers/vertex-extensions.js';
 import { AgentEnginesProvider } from './lib/providers/agent-engines.js';
-import { DialogflowToolsProvider } from './lib/providers/dialogflow-tools.js';
 import { CesToolsetsProvider } from './lib/providers/ces-toolsets.js';
 import { IacLocalProvider } from './lib/providers/iac-local.js';
 import { resolvePathWithinRoot } from './lib/utils/resolve-path-within-root.js';
@@ -176,14 +176,22 @@ export function resolveInputs(env: NodeJS.ProcessEnv = process.env): ResolvedInp
     const endpoints = parseEndpointConfigName(apiId);
     const apigee = parseApigeeRevisionName(apiId);
     const apiHub = parseApiHubSpecName(apiId);
-    const ces = /^projects\/([^/]+)\/locations\/global\/apps\/[^/]+\/(?:toolsets|tools)\/[^/]+$/.exec(apiId);
-    if (!gateway && !endpoints && !apigee && !apiHub && !ces) {
-      throw new Error('api-id must be a full API Gateway config, Cloud Endpoints config, Apigee proxy revision, API Hub spec, or CES tool/toolset resource name');
+    const portal = parseApigeePortalApidocName(apiId);
+    const dialogflow = parseDialogflowToolName(apiId);
+    const vertex = parseVertexExtensionName(apiId);
+    // Nested toolset tools (apps/{app}/toolsets/{toolset}/tools/{tool}) are first-class
+    // CES candidates, so the explicit selector accepts them too.
+    const ces = /^projects\/([^/]+)\/locations\/global\/apps\/[^/]+\/(?:tools\/[^/]+|toolsets\/[^/]+(?:\/tools\/[^/]+)?)$/.exec(apiId);
+    if (!gateway && !endpoints && !apigee && !apiHub && !portal && !dialogflow && !vertex && !ces) {
+      throw new Error('api-id must be a full API Gateway config, Cloud Endpoints config, Apigee proxy revision, API Hub spec, Apigee portal apidoc, Vertex extension, Dialogflow tool, or CES tool/toolset resource name');
     }
     if (apiHub && apiHub.projectId !== projectId) {
       throw new Error('api-id must belong to the configured project-id API Hub instance');
     }
     if (apigee && apigee.org !== projectId) throw new Error('api-id must belong to the configured project-id Apigee org');
+    if (portal && portal.org !== projectId) throw new Error('api-id must belong to the configured project-id Apigee portal org');
+    if (dialogflow && dialogflow.projectId !== projectId) throw new Error('api-id must belong to the configured project-id Dialogflow agent');
+    if (vertex && vertex.projectId !== projectId) throw new Error('api-id must belong to the configured project-id Vertex extension registry');
     if (ces?.[1] !== undefined && ces[1] !== projectId) throw new Error('api-id CES resource must belong to the configured project-id');
     if (gateway && (gateway.projectId !== projectId || gateway.location !== location)) {
       throw new Error('api-id must belong to the configured project-id and global location');
@@ -468,6 +476,21 @@ async function runResolveOne(inputs: ResolvedInputs, dependencies: GCPDependenci
   // is absent, a committed repo spec still wins before any cloud call so
   // spec-carrying repos never need GCP auth.
   const existingSpec = inputs.apiId ? undefined : await findExistingRepoSpecTyped(inputs.repoRoot);
+  if (existingSpec?.ambiguousPaths && existingSpec.ambiguousPaths.length > 1) {
+    const resolution: ResolutionResult = {
+      status: 'unresolved',
+      sourceType: 'manual-review',
+      serviceName: inputs.expectedServiceName ?? 'unknown-service',
+      confidence: 0,
+      evidence: existingSpec.evidence ?? ['Repository contains multiple equally ranked specification documents']
+    };
+    return {
+      mode: inputs.mode,
+      discovered: [],
+      resolution,
+      outputs: buildExecutionOutputs({ mode: inputs.mode, discovered: [], resolution })
+    };
+  }
   if (existingSpec) {
     const resolution = chooseSource({
       existingSpecPath: existingSpec.path,
@@ -899,7 +922,14 @@ export function buildExecutionOutputs(result: {
     confidence: 0,
     evidence: ['No resolution result produced']
   };
-  const resolutionWithProbes = { ...resolution, providerProbes: resolution.providerProbes ?? result.providerProbes ?? [] };
+  const resolutionWithProbes = {
+    ...resolution,
+    providerProbes: resolution.providerProbes ?? result.providerProbes ?? [],
+    // Evidence is the human-facing leak surface (summaries, logs, PR comments);
+    // sanitize it at the serialization boundary. Machine-facing fields such as
+    // apiId and specPath stay verbatim because the composite pipeline consumes them.
+    evidence: (resolution.evidence ?? []).map(sanitizeLogMessage)
+  };
   return {
     'resolution-json': JSON.stringify(resolutionWithProbes),
     'resolution-status': resolution.status,

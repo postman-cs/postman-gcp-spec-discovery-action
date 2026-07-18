@@ -8,7 +8,7 @@ Release: `v1.0.0`; npm `@postman-cse/onboarding-gcp-spec-discovery@1.0.0`
 
 ## Product Contract
 
-The action discovers or derives an OpenAPI 3.x or Swagger 2.0 document from one explicitly named Google Cloud project. Resolution order is direct repo spec, one local-IaC referenced spec, then cloud candidates. Ambiguity or unsupported source shape returns `unresolved/manual-review` with sanitized evidence and writes no guessed artifact.
+The action discovers or derives an OpenAPI 3.x or Swagger 2.0 document from one explicitly named Google Cloud project. Resolution order is explicit `api-id` override, then direct repo spec, one local-IaC referenced spec, then cloud candidates. Ambiguity or unsupported source shape returns `unresolved/manual-review` with sanitized evidence and writes no guessed artifact.
 
 ### Inputs
 
@@ -19,13 +19,16 @@ The action discovers or derives an OpenAPI 3.x or Swagger 2.0 document from one 
 | `mode` | false | `resolve-one` | `resolve-one` or `discover-many`. |
 | `project-id` | true | none | Exact Google Cloud project ID; never inferred from ambient ADC. |
 | `location` | false | `global` | API Gateway location; v1 accepts only `global`. |
-| `api-id` | false | `''` | Exact full API Gateway config, Cloud Endpoints config, or Apigee proxy revision resource name. |
+| `api-id` | false | `''` | Exact full resource name of any explicitly selectable source: API Gateway config, Cloud Endpoints config, Apigee proxy revision, API Hub spec, Apigee portal apidoc, Vertex extension, Dialogflow tool, or CES tool/toolset. |
 | `repo-slug` | false | `''` | Repository slug (owner/name) for repository-association matching against `postman-repo` labels; defaults to the CI-detected repository. |
+| `expected-service-name` | false | `''` | Ranking hint; also names manual-review results. |
+| `expected-api-ids-json` | false | `[]` | JSON array of expected full resource names; exact matches rank highest. |
+| `service-mapping-json` | false | `{}` | JSON object mapping resource names to service names. |
 | `output-dir` | false | `discovered-specs` | Confined repository-relative write root. |
 | `postman-api-key` | false | `''` | Optional telemetry enrichment only. |
 | `postman-access-token` | false | `''` | Optional telemetry enrichment only. |
 
-CLI-only controls mirror Azure: repository context, expected IDs/service name, mapping/filter, candidate cap, dry-run, preflight controls, request timeout, attempts, result JSON, dotenv path, help, and version. Defaults are `max-candidates=50`, `request-timeout-ms=30000`, `max-attempts=3`, `preflight-checks=true`, and `preflight-permission-probe=true`.
+CLI-only controls mirror Azure: repository context, filter regex, candidate cap, dry-run, preflight controls, request timeout, attempts, result JSON, dotenv path, help, and version. Defaults are `max-candidates=50`, `request-timeout-ms=30000`, `max-attempts=3`, `preflight-checks=true`, and `preflight-permission-probe=true`.
 
 ### Outputs
 
@@ -120,7 +123,7 @@ Acceptance:
 
 ### R5 - Repository and GCP IaC discovery (P0)
 
-- Direct repository OpenAPI/Swagger files retain highest precedence.
+- Direct repository OpenAPI/Swagger files retain highest precedence after any explicit `api-id` override.
 - Scan at most depth 6 and 200 `.tf`, `.json`, `.yaml`, `.yml` files in lexical order, excluding `.git`, `node_modules`, `dist`, and `output-dir`; do not execute Terraform, gcloud, hooks, or source code.
 - Terraform recognizes only literal `google_api_gateway_api_config` OpenAPI document `path` references and `google_endpoints_service` literal OpenAPI file/content references. Resolve files beneath repo root only.
 - One valid referenced document resolves `iac-embedded`; multiple remain `manual-review`; no match falls through. Extract resource/API/service names only as narrowing fingerprints.

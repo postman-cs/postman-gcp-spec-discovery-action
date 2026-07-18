@@ -67,11 +67,13 @@ function scoreCandidate(candidate: GCPCandidateInput, signals: RepoSignals): { s
     score += 60;
     evidence.push('Canonical ownership tag exactly matches service hint');
   } else if (serviceHints.some((hint) => hint && allTagValues.some((tag) => tag === hint))) {
-    // Exact match on a non-canonical tag is corroborating but not authoritative.
-    score += 40;
+    // Exact match on a non-canonical tag is corroborating but not authoritative:
+    // it stays below MINIMUM_RESOLVED_CONFIDENCE (40) so it reorders candidates
+    // but can never authorize an export on its own.
+    score += 39;
     evidence.push('Resource tag exactly matches service hint');
   } else if (serviceHints.some((hint) => hint && allTagValues.some((tag) => tag.includes(hint)))) {
-    score += 40;
+    score += 39;
     evidence.push('Resource tags match service hint');
   }
 

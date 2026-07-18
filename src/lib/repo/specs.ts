@@ -1,8 +1,8 @@
 import { readdir, readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
-import { parse } from 'yaml';
 
 import type { SpecFormat } from '../../contracts.js';
+import { parseAndValidateOpenApi } from '../spec/validate-openapi.js';
 
 const DIRECT_SPEC_CANDIDATES = [
   'openapi.yaml',
@@ -65,11 +65,8 @@ const MAX_SPEC_SCAN_DEPTH = 6;
 
 function isLikelyOpenApiDocument(content: string): boolean {
   try {
-    const parsed = content.trim().startsWith('{') ? JSON.parse(content) : parse(content);
-    if (!parsed || typeof parsed !== 'object') {
-      return false;
-    }
-    return Boolean((parsed as Record<string, unknown>).openapi || (parsed as Record<string, unknown>).swagger);
+    parseAndValidateOpenApi(content);
+    return true;
   } catch {
     return false;
   }
@@ -79,6 +76,8 @@ export interface RepoSpecMatch {
   path: string;
   format: SpecFormat;
   evidence?: string[];
+  /** Set when two or more valid documents tie at the same precedence score. */
+  ambiguousPaths?: string[];
 }
 
 function formatFor(candidate: string): SpecFormat {
@@ -92,6 +91,7 @@ export async function findExistingRepoSpec(repoRoot: string): Promise<string | u
 
 export async function findExistingRepoSpecTyped(repoRoot: string): Promise<RepoSpecMatch | undefined> {
   const candidates = await collectSpecCandidates(repoRoot);
+  const valid: Array<{ path: string; score: number }> = [];
   for (const candidate of candidates) {
     const fullPath = path.resolve(repoRoot, candidate);
     try {
@@ -101,19 +101,30 @@ export async function findExistingRepoSpecTyped(repoRoot: string): Promise<RepoS
       }
       const content = await readFile(fullPath, 'utf8');
       if (isLikelyOpenApiDocument(content)) {
-        const normalized = candidate.replace(/\\/g, '/');
-        return {
-          path: normalized,
-          format: formatFor(normalized.toLowerCase()),
-          evidence: [`Resolved from repository specification ${normalized}`]
-        };
+        valid.push({ path: candidate.replace(/\\/g, '/'), score: specCandidateScore(candidate) });
       }
     } catch {
       // Continue search.
     }
   }
-
-  return undefined;
+  if (valid.length === 0) return undefined;
+  const top = valid[0]!;
+  // Two or more valid documents at the same precedence score are ambiguous;
+  // the caller must surface manual review instead of guessing between them.
+  const tied = valid.filter((match) => match.score === top.score);
+  if (tied.length > 1) {
+    return {
+      path: top.path,
+      format: formatFor(top.path.toLowerCase()),
+      ambiguousPaths: tied.map((match) => match.path),
+      evidence: [`Repository contains ${tied.length} equally ranked specification documents; refusing to guess between them`]
+    };
+  }
+  return {
+    path: top.path,
+    format: formatFor(top.path.toLowerCase()),
+    evidence: [`Resolved from repository specification ${top.path}`]
+  };
 }
 
 function isSpecLikeFilename(filename: string): boolean {

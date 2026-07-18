@@ -19341,7 +19341,7 @@ var require_ms = __commonJS({
       options = options || {};
       var type = typeof val;
       if (type === "string" && val.length > 0) {
-        return parse4(val);
+        return parse3(val);
       } else if (type === "number" && isFinite(val)) {
         return options.long ? fmtLong(val) : fmtShort(val);
       }
@@ -19349,7 +19349,7 @@ var require_ms = __commonJS({
         "val is not a non-empty string or a valid number. val=" + JSON.stringify(val)
       );
     };
-    function parse4(str) {
+    function parse3(str) {
       str = String(str);
       if (str.length > 100) {
         return;
@@ -44468,7 +44468,7 @@ var require_public_api = __commonJS({
       }
       return doc;
     }
-    function parse4(src, reviver, options) {
+    function parse3(src, reviver, options) {
       let _reviver = void 0;
       if (typeof reviver === "function") {
         _reviver = reviver;
@@ -44509,7 +44509,7 @@ var require_public_api = __commonJS({
         return value.toString(options);
       return new Document.Document(value, _replacer, options).toString(options);
     }
-    exports2.parse = parse4;
+    exports2.parse = parse3;
     exports2.parseAllDocuments = parseAllDocuments;
     exports2.parseDocument = parseDocument2;
     exports2.stringify = stringify;
@@ -47285,7 +47285,7 @@ var actionContract = {
       default: "global"
     },
     "api-id": {
-      description: "Optional full API Gateway config, Cloud Endpoints config, Apigee proxy revision, or API Hub spec resource name. Use this to bypass broader project discovery.",
+      description: "Optional full API Gateway config, Cloud Endpoints config, Apigee proxy revision, API Hub spec, Apigee portal apidoc, Vertex extension, Dialogflow tool, or CES tool/toolset resource name. Use this to bypass broader project discovery.",
       required: false,
       default: ""
     },
@@ -47293,6 +47293,21 @@ var actionContract = {
       description: "Repository slug (owner/name) used for repository-association matching against postman-repo resource labels. Defaults to the CI-detected repository (GITHUB_REPOSITORY).",
       required: false,
       default: ""
+    },
+    "expected-service-name": {
+      description: "Optional expected service name used as a ranking hint and as the reported service name when resolution stays manual-review.",
+      required: false,
+      default: ""
+    },
+    "expected-api-ids-json": {
+      description: "Optional JSON array of full resource names that this repository expects to own; exact matches rank highest during resolution.",
+      required: false,
+      default: "[]"
+    },
+    "service-mapping-json": {
+      description: "Optional JSON object mapping resource names to service names, used to name exported specs for label-incapable providers.",
+      required: false,
+      default: "{}"
     },
     "output-dir": {
       description: "Directory under the repository root where generated specs are written.",
@@ -47327,7 +47342,7 @@ var actionContract = {
       description: "Path to the resolved or generated specification when available."
     },
     "api-id": {
-      description: "Full API Gateway, Cloud Endpoints config, Apigee proxy revision, or API Hub spec resource name; empty for repo, generated, or IaC-local resolutions."
+      description: "Full resource name of the exported cloud source (API Gateway config, Cloud Endpoints config, Apigee proxy revision, API Hub spec, Apigee portal apidoc, Vertex extension, Agent Engine, Dialogflow tool, or CES tool/toolset); empty for repo, generated, or IaC-local resolutions."
     },
     "service-name": {
       description: "Resolved service name."
@@ -47999,7 +48014,7 @@ var GcpSdkClient = class {
 // src/lib/logging/sanitize.ts
 var BEARER_TOKEN_RE = /\bBearer\s+[A-Za-z0-9._~+/=-]{8,}/gi;
 var URL_QUERY_RE = /(https:\/\/[^\s'"?]+)\?[^\s'"]*/gi;
-var GOOGLE_RESOURCE_RE = /\b(?:projects\/[a-z0-9-]+\/locations\/[^\s'"]+|services\/[a-z0-9.-]+\/configs\/[^\s'"]+)/gi;
+var GOOGLE_RESOURCE_RE = /\b(?:projects\/[a-z0-9-]+\/locations\/[^\s'"]+|organizations\/[a-z0-9-]+\/[^\s'"]+|services\/[a-z0-9.-]+\/configs\/[^\s'"]+)/gi;
 var SERVICE_ACCOUNT_RE = /\b[a-z0-9._%+-]+@[a-z0-9.-]+\.iam\.gserviceaccount\.com\b/gi;
 var PROJECT_NUMBER_RE = /\b\d{10,15}\b/g;
 var PRIVATE_KEY_RE = /-----BEGIN PRIVATE KEY-----[\s\S]*?-----END PRIVATE KEY-----/g;
@@ -48517,7 +48532,50 @@ function detectRepoContext2(input, env = process.env) {
 // src/lib/repo/specs.ts
 var import_promises2 = require("node:fs/promises");
 var import_node_path3 = __toESM(require("node:path"), 1);
+
+// src/lib/spec/validate-openapi.ts
 var import_yaml = __toESM(require_dist3(), 1);
+function parseAndValidateOpenApi(content) {
+  const trimmed = content.trim();
+  if (!trimmed) {
+    throw new Error("Specification content is empty");
+  }
+  const isJson = trimmed.startsWith("{");
+  let parsed;
+  try {
+    parsed = isJson ? JSON.parse(trimmed) : (0, import_yaml.parse)(trimmed);
+  } catch (error2) {
+    const detail = error2 instanceof Error ? error2.message : String(error2);
+    throw new Error(`Specification is not parseable JSON or YAML: ${detail}`);
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new Error("Specification did not parse to an object document");
+  }
+  const document2 = parsed;
+  let version;
+  const swagger = typeof document2.swagger === "string" ? document2.swagger : "";
+  const openapi = typeof document2.openapi === "string" ? document2.openapi : "";
+  if (swagger.startsWith("2")) {
+    version = "swagger-2.0";
+  } else if (openapi.startsWith("3.1")) {
+    version = "openapi-3.1";
+  } else if (openapi.startsWith("3.")) {
+    version = "openapi-3.0";
+  }
+  if (!version) {
+    throw new Error("Specification is not Swagger 2.0 or OpenAPI 3.x");
+  }
+  const paths = document2.paths;
+  if (!paths || typeof paths !== "object" || Array.isArray(paths)) {
+    throw new Error("Specification has no paths object");
+  }
+  if (Object.keys(paths).length === 0) {
+    throw new Error("Specification has an empty paths object");
+  }
+  return { document: document2, version, isJson };
+}
+
+// src/lib/repo/specs.ts
 var DIRECT_SPEC_CANDIDATES = [
   "openapi.yaml",
   "openapi.yml",
@@ -48575,11 +48633,8 @@ var MAX_SPEC_SCAN_FILES = 200;
 var MAX_SPEC_SCAN_DEPTH = 6;
 function isLikelyOpenApiDocument(content) {
   try {
-    const parsed = content.trim().startsWith("{") ? JSON.parse(content) : (0, import_yaml.parse)(content);
-    if (!parsed || typeof parsed !== "object") {
-      return false;
-    }
-    return Boolean(parsed.openapi || parsed.swagger);
+    parseAndValidateOpenApi(content);
+    return true;
   } catch {
     return false;
   }
@@ -48589,6 +48644,7 @@ function formatFor(candidate) {
 }
 async function findExistingRepoSpecTyped(repoRoot) {
   const candidates = await collectSpecCandidates(repoRoot);
+  const valid = [];
   for (const candidate of candidates) {
     const fullPath = import_node_path3.default.resolve(repoRoot, candidate);
     try {
@@ -48598,17 +48654,27 @@ async function findExistingRepoSpecTyped(repoRoot) {
       }
       const content = await (0, import_promises2.readFile)(fullPath, "utf8");
       if (isLikelyOpenApiDocument(content)) {
-        const normalized = candidate.replace(/\\/g, "/");
-        return {
-          path: normalized,
-          format: formatFor(normalized.toLowerCase()),
-          evidence: [`Resolved from repository specification ${normalized}`]
-        };
+        valid.push({ path: candidate.replace(/\\/g, "/"), score: specCandidateScore(candidate) });
       }
     } catch {
     }
   }
-  return void 0;
+  if (valid.length === 0) return void 0;
+  const top = valid[0];
+  const tied = valid.filter((match) => match.score === top.score);
+  if (tied.length > 1) {
+    return {
+      path: top.path,
+      format: formatFor(top.path.toLowerCase()),
+      ambiguousPaths: tied.map((match) => match.path),
+      evidence: [`Repository contains ${tied.length} equally ranked specification documents; refusing to guess between them`]
+    };
+  }
+  return {
+    path: top.path,
+    format: formatFor(top.path.toLowerCase()),
+    evidence: [`Resolved from repository specification ${top.path}`]
+  };
 }
 function isSpecLikeFilename(filename) {
   const lower2 = filename.toLowerCase();
@@ -48768,50 +48834,6 @@ async function collectRepoSignals(input) {
 // src/lib/repo/gcp-iac-scanner.ts
 var import_promises5 = require("node:fs/promises");
 var import_node_path6 = __toESM(require("node:path"), 1);
-
-// src/lib/spec/validate-openapi.ts
-var import_yaml2 = __toESM(require_dist3(), 1);
-function parseAndValidateOpenApi(content) {
-  const trimmed = content.trim();
-  if (!trimmed) {
-    throw new Error("Specification content is empty");
-  }
-  const isJson = trimmed.startsWith("{");
-  let parsed;
-  try {
-    parsed = isJson ? JSON.parse(trimmed) : (0, import_yaml2.parse)(trimmed);
-  } catch (error2) {
-    const detail = error2 instanceof Error ? error2.message : String(error2);
-    throw new Error(`Specification is not parseable JSON or YAML: ${detail}`);
-  }
-  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-    throw new Error("Specification did not parse to an object document");
-  }
-  const document2 = parsed;
-  let version;
-  const swagger = typeof document2.swagger === "string" ? document2.swagger : "";
-  const openapi = typeof document2.openapi === "string" ? document2.openapi : "";
-  if (swagger.startsWith("2")) {
-    version = "swagger-2.0";
-  } else if (openapi.startsWith("3.1")) {
-    version = "openapi-3.1";
-  } else if (openapi.startsWith("3.")) {
-    version = "openapi-3.0";
-  }
-  if (!version) {
-    throw new Error("Specification is not Swagger 2.0 or OpenAPI 3.x");
-  }
-  const paths = document2.paths;
-  if (!paths || typeof paths !== "object" || Array.isArray(paths)) {
-    throw new Error("Specification has no paths object");
-  }
-  if (Object.keys(paths).length === 0) {
-    throw new Error("Specification has an empty paths object");
-  }
-  return { document: document2, version, isJson };
-}
-
-// src/lib/repo/gcp-iac-scanner.ts
 var MAX_SCAN_FILES = 200;
 var MAX_SCAN_DEPTH = 6;
 var SKIP_DIRS3 = /* @__PURE__ */ new Set([".git", "node_modules", "dist"]);
@@ -49093,10 +49115,10 @@ function scoreCandidate(candidate, signals) {
     score += 60;
     evidence.push("Canonical ownership tag exactly matches service hint");
   } else if (serviceHints.some((hint) => hint && allTagValues.some((tag) => tag === hint))) {
-    score += 40;
+    score += 39;
     evidence.push("Resource tag exactly matches service hint");
   } else if (serviceHints.some((hint) => hint && allTagValues.some((tag) => tag.includes(hint)))) {
-    score += 40;
+    score += 39;
     evidence.push("Resource tags match service hint");
   }
   if (candidate.sourceType?.endsWith("-generated-spec")) {
@@ -49236,10 +49258,10 @@ async function runNarrowingPipeline(context, candidates) {
 }
 
 // src/lib/spec/oas-derivation.ts
-var import_yaml3 = __toESM(require_dist3(), 1);
+var import_yaml2 = __toESM(require_dist3(), 1);
 function parseDocument(content) {
   try {
-    const parsed = content.trim().startsWith("{") ? JSON.parse(content) : (0, import_yaml3.parse)(content);
+    const parsed = content.trim().startsWith("{") ? JSON.parse(content) : (0, import_yaml2.parse)(content);
     return parsed && typeof parsed === "object" ? parsed : void 0;
   } catch {
     return void 0;
@@ -50003,10 +50025,55 @@ var ApigeePortalProvider = class {
   }
 };
 
-// src/lib/providers/vertex-extensions.ts
-var PATTERN3 = /^projects\/([^/]+)\/locations\/([^/]+)\/extensions\/([^/]+)$/;
-function parseVertexExtensionName(value) {
+// src/lib/providers/dialogflow-tools.ts
+var PATTERN3 = /^projects\/([^/]+)\/locations\/([^/]+)\/agents\/([^/]+)\/tools\/([^/]+)$/;
+function parseDialogflowToolName(value) {
   const match = PATTERN3.exec(value);
+  return match ? { projectId: match[1], location: match[2], agentId: match[3], toolId: match[4] } : void 0;
+}
+var DialogflowToolsProvider = class {
+  constructor(client, scope) {
+    this.client = client;
+    this.scope = scope;
+  }
+  client;
+  scope;
+  type = "dialogflow-tools";
+  async probe() {
+    try {
+      await this.client.probeDialogflow(this.scope.projectId);
+      return "available";
+    } catch (error2) {
+      return probeFailureStatus(error2);
+    }
+  }
+  async listCandidates() {
+    const parsed = this.scope.apiId ? parseDialogflowToolName(this.scope.apiId) : void 0;
+    if (this.scope.apiId && !parsed) return [];
+    if (parsed && parsed.projectId !== this.scope.projectId) throw new Error("api-id Dialogflow tool does not belong to configured project-id");
+    let tools = [];
+    if (parsed) tools = (await this.client.listDialogflowTools(`projects/${parsed.projectId}/locations/${parsed.location}/agents/${parsed.agentId}`)).filter((tool) => tool.name === this.scope.apiId);
+    else for (const agent of await this.client.listDialogflowAgents(this.scope.projectId)) tools.push(...await this.client.listDialogflowTools(agent.name));
+    return tools.map((tool) => {
+      const schema = tool.textSchema?.trim();
+      let supported = Boolean(schema);
+      if (schema) try {
+        decodeUtf8OpenApi(schema);
+      } catch {
+        supported = false;
+      }
+      return { id: tool.name, apiId: tool.name, name: tool.displayName || tool.name.split("/").pop(), providerType: this.type, projectId: this.scope.projectId, tags: {}, supported, evidence: [schema ? "Dialogflow tool stores an OpenAPI text schema" : "Dialogflow tool has no OpenAPI text schema; only OPEN_API_TOOL tools are exportable"], meta: { textSchema: schema ?? "" } };
+    });
+  }
+  async exportSpec(candidate) {
+    return { ...decodeUtf8OpenApi(candidate.meta.textSchema ?? ""), evidence: ["Exported original Dialogflow tool OpenAPI text schema"] };
+  }
+};
+
+// src/lib/providers/vertex-extensions.ts
+var PATTERN4 = /^projects\/([^/]+)\/locations\/([^/]+)\/extensions\/([^/]+)$/;
+function parseVertexExtensionName(value) {
+  const match = PATTERN4.exec(value);
   return match ? { projectId: match[1], location: match[2], extensionId: match[3] } : void 0;
 }
 var VertexExtensionsProvider = class {
@@ -50210,51 +50277,6 @@ function isRecord(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-// src/lib/providers/dialogflow-tools.ts
-var PATTERN4 = /^projects\/([^/]+)\/locations\/([^/]+)\/agents\/([^/]+)\/tools\/([^/]+)$/;
-function parseDialogflowToolName(value) {
-  const match = PATTERN4.exec(value);
-  return match ? { projectId: match[1], location: match[2], agentId: match[3], toolId: match[4] } : void 0;
-}
-var DialogflowToolsProvider = class {
-  constructor(client, scope) {
-    this.client = client;
-    this.scope = scope;
-  }
-  client;
-  scope;
-  type = "dialogflow-tools";
-  async probe() {
-    try {
-      await this.client.probeDialogflow(this.scope.projectId);
-      return "available";
-    } catch (error2) {
-      return probeFailureStatus(error2);
-    }
-  }
-  async listCandidates() {
-    const parsed = this.scope.apiId ? parseDialogflowToolName(this.scope.apiId) : void 0;
-    if (this.scope.apiId && !parsed) return [];
-    if (parsed && parsed.projectId !== this.scope.projectId) throw new Error("api-id Dialogflow tool does not belong to configured project-id");
-    let tools = [];
-    if (parsed) tools = (await this.client.listDialogflowTools(`projects/${parsed.projectId}/locations/${parsed.location}/agents/${parsed.agentId}`)).filter((tool) => tool.name === this.scope.apiId);
-    else for (const agent of await this.client.listDialogflowAgents(this.scope.projectId)) tools.push(...await this.client.listDialogflowTools(agent.name));
-    return tools.map((tool) => {
-      const schema = tool.textSchema?.trim();
-      let supported = Boolean(schema);
-      if (schema) try {
-        decodeUtf8OpenApi(schema);
-      } catch {
-        supported = false;
-      }
-      return { id: tool.name, apiId: tool.name, name: tool.displayName || tool.name.split("/").pop(), providerType: this.type, projectId: this.scope.projectId, tags: {}, supported, evidence: [schema ? "Dialogflow tool stores an OpenAPI text schema" : "Dialogflow tool has no OpenAPI text schema; only OPEN_API_TOOL tools are exportable"], meta: { textSchema: schema ?? "" } };
-    });
-  }
-  async exportSpec(candidate) {
-    return { ...decodeUtf8OpenApi(candidate.meta.textSchema ?? ""), evidence: ["Exported original Dialogflow tool OpenAPI text schema"] };
-  }
-};
-
 // src/lib/providers/ces-toolsets.ts
 var PATTERN5 = /^projects\/([^/]+)\/locations\/global\/apps\/[^/]+\/(?:tools\/[^/]+|toolsets\/[^/]+(?:\/tools\/[^/]+)?)$/;
 var CesToolsetsProvider = class {
@@ -50440,14 +50462,20 @@ function resolveInputs(env = process.env) {
     const endpoints = parseEndpointConfigName(apiId);
     const apigee = parseApigeeRevisionName(apiId);
     const apiHub = parseApiHubSpecName(apiId);
-    const ces = /^projects\/([^/]+)\/locations\/global\/apps\/[^/]+\/(?:toolsets|tools)\/[^/]+$/.exec(apiId);
-    if (!gateway && !endpoints && !apigee && !apiHub && !ces) {
-      throw new Error("api-id must be a full API Gateway config, Cloud Endpoints config, Apigee proxy revision, API Hub spec, or CES tool/toolset resource name");
+    const portal = parseApigeePortalApidocName(apiId);
+    const dialogflow = parseDialogflowToolName(apiId);
+    const vertex = parseVertexExtensionName(apiId);
+    const ces = /^projects\/([^/]+)\/locations\/global\/apps\/[^/]+\/(?:tools\/[^/]+|toolsets\/[^/]+(?:\/tools\/[^/]+)?)$/.exec(apiId);
+    if (!gateway && !endpoints && !apigee && !apiHub && !portal && !dialogflow && !vertex && !ces) {
+      throw new Error("api-id must be a full API Gateway config, Cloud Endpoints config, Apigee proxy revision, API Hub spec, Apigee portal apidoc, Vertex extension, Dialogflow tool, or CES tool/toolset resource name");
     }
     if (apiHub && apiHub.projectId !== projectId) {
       throw new Error("api-id must belong to the configured project-id API Hub instance");
     }
     if (apigee && apigee.org !== projectId) throw new Error("api-id must belong to the configured project-id Apigee org");
+    if (portal && portal.org !== projectId) throw new Error("api-id must belong to the configured project-id Apigee portal org");
+    if (dialogflow && dialogflow.projectId !== projectId) throw new Error("api-id must belong to the configured project-id Dialogflow agent");
+    if (vertex && vertex.projectId !== projectId) throw new Error("api-id must belong to the configured project-id Vertex extension registry");
     if (ces?.[1] !== void 0 && ces[1] !== projectId) throw new Error("api-id CES resource must belong to the configured project-id");
     if (gateway && (gateway.projectId !== projectId || gateway.location !== location)) {
       throw new Error("api-id must belong to the configured project-id and global location");
@@ -50664,6 +50692,21 @@ async function collectCandidates(providers, core) {
 async function runResolveOne(inputs, dependencies) {
   const core = dependencies.core;
   const existingSpec = inputs.apiId ? void 0 : await findExistingRepoSpecTyped(inputs.repoRoot);
+  if (existingSpec?.ambiguousPaths && existingSpec.ambiguousPaths.length > 1) {
+    const resolution2 = {
+      status: "unresolved",
+      sourceType: "manual-review",
+      serviceName: inputs.expectedServiceName ?? "unknown-service",
+      confidence: 0,
+      evidence: existingSpec.evidence ?? ["Repository contains multiple equally ranked specification documents"]
+    };
+    return {
+      mode: inputs.mode,
+      discovered: [],
+      resolution: resolution2,
+      outputs: buildExecutionOutputs({ mode: inputs.mode, discovered: [], resolution: resolution2 })
+    };
+  }
   if (existingSpec) {
     const resolution2 = chooseSource({
       existingSpecPath: existingSpec.path,
@@ -51036,7 +51079,14 @@ function buildExecutionOutputs(result) {
     confidence: 0,
     evidence: ["No resolution result produced"]
   };
-  const resolutionWithProbes = { ...resolution, providerProbes: resolution.providerProbes ?? result.providerProbes ?? [] };
+  const resolutionWithProbes = {
+    ...resolution,
+    providerProbes: resolution.providerProbes ?? result.providerProbes ?? [],
+    // Evidence is the human-facing leak surface (summaries, logs, PR comments);
+    // sanitize it at the serialization boundary. Machine-facing fields such as
+    // apiId and specPath stay verbatim because the composite pipeline consumes them.
+    evidence: (resolution.evidence ?? []).map(sanitizeLogMessage)
+  };
   return {
     "resolution-json": JSON.stringify(resolutionWithProbes),
     "resolution-status": resolution.status,
