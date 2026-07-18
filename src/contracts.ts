@@ -40,7 +40,7 @@ export type SourceType =
   | 'api-hub-spec'
   | 'app-integration-trigger'
   | 'connectors-custom-spec'
-  | 'apigee-portal-doc' | 'vertex-extension-manifest' | 'dialogflow-tool-schema' | 'ces-toolset-schema'
+  | 'apigee-portal-doc' | 'vertex-extension-manifest' | 'dialogflow-tool-schema' | 'ces-tool-schema' | 'ces-toolset-schema'
   | 'iac-embedded'
   | 'manual-review'
   | 'discover-many';
@@ -171,7 +171,7 @@ export const actionContract: GCPSpecDiscoveryActionContract = {
       description: 'Resolution status: resolved or unresolved.'
     },
     'source-type': {
-      description: 'Resolved source type: repo-spec, api-gateway-config, cloud-endpoints-config, apigee-proxy, api-hub-spec, app-integration-trigger, connectors-custom-spec, apigee-portal-doc, vertex-extension-manifest, dialogflow-tool-schema, ces-toolset-schema, iac-embedded, manual-review, or discover-many.'
+      description: 'Resolved source type: repo-spec, api-gateway-config, cloud-endpoints-config, apigee-proxy, api-hub-spec, app-integration-trigger, connectors-custom-spec, apigee-portal-doc, vertex-extension-manifest, dialogflow-tool-schema, ces-tool-schema, ces-toolset-schema, iac-embedded, manual-review, or discover-many.'
     },
     'mapping-confidence': {
       description: 'Numeric confidence score for the selected service candidate.'

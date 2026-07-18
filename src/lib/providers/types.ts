@@ -1,9 +1,10 @@
-import type { ProviderType, ProviderProbeStatus, SpecFormat } from '../../contracts.js';
+import type { ProviderType, ProviderProbeStatus, SourceType, SpecFormat } from '../../contracts.js';
 
 export interface SpecCandidate {
   id: string; // full Google resource name, or stable repo-relative IaC candidate ID
   name: string;
   providerType: ProviderType;
+  sourceType?: SourceType;
   apiId?: string; // full API Gateway or Cloud Endpoints config resource name
   projectId?: string;
   tags: Record<string, string>;

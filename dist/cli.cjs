@@ -45750,7 +45750,7 @@ var actionContract = {
       description: "Resolution status: resolved or unresolved."
     },
     "source-type": {
-      description: "Resolved source type: repo-spec, api-gateway-config, cloud-endpoints-config, apigee-proxy, api-hub-spec, app-integration-trigger, connectors-custom-spec, apigee-portal-doc, vertex-extension-manifest, dialogflow-tool-schema, ces-toolset-schema, iac-embedded, manual-review, or discover-many."
+      description: "Resolved source type: repo-spec, api-gateway-config, cloud-endpoints-config, apigee-proxy, api-hub-spec, app-integration-trigger, connectors-custom-spec, apigee-portal-doc, vertex-extension-manifest, dialogflow-tool-schema, ces-tool-schema, ces-toolset-schema, iac-embedded, manual-review, or discover-many."
     },
     "mapping-confidence": {
       description: "Numeric confidence score for the selected service candidate."
@@ -46407,7 +46407,7 @@ function chooseSource(input) {
   if (resolved) {
     return {
       status: "resolved",
-      sourceType: sourceTypeFor(resolved.providerType),
+      sourceType: resolved.sourceType ?? sourceTypeFor(resolved.providerType),
       serviceName: resolved.serviceName,
       confidence: resolved.confidence,
       ...resolved.apiId ? { apiId: resolved.apiId } : {},
@@ -46472,6 +46472,7 @@ function toRanked(candidate, signals, score, evidence) {
     resourceId: candidate.id,
     apiId: candidate.apiId,
     providerType: candidate.providerType,
+    sourceType: candidate.sourceType,
     confidence: score,
     supported: candidate.supported,
     evidence: mergedEvidence.length > 0 ? mergedEvidence : ["No strong resolver evidence found"]
@@ -47457,16 +47458,18 @@ var CesToolsetsProvider = class {
   }
   toCandidate(toolset) {
     const schema = toolset.openApiSchema?.trim();
+    const standaloneTool = toolset.name.includes("/tools/");
+    const resourceKind = standaloneTool ? "tool" : "toolset";
     let supported = Boolean(schema);
     if (schema) try {
       decodeUtf8OpenApi(schema);
     } catch {
       supported = false;
     }
-    return { id: toolset.name, apiId: toolset.name, name: toolset.displayName || toolset.name.split("/").pop(), providerType: this.type, projectId: this.scope.projectId, tags: {}, supported, evidence: [schema ? "CES toolset stores an OpenAPI schema" : "CES toolset has no OpenAPI schema"], meta: { openApiSchema: schema ?? "" } };
+    return { id: toolset.name, apiId: toolset.name, name: toolset.displayName || toolset.name.split("/").pop(), providerType: this.type, sourceType: standaloneTool ? "ces-tool-schema" : "ces-toolset-schema", projectId: this.scope.projectId, tags: {}, supported, evidence: [schema ? `CES ${resourceKind} stores an OpenAPI schema` : `CES ${resourceKind} has no OpenAPI schema`], meta: { openApiSchema: schema ?? "", resourceKind } };
   }
   async exportSpec(candidate) {
-    return { ...decodeUtf8OpenApi(candidate.meta.openApiSchema ?? ""), evidence: ["Exported original CES toolset OpenAPI schema"] };
+    return { ...decodeUtf8OpenApi(candidate.meta.openApiSchema ?? ""), evidence: [`Exported original CES ${candidate.meta.resourceKind ?? "toolset"} OpenAPI schema`] };
   }
 };
 
@@ -47580,13 +47583,15 @@ function resolveInputs(env = process.env) {
     const endpoints = parseEndpointConfigName(apiId);
     const apigee = parseApigeeRevisionName(apiId);
     const apiHub = parseApiHubSpecName(apiId);
-    if (!gateway && !endpoints && !apigee && !apiHub) {
-      throw new Error("api-id must be a full API Gateway config, Cloud Endpoints config, Apigee proxy revision, or API Hub spec resource name");
+    const ces = /^projects\/([^/]+)\/locations\/global\/apps\/[^/]+\/(?:toolsets|tools)\/[^/]+$/.exec(apiId);
+    if (!gateway && !endpoints && !apigee && !apiHub && !ces) {
+      throw new Error("api-id must be a full API Gateway config, Cloud Endpoints config, Apigee proxy revision, API Hub spec, or CES tool/toolset resource name");
     }
     if (apiHub && apiHub.projectId !== projectId) {
       throw new Error("api-id must belong to the configured project-id API Hub instance");
     }
     if (apigee && apigee.org !== projectId) throw new Error("api-id must belong to the configured project-id Apigee org");
+    if (ces?.[1] !== void 0 && ces[1] !== projectId) throw new Error("api-id CES resource must belong to the configured project-id");
     if (gateway && (gateway.projectId !== projectId || gateway.location !== location)) {
       throw new Error("api-id must belong to the configured project-id and global location");
     }
@@ -47657,7 +47662,8 @@ function resolveServiceName(candidate, serviceMapping) {
   if (mapped) return mapped;
   return candidate.name;
 }
-function sourceTypeForProvider(provider) {
+function sourceTypeForProvider(provider, candidateSourceType) {
+  if (candidateSourceType) return candidateSourceType;
   if (provider === "api-gateway") return "api-gateway-config";
   if (provider === "cloud-endpoints") return "cloud-endpoints-config";
   if (provider === "apigee") return "apigee-proxy";
@@ -47710,6 +47716,7 @@ function toCandidateInput(candidate) {
     id: candidate.id,
     name: candidate.name,
     providerType: candidate.providerType,
+    sourceType: candidate.sourceType,
     apiId: candidate.apiId,
     tags: candidate.tags,
     supported: candidate.supported,
@@ -47897,7 +47904,7 @@ async function runResolveOne(inputs, dependencies) {
         const written = await writeSpecExport(inputs, serviceName, exportResult, dependencies.writeSpecFile);
         const resolution3 = {
           status: "resolved",
-          sourceType: sourceTypeForProvider(target.providerType),
+          sourceType: sourceTypeForProvider(target.providerType, target.sourceType),
           serviceName,
           confidence: 100,
           specPath: written.specPath,
@@ -47980,7 +47987,7 @@ async function runResolveOne(inputs, dependencies) {
         const written = await writeSpecExport(inputs, serviceName, exportResult, dependencies.writeSpecFile);
         const resolution2 = {
           status: "resolved",
-          sourceType: sourceTypeForProvider(target.providerType),
+          sourceType: sourceTypeForProvider(target.providerType, target.sourceType),
           serviceName,
           confidence: best.confidence,
           specPath: written.specPath,

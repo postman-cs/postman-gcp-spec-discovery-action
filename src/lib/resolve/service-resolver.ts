@@ -1,4 +1,4 @@
-import type { AmbiguousCandidateView, ProviderType } from '../../contracts.js';
+import type { AmbiguousCandidateView, ProviderType, SourceType } from '../../contracts.js';
 import type { RepoSignals } from '../repo/signals.js';
 import { sanitizeLogMessage } from '../logging/sanitize.js';
 
@@ -6,6 +6,7 @@ export interface GCPCandidateInput {
   id: string; // full Google resource name (or repo-relative IaC candidate ID)
   name: string;
   providerType: ProviderType;
+  sourceType?: SourceType;
   apiId?: string;
   tags: Record<string, string>;
   supported: boolean;
@@ -17,6 +18,7 @@ export interface RankedServiceCandidate {
   resourceId: string;
   apiId?: string;
   providerType: ProviderType;
+  sourceType?: SourceType;
   confidence: number;
   supported: boolean;
   ambiguous?: boolean;
@@ -87,6 +89,7 @@ function toRanked(candidate: GCPCandidateInput, signals: RepoSignals, score: num
     resourceId: candidate.id,
     apiId: candidate.apiId,
     providerType: candidate.providerType,
+    sourceType: candidate.sourceType,
     confidence: score,
     supported: candidate.supported,
     evidence: mergedEvidence.length > 0 ? mergedEvidence : ['No strong resolver evidence found']

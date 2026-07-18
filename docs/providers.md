@@ -81,7 +81,7 @@ Label-incapable providers still participate in discovery and ranking; they simpl
 
 - Lists Conversational Agents (Agent Studio) apps and OpenAPI toolsets in the global CES location.
 - Exports inline `openApiToolset.openApiSchema` and tool-level `openApiTool.openApiSchema` documents.
-- Produces `ces-toolset-schema` candidates whose `api-id` identifies the app toolset resource.
+- Produces `ces-tool-schema` candidates for standalone app tools and `ces-toolset-schema` candidates for toolset-scoped tools; each `api-id` identifies the original resource.
 - Disabled, absent, and unauthorized CES surfaces probe fail-soft so discovery continues.
 
 ## `iac-local`
