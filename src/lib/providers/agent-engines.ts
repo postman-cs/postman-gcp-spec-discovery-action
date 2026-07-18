@@ -39,6 +39,11 @@ export class AgentEnginesProvider implements SpecProvider {
       for (const declaration of engine.classMethods) {
         if (typeof declaration.name !== 'string') throw new Error('Invalid classMethod declaration');
       }
+      const unsupportedModes = unsupportedAgentEngineModes(engine);
+      if (unsupportedModes.length > 0) {
+        supported = false;
+        evidence.push(`Unsupported Agent Engine api_mode(s) ${unsupportedModes.join(', ')}; manual review`);
+      }
       parseAndValidateOpenApi(document);
     } catch { supported = false; evidence.push('Generated spec has no operations or is invalid; manual review'); }
     return { id: engine.name, apiId: engine.name, name: engine.displayName || engine.name.split('/').pop()!, providerType: this.type, sourceType: 'agent-engine-generated-spec', projectId: this.scope.projectId, tags: {}, supported, evidence, meta: { generatedOpenApi: document } };
@@ -49,12 +54,30 @@ export class AgentEnginesProvider implements SpecProvider {
   }
 }
 
+const AGENT_ENGINE_MODE_OPERATIONS: Record<string, string> = {
+  '': 'query',
+  stream: 'streamQuery',
+  async: 'asyncQuery',
+  async_stream: 'asyncStreamQuery'
+};
+
+export function unsupportedAgentEngineModes(engine: AgentEngineSummary): string[] {
+  return [...new Set(
+    engine.classMethods
+      .map((declaration) => (typeof declaration.api_mode === 'string' ? declaration.api_mode : ''))
+      .filter((mode) => !(mode in AGENT_ENGINE_MODE_OPERATIONS))
+  )];
+}
+
+function agentEngineRegion(name: string): string | undefined {
+  return /^projects\/[^/]+\/locations\/([^/]+)\//.exec(name)?.[1];
+}
+
 function assembleAgentEngineOpenApi(engine: AgentEngineSummary): Record<string, unknown> {
   const paths: Record<string, unknown> = {};
-  for (const mode of ['', 'stream'] as const) {
-    const declarations = engine.classMethods.filter((declaration) => (declaration.api_mode === 'stream' ? 'stream' : '') === mode);
+  for (const [mode, suffix] of Object.entries(AGENT_ENGINE_MODE_OPERATIONS)) {
+    const declarations = engine.classMethods.filter((declaration) => (typeof declaration.api_mode === 'string' ? declaration.api_mode : '') === mode);
     if (declarations.length === 0) continue;
-    const suffix = mode === 'stream' ? 'streamQuery' : 'query';
     paths[`/v1/{engine.name}:${suffix}`] = {
       post: {
         operationId: suffix,
@@ -81,7 +104,13 @@ function assembleAgentEngineOpenApi(engine: AgentEngineSummary): Record<string, 
       }
     };
   }
-  return { openapi: '3.0.3', info: { title: engine.displayName || engine.name.split('/').pop()!, version: 'generated', description: 'Generated from Vertex AI Agent Engine classMethods declarations' }, paths };
+  const region = agentEngineRegion(engine.name);
+  return {
+    openapi: '3.0.3',
+    info: { title: engine.displayName || engine.name.split('/').pop()!, version: 'generated', description: 'Generated from Vertex AI Agent Engine classMethods declarations' },
+    ...(region ? { servers: [{ url: `https://${region}-aiplatform.googleapis.com` }] } : {}),
+    paths
+  };
 }
 
 function parameterSchema(declaration: Record<string, unknown>): Record<string, unknown> {
