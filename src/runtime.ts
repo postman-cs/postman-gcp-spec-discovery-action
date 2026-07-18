@@ -35,6 +35,7 @@ import { AppIntegrationProvider } from './lib/providers/app-integration.js';
 import { ConnectorsCustomProvider } from './lib/providers/connectors-custom.js';
 import { ApigeePortalProvider } from './lib/providers/apigee-portal.js';
 import { VertexExtensionsProvider } from './lib/providers/vertex-extensions.js';
+import { AgentEnginesProvider } from './lib/providers/agent-engines.js';
 import { DialogflowToolsProvider } from './lib/providers/dialogflow-tools.js';
 import { CesToolsetsProvider } from './lib/providers/ces-toolsets.js';
 import { IacLocalProvider } from './lib/providers/iac-local.js';
@@ -296,6 +297,7 @@ function sourceTypeForProvider(
   if (provider === 'connectors-custom') return 'connectors-custom-spec';
   if (provider === 'apigee-portal') return 'apigee-portal-doc';
   if (provider === 'vertex-extensions') return 'vertex-extension-manifest';
+  if (provider === 'agent-engines') return 'agent-engine-generated-spec';
   if (provider === 'dialogflow-tools') return 'dialogflow-tool-schema';
   if (provider === 'ces-toolsets') return 'ces-toolset-schema';
   return 'iac-embedded';
@@ -409,6 +411,7 @@ function buildProviders(inputs: ResolvedInputs, dependencies: GCPDependencies, i
     new ConnectorsCustomProvider(dependencies.client, { projectId: inputs.projectId, apiId: inputs.apiId }),
     new ApigeePortalProvider(dependencies.client, { projectId: inputs.projectId, apiId: inputs.apiId }),
     new VertexExtensionsProvider(dependencies.client, { projectId: inputs.projectId, location: inputs.location, apiId: inputs.apiId }),
+    new AgentEnginesProvider(dependencies.client, { projectId: inputs.projectId, location: inputs.location, apiId: inputs.apiId }),
     new DialogflowToolsProvider(dependencies.client, { projectId: inputs.projectId, apiId: inputs.apiId }),
     new CesToolsetsProvider(dependencies.client, { projectId: inputs.projectId, apiId: inputs.apiId }),
     new IacLocalProvider(iacScan)

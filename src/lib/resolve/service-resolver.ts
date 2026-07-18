@@ -75,9 +75,9 @@ function scoreCandidate(candidate: GCPCandidateInput, signals: RepoSignals): { s
     evidence.push('Resource tags match service hint');
   }
 
-  if (candidate.sourceType === 'connectors-generated-spec') {
+  if (candidate.sourceType?.endsWith('-generated-spec')) {
     score = Math.max(0, score - 1);
-    evidence.push('Generated connector specification ranks below stored specification sources');
+    evidence.push('Generated specification ranks below stored specification sources');
   }
 
   return { score, evidence };

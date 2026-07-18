@@ -78,6 +78,11 @@ describe('source selector', () => {
     expect(ranked.map((candidate) => candidate.resourceId)).toEqual([stored.id, generated.id]);
     expect(ranked[0]!.confidence).toBeGreaterThan(ranked[1]!.confidence);
   });
+  it('penalizes every generated-spec source type, including Agent Engine', () => {
+    const stored = input('/x/stored', { name: 'payments', sourceType: 'vertex-extension-manifest', providerType: 'vertex-extensions' });
+    const generated = input('/x/generated', { name: 'payments', sourceType: 'agent-engine-generated-spec', providerType: 'agent-engines' });
+    expect(rankServiceCandidates([generated, stored], signals({ serviceHints: ['payments'] })).map((candidate) => candidate.resourceId)).toEqual([stored.id, generated.id]);
+  });
 });
 
 describe('exact tag equality precedence (GCP-RESOLVE-EXACT)', () => {

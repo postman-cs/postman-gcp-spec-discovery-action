@@ -15,6 +15,8 @@ function fakeClient(overrides: Partial<GcpDiscoveryClient> = {}): GcpDiscoveryCl
     listApiGatewayApis: vi.fn(async () => []),
     listApiGatewayConfigs: vi.fn(async () => []),
     getApiGatewayConfig: vi.fn(async () => ({ name: '', labels: {}, openapiDocuments: [], grpcServices: [], managedServiceConfigs: [] })),
+    probeAgentEngines: vi.fn(),
+    listAgentEngines: vi.fn(async () => []),
     probeCloudEndpoints: vi.fn(),
     listManagedServices: vi.fn(async () => []),
     listEndpointConfigs: vi.fn(async () => []),
@@ -108,6 +110,7 @@ describe('GCP preflight and probes', () => {
         { provider: 'connectors-custom', status: 'available' },
         { provider: 'apigee-portal', status: 'available' },
         { provider: 'vertex-extensions', status: 'available' },
+        { provider: 'agent-engines', status: 'skipped:error' },
         { provider: 'dialogflow-tools', status: 'available' },
         { provider: 'ces-toolsets', status: 'available' },
         { provider: 'iac-local', status: 'available' }
