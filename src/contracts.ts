@@ -26,6 +26,9 @@ export type ProviderType =
   | 'api-hub'
   | 'app-integration'
   | 'connectors-custom'
+  | 'apigee-portal'
+  | 'dialogflow-tools'
+  | 'vertex-extensions'
   | 'iac-local';
 
 export type SourceType =
@@ -36,6 +39,7 @@ export type SourceType =
   | 'api-hub-spec'
   | 'app-integration-trigger'
   | 'connectors-custom-spec'
+  | 'apigee-portal-doc' | 'vertex-extension-manifest' | 'dialogflow-tool-schema'
   | 'iac-embedded'
   | 'manual-review'
   | 'discover-many';
@@ -161,7 +165,7 @@ export const actionContract: GCPSpecDiscoveryActionContract = {
       description: 'Resolution status: resolved or unresolved.'
     },
     'source-type': {
-      description: 'Resolved source type: repo-spec, api-gateway-config, cloud-endpoints-config, apigee-proxy, api-hub-spec, app-integration-trigger, connectors-custom-spec, iac-embedded, manual-review, or discover-many.'
+      description: 'Resolved source type: repo-spec, api-gateway-config, cloud-endpoints-config, apigee-proxy, api-hub-spec, app-integration-trigger, connectors-custom-spec, apigee-portal-doc, vertex-extension-manifest, dialogflow-tool-schema, iac-embedded, manual-review, or discover-many.'
     },
     'mapping-confidence': {
       description: 'Numeric confidence score for the selected service candidate.'
@@ -188,7 +192,7 @@ export const actionContract: GCPSpecDiscoveryActionContract = {
       description: 'Ranked ambiguous candidates as JSON when resolution is unresolved with at least two candidates; empty otherwise.'
     },
     'provider-type': {
-      description: 'Provider that produced the resolved spec: api-gateway, cloud-endpoints, apigee, api-hub, app-integration, connectors-custom, or iac-local.'
+      description: 'Provider that produced the resolved spec: api-gateway, cloud-endpoints, apigee, api-hub, app-integration, connectors-custom, apigee-portal, vertex-extensions, dialogflow-tools, or iac-local.'
     },
     'spec-format': {
       description: 'Format of the resolved spec: openapi-yaml or openapi-json.'

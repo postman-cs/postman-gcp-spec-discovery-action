@@ -33,6 +33,9 @@ import { ApigeeProvider, parseApigeeRevisionName } from './lib/providers/apigee.
 import { ApiHubProvider, parseApiHubSpecName } from './lib/providers/api-hub.js';
 import { AppIntegrationProvider } from './lib/providers/app-integration.js';
 import { ConnectorsCustomProvider } from './lib/providers/connectors-custom.js';
+import { ApigeePortalProvider } from './lib/providers/apigee-portal.js';
+import { VertexExtensionsProvider } from './lib/providers/vertex-extensions.js';
+import { DialogflowToolsProvider } from './lib/providers/dialogflow-tools.js';
 import { IacLocalProvider } from './lib/providers/iac-local.js';
 import { resolvePathWithinRoot } from './lib/utils/resolve-path-within-root.js';
 import type { SpecCandidate, SpecExportResult, SpecProvider } from './lib/providers/types.js';
@@ -279,13 +282,16 @@ function resolveServiceName(candidate: SpecCandidate, serviceMapping: Record<str
 
 function sourceTypeForProvider(
   provider: ProviderType
-): 'api-gateway-config' | 'cloud-endpoints-config' | 'apigee-proxy' | 'api-hub-spec' | 'app-integration-trigger' | 'connectors-custom-spec' | 'iac-embedded' {
+): import('./contracts.js').SourceType {
   if (provider === 'api-gateway') return 'api-gateway-config';
   if (provider === 'cloud-endpoints') return 'cloud-endpoints-config';
   if (provider === 'apigee') return 'apigee-proxy';
   if (provider === 'api-hub') return 'api-hub-spec';
   if (provider === 'app-integration') return 'app-integration-trigger';
   if (provider === 'connectors-custom') return 'connectors-custom-spec';
+  if (provider === 'apigee-portal') return 'apigee-portal-doc';
+  if (provider === 'vertex-extensions') return 'vertex-extension-manifest';
+  if (provider === 'dialogflow-tools') return 'dialogflow-tool-schema';
   return 'iac-embedded';
 }
 
@@ -394,6 +400,9 @@ function buildProviders(inputs: ResolvedInputs, dependencies: GCPDependencies, i
     new ApiHubProvider(dependencies.client, { projectId: inputs.projectId, apiId: inputs.apiId }),
     new AppIntegrationProvider(dependencies.client, { projectId: inputs.projectId, apiId: inputs.apiId }),
     new ConnectorsCustomProvider(dependencies.client, { projectId: inputs.projectId, apiId: inputs.apiId }),
+    new ApigeePortalProvider(dependencies.client, { projectId: inputs.projectId, apiId: inputs.apiId }),
+    new VertexExtensionsProvider(dependencies.client, { projectId: inputs.projectId, apiId: inputs.apiId }),
+    new DialogflowToolsProvider(dependencies.client, { projectId: inputs.projectId, apiId: inputs.apiId }),
     new IacLocalProvider(iacScan)
   ];
 }

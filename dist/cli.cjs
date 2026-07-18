@@ -44922,6 +44922,44 @@ var GcpSdkClient = class {
     const body = await this.getJson(url, "API Hub spec contents");
     return { contents: body.contents, mimeType: body.mimeType };
   }
+  async probeApigeePortal(org) {
+    const url = resourceUrl("https://apigee.googleapis.com/", `organizations/${org}/sites`);
+    url.searchParams.set("pageSize", "1");
+    await this.getJson(url, "Apigee portal probe");
+  }
+  async listApigeePortalSites(org) {
+    return this.collectPages(() => resourceUrl("https://apigee.googleapis.com/", `organizations/${org}/sites`), "Apigee portal site list", (body) => ({ items: (body.sites ?? []).map((x2) => ({ id: x2.id ?? x2.name?.split("/").pop() ?? "", name: x2.name })).filter((x2) => x2.id), nextPageToken: body.nextPageToken }));
+  }
+  async listApigeePortalApidocs(org, siteId) {
+    return this.collectPages(() => resourceUrl("https://apigee.googleapis.com/", `organizations/${org}/sites/${siteId}/apidocs`), "Apigee portal apidoc list", (body) => ({ items: body.data ?? [], nextPageToken: body.nextPageToken }));
+  }
+  async getApigeePortalDocumentation(org, siteId, apidocId) {
+    const body = await this.getJson(resourceUrl("https://apigee.googleapis.com/", `organizations/${org}/sites/${siteId}/apidocs/${apidocId}/documentation`), "Apigee portal documentation get");
+    const data = body.data ?? {};
+    for (const type of ["oasDocumentation", "graphqlDocumentation", "asyncapiDocumentation"]) {
+      if (data[type]) return { type, contents: type === "oasDocumentation" ? data[type].spec?.contents : void 0 };
+    }
+    return { type: "missing" };
+  }
+  async probeVertexExtensions(projectId) {
+    const url = resourceUrl("https://us-central1-aiplatform.googleapis.com/", `projects/${projectId}/locations/us-central1/extensions`);
+    url.searchParams.set("pageSize", "1");
+    await this.getJson(url, "Vertex Extensions probe");
+  }
+  async listVertexExtensions(projectId) {
+    return this.collectPages(() => resourceUrl("https://us-central1-aiplatform.googleapis.com/", `projects/${projectId}/locations/us-central1/extensions`), "Vertex Extensions list", (body) => ({ items: (body.extensions ?? []).filter((x2) => x2.name).map((x2) => ({ name: x2.name, displayName: x2.displayName, openApiYaml: x2.manifest?.apiSpec?.openApiYaml, openApiGcsUri: x2.manifest?.apiSpec?.openApiGcsUri })), nextPageToken: body.nextPageToken }));
+  }
+  async probeDialogflow(projectId) {
+    const url = resourceUrl("https://dialogflow.googleapis.com/", `projects/${projectId}/locations/global/agents`);
+    url.searchParams.set("pageSize", "1");
+    await this.getJson(url, "Dialogflow probe");
+  }
+  async listDialogflowAgents(projectId) {
+    return this.collectPages(() => resourceUrl("https://dialogflow.googleapis.com/", `projects/${projectId}/locations/global/agents`), "Dialogflow agent list", (body) => ({ items: body.agents ?? [], nextPageToken: body.nextPageToken }));
+  }
+  async listDialogflowTools(agentName) {
+    return this.collectPages(() => resourceUrl("https://dialogflow.googleapis.com/", `${agentName}/tools`), "Dialogflow tool list", (body) => ({ items: (body.tools ?? []).map((x2) => ({ name: x2.name, displayName: x2.displayName, textSchema: x2.openApiSpec?.textSchema })), nextPageToken: body.nextPageToken }));
+  }
   async probeAppIntegration(projectId) {
     await this.getJson(this.locationsUrl("https://integrations.googleapis.com/", projectId), "Application Integration probe");
   }
@@ -45033,7 +45071,8 @@ var GcpSdkClient = class {
       apiDisplayName,
       specTypeIds: (specType?.enumValues?.values ?? []).map((entry) => entry.id ?? "").filter((id) => id.length > 0),
       attributes: normalizeLabels(item.attributes),
-      createTime: typeof item.createTime === "string" ? item.createTime : void 0
+      createTime: typeof item.createTime === "string" ? item.createTime : void 0,
+      sourceUri: typeof item.sourceUri === "string" ? item.sourceUri : void 0
     };
   }
   toCustomConnectorVersion(value) {
@@ -45610,7 +45649,7 @@ var actionContract = {
       description: "Resolution status: resolved or unresolved."
     },
     "source-type": {
-      description: "Resolved source type: repo-spec, api-gateway-config, cloud-endpoints-config, apigee-proxy, api-hub-spec, app-integration-trigger, connectors-custom-spec, iac-embedded, manual-review, or discover-many."
+      description: "Resolved source type: repo-spec, api-gateway-config, cloud-endpoints-config, apigee-proxy, api-hub-spec, app-integration-trigger, connectors-custom-spec, apigee-portal-doc, vertex-extension-manifest, dialogflow-tool-schema, iac-embedded, manual-review, or discover-many."
     },
     "mapping-confidence": {
       description: "Numeric confidence score for the selected service candidate."
@@ -45637,7 +45676,7 @@ var actionContract = {
       description: "Ranked ambiguous candidates as JSON when resolution is unresolved with at least two candidates; empty otherwise."
     },
     "provider-type": {
-      description: "Provider that produced the resolved spec: api-gateway, cloud-endpoints, apigee, api-hub, app-integration, connectors-custom, or iac-local."
+      description: "Provider that produced the resolved spec: api-gateway, cloud-endpoints, apigee, api-hub, app-integration, connectors-custom, apigee-portal, vertex-extensions, dialogflow-tools, or iac-local."
     },
     "spec-format": {
       description: "Format of the resolved spec: openapi-yaml or openapi-json."
@@ -46230,6 +46269,12 @@ function sourceTypeFor(providerType) {
       return "app-integration-trigger";
     case "connectors-custom":
       return "connectors-custom-spec";
+    case "apigee-portal":
+      return "apigee-portal-doc";
+    case "vertex-extensions":
+      return "vertex-extension-manifest";
+    case "dialogflow-tools":
+      return "dialogflow-tool-schema";
     case "iac-local":
       return "iac-embedded";
   }
@@ -46591,7 +46636,8 @@ var ApiGatewayProvider = class {
       if (explicit.projectId !== this.scope.projectId || explicit.location !== this.scope.location) {
         throw new Error("api-id must belong to the configured project-id and global location");
       }
-      return [this.toCandidate(await this.client.getApiGatewayConfig(this.scope.apiId), void 0)];
+      const candidate = this.toCandidate(await this.client.getApiGatewayConfig(this.scope.apiId), void 0);
+      return [{ ...candidate, apiId: this.scope.apiId }];
     }
     if (this.scope.apiId) return [];
     const candidates = [];
@@ -46688,6 +46734,7 @@ var CloudEndpointsProvider = class {
     if (this.scope.apiId) return [];
     const candidates = [];
     for (const service of await this.client.listManagedServices(this.scope.projectId)) {
+      if (service.serviceName.endsWith(`.apigateway.${this.scope.projectId}.cloud.goog`)) continue;
       const newest = (await this.client.listEndpointConfigs(service.serviceName))[0];
       if (!newest?.id) continue;
       const full = await this.client.getEndpointConfig(service.serviceName, newest.id);
@@ -46735,14 +46782,63 @@ var import_node_util5 = require("node:util");
 // src/lib/gcp/zip.ts
 var import_node_zlib2 = require("node:zlib");
 var MAX_EXTRACTED_BYTES = 10 * 1024 * 1024;
+function addEntry(files, total, name, method, compressed) {
+  if (name.endsWith("/")) return total;
+  const content = method === 0 ? Buffer.from(compressed) : method === 8 ? (0, import_node_zlib2.inflateRawSync)(compressed) : void 0;
+  if (!content) throw new Error(`Unsupported ZIP compression method ${method}`);
+  const next = total + content.length;
+  if (next > MAX_EXTRACTED_BYTES) throw new Error("ZIP extracted contents exceed 10 MiB");
+  files.set(name, content);
+  return next;
+}
+function inflateFromCentralDirectory(bytes) {
+  const scanStart = Math.max(0, bytes.length - 65557);
+  let eocd = -1;
+  for (let i2 = bytes.length - 22; i2 >= scanStart; i2 -= 1) {
+    if (bytes.readUInt32LE(i2) === 101010256) {
+      eocd = i2;
+      break;
+    }
+  }
+  if (eocd === -1) return void 0;
+  const count = bytes.readUInt16LE(eocd + 10);
+  let offset = bytes.readUInt32LE(eocd + 16);
+  const files = /* @__PURE__ */ new Map();
+  let total = 0;
+  for (let i2 = 0; i2 < count; i2 += 1) {
+    if (offset + 46 > bytes.length || bytes.readUInt32LE(offset) !== 33639248) {
+      throw new Error("Invalid ZIP central directory entry");
+    }
+    const method = bytes.readUInt16LE(offset + 10);
+    const compressedSize = bytes.readUInt32LE(offset + 20);
+    const nameLength = bytes.readUInt16LE(offset + 28);
+    const extraLength = bytes.readUInt16LE(offset + 30);
+    const commentLength = bytes.readUInt16LE(offset + 32);
+    const localOffset = bytes.readUInt32LE(offset + 42);
+    const name = bytes.subarray(offset + 46, offset + 46 + nameLength).toString("utf8");
+    if (localOffset + 30 > bytes.length || bytes.readUInt32LE(localOffset) !== 67324752) {
+      throw new Error("Invalid ZIP local header reference");
+    }
+    const localNameLength = bytes.readUInt16LE(localOffset + 26);
+    const localExtraLength = bytes.readUInt16LE(localOffset + 28);
+    const dataOffset = localOffset + 30 + localNameLength + localExtraLength;
+    const end = dataOffset + compressedSize;
+    if (end > bytes.length) throw new Error("Invalid truncated ZIP entry");
+    total = addEntry(files, total, name, method, bytes.subarray(dataOffset, end));
+    offset += 46 + nameLength + extraLength + commentLength;
+  }
+  return files;
+}
 function inflateZip(bytes) {
+  const central = inflateFromCentralDirectory(bytes);
+  if (central) return central;
   const files = /* @__PURE__ */ new Map();
   let offset = 0;
   let total = 0;
   while (offset + 30 <= bytes.length && bytes.readUInt32LE(offset) === 67324752) {
     const flags = bytes.readUInt16LE(offset + 6);
     const method = bytes.readUInt16LE(offset + 8);
-    if (flags & 8) throw new Error("ZIP data descriptors are not supported");
+    if (flags & 8) throw new Error("ZIP data descriptors require a central directory");
     const compressedSize = bytes.readUInt32LE(offset + 18);
     const nameLength = bytes.readUInt16LE(offset + 26);
     const extraLength = bytes.readUInt16LE(offset + 28);
@@ -46750,14 +46846,7 @@ function inflateZip(bytes) {
     const end = dataOffset + compressedSize;
     if (end > bytes.length) throw new Error("Invalid truncated ZIP entry");
     const name = bytes.subarray(offset + 30, offset + 30 + nameLength).toString("utf8");
-    if (!name.endsWith("/")) {
-      const compressed = bytes.subarray(dataOffset, end);
-      const content = method === 0 ? Buffer.from(compressed) : method === 8 ? (0, import_node_zlib2.inflateRawSync)(compressed) : void 0;
-      if (!content) throw new Error(`Unsupported ZIP compression method ${method}`);
-      total += content.length;
-      if (total > MAX_EXTRACTED_BYTES) throw new Error("ZIP extracted contents exceed 10 MiB");
-      files.set(name, content);
-    }
+    total = addEntry(files, total, name, method, bytes.subarray(dataOffset, end));
     offset = end;
   }
   return files;
@@ -46825,19 +46914,90 @@ var ApigeeProvider = class {
   }
 };
 
+// src/lib/providers/connectors-custom.ts
+var GCS_PATTERN = /^gs:\/\/([a-z0-9][a-z0-9._-]{1,220}[a-z0-9])\/(.+)$/;
+function parseGcsSpecLocation(value) {
+  const match = GCS_PATTERN.exec(value);
+  return match ? { bucket: match[1], object: match[2] } : void 0;
+}
+function shortName2(value) {
+  return value.split("/").pop() ?? value;
+}
+var ConnectorsCustomProvider = class {
+  constructor(client, scope) {
+    this.client = client;
+    this.scope = scope;
+  }
+  client;
+  scope;
+  type = "connectors-custom";
+  async probe() {
+    try {
+      await this.client.probeConnectors(this.scope.projectId);
+      return "available";
+    } catch (error) {
+      return probeFailureStatus(error);
+    }
+  }
+  async listCandidates() {
+    if (this.scope.apiId) return [];
+    const versions = await this.client.listCustomConnectorVersions(this.scope.projectId);
+    return versions.map((version) => this.toCandidate(version));
+  }
+  async exportSpec(candidate) {
+    const location = candidate.meta.specLocation ?? "";
+    const gcs = parseGcsSpecLocation(location);
+    if (!gcs) throw new Error("Custom connector specLocation is not a gs:// object; v1.0.0 does not fetch remote URLs");
+    const content = await this.client.getStorageObjectText(gcs.bucket, gcs.object);
+    const decoded = decodeUtf8OpenApi(content);
+    return {
+      ...decoded,
+      evidence: [`Fetched custom connector source spec from ${location}`]
+    };
+  }
+  toCandidate(version) {
+    const specLocation = version.specLocation ?? "";
+    const gcs = parseGcsSpecLocation(specLocation);
+    const evidence = [`Custom connector version ${shortName2(version.name)} records specLocation ${specLocation || "(none)"}`];
+    let supported = true;
+    if (!specLocation) {
+      supported = false;
+      evidence.push("Custom connector version has no specLocation");
+    } else if (!gcs) {
+      supported = false;
+      evidence.push("Only gs:// specLocation objects are fetched in v1.0.0; remote URLs are manual review");
+    }
+    return {
+      id: version.name,
+      name: version.name.split("/customConnectors/")[1]?.split("/")[0] ?? shortName2(version.name),
+      providerType: this.type,
+      projectId: this.scope.projectId,
+      tags: version.labels,
+      supported,
+      evidence,
+      meta: {
+        specLocation,
+        connectorName: version.name.split("/customConnectorVersions/")[0] ?? version.name,
+        versionId: shortName2(version.name),
+        updateTime: version.updateTime ?? ""
+      }
+    };
+  }
+};
+
 // src/lib/providers/api-hub.ts
 var SPEC_PATTERN = /^projects\/([^/]+)\/locations\/([^/]+)\/apis\/([^/]+)\/versions\/([^/]+)\/specs\/([^/]+)$/;
 function parseApiHubSpecName(value) {
   const match = SPEC_PATTERN.exec(value);
   return match ? { projectId: match[1], location: match[2], apiName: match[3], versionId: match[4], specId: match[5] } : void 0;
 }
-function shortName2(value) {
+function shortName3(value) {
   return value.split("/").pop() ?? value;
 }
 function supportEvidence3(spec) {
   const specTypes = spec.specTypeIds;
   const evidence = [
-    `API Hub spec ${shortName2(spec.name)} declares type ${specTypes.length > 0 ? specTypes.join(",") : "unspecified"}`
+    `API Hub spec ${shortName3(spec.name)} declares type ${specTypes.length > 0 ? specTypes.join(",") : "unspecified"}`
   ];
   if (specTypes.length > 0 && !specTypes.some((id) => /openapi|oas|swagger/i.test(id))) {
     return {
@@ -46878,17 +47038,25 @@ var ApiHubProvider = class {
   }
   async exportSpec(candidate) {
     const contents = await this.client.getApiHubSpecContents(candidate.id);
-    const decoded = decodeSourceDocument(contents.contents);
+    let decoded;
+    const evidence = [`Exported API Hub spec contents for ${shortName3(candidate.id)}`];
+    if (contents.contents) decoded = decodeSourceDocument(contents.contents);
+    else {
+      const gcs = parseGcsSpecLocation(candidate.meta.sourceUri ?? "");
+      if (!gcs) return { ...decodeSourceDocument(contents.contents), evidence };
+      decoded = decodeUtf8OpenApi(await this.client.getStorageObjectText(gcs.bucket, gcs.object));
+      evidence.push("Fetched original spec bytes from registered Cloud Storage source_uri");
+    }
     return {
       ...decoded,
-      evidence: [`Exported API Hub spec contents for ${shortName2(candidate.id)}`]
+      evidence
     };
   }
   toCandidate(spec) {
     const support = supportEvidence3(spec);
     return {
       id: spec.name,
-      name: spec.displayName || spec.apiDisplayName || shortName2(spec.name),
+      name: spec.displayName || spec.apiDisplayName || shortName3(spec.name),
       providerType: this.type,
       apiId: spec.name,
       projectId: this.scope.projectId,
@@ -46898,15 +47066,16 @@ var ApiHubProvider = class {
       meta: {
         apiName: spec.name.split("/versions/")[0] ?? spec.name,
         versionId: spec.name.split("/versions/")[1]?.split("/")[0] ?? "",
-        specId: shortName2(spec.name),
-        createTime: spec.createTime ?? ""
+        specId: shortName3(spec.name),
+        createTime: spec.createTime ?? "",
+        sourceUri: spec.sourceUri ?? ""
       }
     };
   }
 };
 
 // src/lib/providers/app-integration.ts
-function shortName3(value) {
+function shortName4(value) {
   return value.split("/").pop() ?? value;
 }
 var AppIntegrationProvider = class {
@@ -46950,13 +47119,13 @@ var AppIntegrationProvider = class {
   toCandidate(trigger) {
     return {
       id: trigger.integrationResource,
-      name: shortName3(trigger.integrationResource),
+      name: shortName4(trigger.integrationResource),
       providerType: this.type,
       projectId: this.scope.projectId,
       tags: {},
       supported: trigger.triggerIds.length > 0,
       evidence: [
-        `Application Integration ${shortName3(trigger.integrationResource)} exposes ${trigger.triggerIds.length} API trigger${trigger.triggerIds.length === 1 ? "" : "s"} in ${trigger.location}`
+        `Application Integration ${shortName4(trigger.integrationResource)} exposes ${trigger.triggerIds.length} API trigger${trigger.triggerIds.length === 1 ? "" : "s"} in ${trigger.location}`
       ],
       meta: {
         location: trigger.location,
@@ -46967,74 +47136,154 @@ var AppIntegrationProvider = class {
   }
 };
 
-// src/lib/providers/connectors-custom.ts
-var GCS_PATTERN = /^gs:\/\/([a-z0-9][a-z0-9._-]{1,220}[a-z0-9])\/(.+)$/;
-function parseGcsSpecLocation(value) {
-  const match = GCS_PATTERN.exec(value);
-  return match ? { bucket: match[1], object: match[2] } : void 0;
+// src/lib/providers/apigee-portal.ts
+var PATTERN2 = /^organizations\/([^/]+)\/sites\/([^/]+)\/apidocs\/([^/]+)$/;
+function parseApigeePortalApidocName(value) {
+  const m2 = PATTERN2.exec(value);
+  return m2 ? { org: m2[1], siteId: m2[2], apidocId: m2[3] } : void 0;
 }
-function shortName4(value) {
-  return value.split("/").pop() ?? value;
-}
-var ConnectorsCustomProvider = class {
+var ApigeePortalProvider = class {
   constructor(client, scope) {
     this.client = client;
     this.scope = scope;
   }
   client;
   scope;
-  type = "connectors-custom";
+  type = "apigee-portal";
   async probe() {
     try {
-      await this.client.probeConnectors(this.scope.projectId);
+      await this.client.probeApigeePortal(this.scope.projectId);
       return "available";
     } catch (error) {
       return probeFailureStatus(error);
     }
   }
   async listCandidates() {
-    if (this.scope.apiId) return [];
-    const versions = await this.client.listCustomConnectorVersions(this.scope.projectId);
-    return versions.map((version) => this.toCandidate(version));
+    const explicit = this.scope.apiId ? parseApigeePortalApidocName(this.scope.apiId) : void 0;
+    if (this.scope.apiId && !explicit) return [];
+    if (explicit?.org !== void 0 && explicit.org !== this.scope.projectId) throw new Error("api-id Apigee portal document does not belong to the configured project-id org");
+    const docs = [];
+    if (explicit) docs.push({ siteId: explicit.siteId, doc: { id: explicit.apidocId } });
+    else for (const site of await this.client.listApigeePortalSites(this.scope.projectId)) for (const doc of await this.client.listApigeePortalApidocs(this.scope.projectId, site.id)) docs.push({ siteId: site.id, doc });
+    return Promise.all(docs.map(async ({ siteId, doc }) => {
+      const id = `organizations/${this.scope.projectId}/sites/${siteId}/apidocs/${doc.id}`;
+      const found = await this.client.getApigeePortalDocumentation(this.scope.projectId, siteId, doc.id);
+      let supported = false;
+      if (found.type === "oasDocumentation" && found.contents?.trim()) try {
+        decodeUtf8OpenApi(found.contents);
+        supported = true;
+      } catch {
+        supported = false;
+      }
+      return { id, apiId: id, name: doc.title || doc.id, providerType: this.type, projectId: this.scope.projectId, tags: {}, supported, evidence: [`Apigee portal documentation type: ${found.type}`], meta: { siteId, apidocId: doc.id, documentationType: found.type } };
+    }));
   }
   async exportSpec(candidate) {
-    const location = candidate.meta.specLocation ?? "";
-    const gcs = parseGcsSpecLocation(location);
-    if (!gcs) throw new Error("Custom connector specLocation is not a gs:// object; v1.0.0 does not fetch remote URLs");
-    const content = await this.client.getStorageObjectText(gcs.bucket, gcs.object);
-    const decoded = decodeUtf8OpenApi(content);
-    return {
-      ...decoded,
-      evidence: [`Fetched custom connector source spec from ${location}`]
-    };
+    const p = parseApigeePortalApidocName(candidate.id);
+    if (!p || p.org !== this.scope.projectId) throw new Error("Invalid Apigee portal document resource name");
+    const doc = await this.client.getApigeePortalDocumentation(p.org, p.siteId, p.apidocId);
+    if (doc.type !== "oasDocumentation" || !doc.contents?.trim()) throw new Error(`Apigee portal documentation type ${doc.type} is unsupported`);
+    return { ...decodeUtf8OpenApi(doc.contents), evidence: ["Exported original Apigee portal OpenAPI documentation"] };
   }
-  toCandidate(version) {
-    const specLocation = version.specLocation ?? "";
-    const gcs = parseGcsSpecLocation(specLocation);
-    const evidence = [`Custom connector version ${shortName4(version.name)} records specLocation ${specLocation || "(none)"}`];
-    let supported = true;
-    if (!specLocation) {
-      supported = false;
-      evidence.push("Custom connector version has no specLocation");
-    } else if (!gcs) {
-      supported = false;
-      evidence.push("Only gs:// specLocation objects are fetched in v1.0.0; remote URLs are manual review");
+};
+
+// src/lib/providers/vertex-extensions.ts
+var PATTERN3 = /^projects\/([^/]+)\/locations\/([^/]+)\/extensions\/([^/]+)$/;
+function parseVertexExtensionName(v) {
+  const m2 = PATTERN3.exec(v);
+  return m2 ? { projectId: m2[1], location: m2[2], extensionId: m2[3] } : void 0;
+}
+var VertexExtensionsProvider = class {
+  constructor(client, scope) {
+    this.client = client;
+    this.scope = scope;
+  }
+  client;
+  scope;
+  type = "vertex-extensions";
+  async probe() {
+    try {
+      await this.client.probeVertexExtensions(this.scope.projectId);
+      return "available";
+    } catch (e2) {
+      return probeFailureStatus(e2);
     }
-    return {
-      id: version.name,
-      name: version.name.split("/customConnectors/")[1]?.split("/")[0] ?? shortName4(version.name),
-      providerType: this.type,
-      projectId: this.scope.projectId,
-      tags: version.labels,
-      supported,
-      evidence,
-      meta: {
-        specLocation,
-        connectorName: version.name.split("/customConnectorVersions/")[0] ?? version.name,
-        versionId: shortName4(version.name),
-        updateTime: version.updateTime ?? ""
+  }
+  async listCandidates() {
+    const p = this.scope.apiId ? parseVertexExtensionName(this.scope.apiId) : void 0;
+    if (this.scope.apiId && !p) return [];
+    if (p && p.projectId !== this.scope.projectId) throw new Error("api-id Vertex extension does not belong to configured project-id");
+    const xs = p ? [await this.findExplicit(this.scope.apiId)] : await this.client.listVertexExtensions(this.scope.projectId);
+    return xs.map((x2) => this.toCandidate(x2));
+  }
+  async findExplicit(id) {
+    const xs = await this.client.listVertexExtensions(this.scope.projectId);
+    return xs.find((x2) => x2.name === id) ?? { name: id };
+  }
+  toCandidate(x2) {
+    const count = Number(Boolean(x2.openApiYaml?.trim())) + Number(Boolean(x2.openApiGcsUri));
+    let supported = count === 1;
+    if (x2.openApiYaml?.trim()) try {
+      decodeUtf8OpenApi(x2.openApiYaml);
+    } catch {
+      supported = false;
+    }
+    if (x2.openApiGcsUri && !parseGcsSpecLocation(x2.openApiGcsUri)) supported = false;
+    return { id: x2.name, apiId: x2.name, name: x2.displayName || x2.name.split("/").pop(), providerType: this.type, projectId: this.scope.projectId, tags: {}, supported, evidence: [count === 0 ? "Vertex extension manifest has no OpenAPI source" : count > 1 ? "Vertex extension manifest has multiple OpenAPI sources" : "Vertex extension manifest has one OpenAPI source"], meta: { openApiYaml: x2.openApiYaml ?? "", openApiGcsUri: x2.openApiGcsUri ?? "" } };
+  }
+  async exportSpec(c) {
+    let text = c.meta.openApiYaml ?? "";
+    if (!text) {
+      const g = parseGcsSpecLocation(c.meta.openApiGcsUri ?? "");
+      if (!g) throw new Error("Vertex extension has no supported OpenAPI source");
+      text = await this.client.getStorageObjectText(g.bucket, g.object);
+    }
+    return { ...decodeUtf8OpenApi(text), evidence: ["Exported original Vertex extension manifest OpenAPI source"] };
+  }
+};
+
+// src/lib/providers/dialogflow-tools.ts
+var PATTERN4 = /^projects\/([^/]+)\/locations\/([^/]+)\/agents\/([^/]+)\/tools\/([^/]+)$/;
+function parseDialogflowToolName(v) {
+  const m2 = PATTERN4.exec(v);
+  return m2 ? { projectId: m2[1], location: m2[2], agentId: m2[3], toolId: m2[4] } : void 0;
+}
+var DialogflowToolsProvider = class {
+  constructor(client, scope) {
+    this.client = client;
+    this.scope = scope;
+  }
+  client;
+  scope;
+  type = "dialogflow-tools";
+  async probe() {
+    try {
+      await this.client.probeDialogflow(this.scope.projectId);
+      return "available";
+    } catch (e2) {
+      return probeFailureStatus(e2);
+    }
+  }
+  async listCandidates() {
+    const p = this.scope.apiId ? parseDialogflowToolName(this.scope.apiId) : void 0;
+    if (this.scope.apiId && !p) return [];
+    if (p && p.projectId !== this.scope.projectId) throw new Error("api-id Dialogflow tool does not belong to configured project-id");
+    let tools = [];
+    if (p) {
+      tools = (await this.client.listDialogflowTools(`projects/${p.projectId}/locations/${p.location}/agents/${p.agentId}`)).filter((x2) => x2.name === this.scope.apiId);
+    } else for (const a of await this.client.listDialogflowAgents(this.scope.projectId)) tools.push(...await this.client.listDialogflowTools(a.name));
+    return tools.filter((x2) => x2.textSchema?.trim()).map((x2) => {
+      let supported = true;
+      try {
+        decodeUtf8OpenApi(x2.textSchema);
+      } catch {
+        supported = false;
       }
-    };
+      return { id: x2.name, apiId: x2.name, name: x2.displayName || x2.name.split("/").pop(), providerType: this.type, projectId: this.scope.projectId, tags: {}, supported, evidence: ["Dialogflow tool stores an OpenAPI text schema"], meta: { textSchema: x2.textSchema } };
+    });
+  }
+  async exportSpec(c) {
+    return { ...decodeUtf8OpenApi(c.meta.textSchema ?? ""), evidence: ["Exported original Dialogflow tool OpenAPI text schema"] };
   }
 };
 
@@ -47244,6 +47493,9 @@ function sourceTypeForProvider(provider) {
   if (provider === "api-hub") return "api-hub-spec";
   if (provider === "app-integration") return "app-integration-trigger";
   if (provider === "connectors-custom") return "connectors-custom-spec";
+  if (provider === "apigee-portal") return "apigee-portal-doc";
+  if (provider === "vertex-extensions") return "vertex-extension-manifest";
+  if (provider === "dialogflow-tools") return "dialogflow-tool-schema";
   return "iac-embedded";
 }
 async function writeSpecExport(inputs, serviceName, exportResult, writeSpecFile) {
@@ -47323,6 +47575,9 @@ function buildProviders(inputs, dependencies, iacScan) {
     new ApiHubProvider(dependencies.client, { projectId: inputs.projectId, apiId: inputs.apiId }),
     new AppIntegrationProvider(dependencies.client, { projectId: inputs.projectId, apiId: inputs.apiId }),
     new ConnectorsCustomProvider(dependencies.client, { projectId: inputs.projectId, apiId: inputs.apiId }),
+    new ApigeePortalProvider(dependencies.client, { projectId: inputs.projectId, apiId: inputs.apiId }),
+    new VertexExtensionsProvider(dependencies.client, { projectId: inputs.projectId, apiId: inputs.apiId }),
+    new DialogflowToolsProvider(dependencies.client, { projectId: inputs.projectId, apiId: inputs.apiId }),
     new IacLocalProvider(iacScan)
   ];
 }

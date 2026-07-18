@@ -68,7 +68,15 @@ export interface ApiHubSpecSummary {
   specTypeIds: string[];
   attributes: Record<string, string>;
   createTime?: string;
+  sourceUri?: string;
 }
+
+export interface ApigeePortalSite { id: string; name?: string; }
+export interface ApigeePortalApidoc { id: string; title?: string; specId?: string; apiProductName?: string; }
+export interface ApigeePortalDocumentation { type: 'oasDocumentation' | 'graphqlDocumentation' | 'asyncapiDocumentation' | 'missing'; contents?: string; }
+export interface VertexExtensionSummary { name: string; displayName?: string; openApiYaml?: string; openApiGcsUri?: string; }
+export interface DialogflowAgentSummary { name: string; displayName?: string; }
+export interface DialogflowToolSummary { name: string; displayName?: string; textSchema?: string; }
 
 export interface AppIntegrationApiTrigger {
   integrationResource: string;
@@ -102,6 +110,15 @@ export interface GcpDiscoveryClient {
   listApiHubSpecs(projectId: string): Promise<ApiHubSpecSummary[]>;
   getApiHubSpec(specName: string): Promise<ApiHubSpecSummary>;
   getApiHubSpecContents(specName: string): Promise<{ contents?: string; mimeType?: string }>;
+  probeApigeePortal(org: string): Promise<void>;
+  listApigeePortalSites(org: string): Promise<ApigeePortalSite[]>;
+  listApigeePortalApidocs(org: string, siteId: string): Promise<ApigeePortalApidoc[]>;
+  getApigeePortalDocumentation(org: string, siteId: string, apidocId: string): Promise<ApigeePortalDocumentation>;
+  probeVertexExtensions(projectId: string): Promise<void>;
+  listVertexExtensions(projectId: string): Promise<VertexExtensionSummary[]>;
+  probeDialogflow(projectId: string): Promise<void>;
+  listDialogflowAgents(projectId: string): Promise<DialogflowAgentSummary[]>;
+  listDialogflowTools(agentName: string): Promise<DialogflowToolSummary[]>;
   probeAppIntegration(projectId: string): Promise<void>;
   listAppIntegrationApiTriggers(projectId: string): Promise<AppIntegrationApiTrigger[]>;
   generateAppIntegrationOpenApiSpec(location: string, integrationResource: string, triggerIds: string[]): Promise<string>;
@@ -339,6 +356,16 @@ export class GcpSdkClient implements GcpDiscoveryClient {
     return { contents: body.contents, mimeType: body.mimeType };
   }
 
+  public async probeApigeePortal(org: string): Promise<void> { const url = resourceUrl('https://apigee.googleapis.com/', `organizations/${org}/sites`); url.searchParams.set('pageSize', '1'); await this.getJson(url, 'Apigee portal probe'); }
+  public async listApigeePortalSites(org: string): Promise<ApigeePortalSite[]> { return this.collectPages(() => resourceUrl('https://apigee.googleapis.com/', `organizations/${org}/sites`), 'Apigee portal site list', (body: { sites?: Array<{ id?: string; name?: string }>; nextPageToken?: string }) => ({ items: (body.sites ?? []).map((x) => ({ id: x.id ?? x.name?.split('/').pop() ?? '', name: x.name })).filter((x) => x.id), nextPageToken: body.nextPageToken })); }
+  public async listApigeePortalApidocs(org: string, siteId: string): Promise<ApigeePortalApidoc[]> { return this.collectPages(() => resourceUrl('https://apigee.googleapis.com/', `organizations/${org}/sites/${siteId}/apidocs`), 'Apigee portal apidoc list', (body: { data?: ApigeePortalApidoc[]; nextPageToken?: string }) => ({ items: body.data ?? [], nextPageToken: body.nextPageToken })); }
+  public async getApigeePortalDocumentation(org: string, siteId: string, apidocId: string): Promise<ApigeePortalDocumentation> { const body = await this.getJson<{ data?: Record<string, unknown> }>(resourceUrl('https://apigee.googleapis.com/', `organizations/${org}/sites/${siteId}/apidocs/${apidocId}/documentation`), 'Apigee portal documentation get'); const data = body.data ?? {}; for (const type of ['oasDocumentation', 'graphqlDocumentation', 'asyncapiDocumentation'] as const) { if (data[type]) return { type, contents: type === 'oasDocumentation' ? (data[type] as { spec?: { contents?: string } }).spec?.contents : undefined }; } return { type: 'missing' }; }
+  public async probeVertexExtensions(projectId: string): Promise<void> { const url = resourceUrl('https://us-central1-aiplatform.googleapis.com/', `projects/${projectId}/locations/us-central1/extensions`); url.searchParams.set('pageSize', '1'); await this.getJson(url, 'Vertex Extensions probe'); }
+  public async listVertexExtensions(projectId: string): Promise<VertexExtensionSummary[]> { return this.collectPages(() => resourceUrl('https://us-central1-aiplatform.googleapis.com/', `projects/${projectId}/locations/us-central1/extensions`), 'Vertex Extensions list', (body: { extensions?: Array<{ name?: string; displayName?: string; manifest?: { apiSpec?: { openApiYaml?: string; openApiGcsUri?: string } } }>; nextPageToken?: string }) => ({ items: (body.extensions ?? []).filter((x) => x.name).map((x) => ({ name: x.name!, displayName: x.displayName, openApiYaml: x.manifest?.apiSpec?.openApiYaml, openApiGcsUri: x.manifest?.apiSpec?.openApiGcsUri })), nextPageToken: body.nextPageToken })); }
+  public async probeDialogflow(projectId: string): Promise<void> { const url = resourceUrl('https://dialogflow.googleapis.com/', `projects/${projectId}/locations/global/agents`); url.searchParams.set('pageSize', '1'); await this.getJson(url, 'Dialogflow probe'); }
+  public async listDialogflowAgents(projectId: string): Promise<DialogflowAgentSummary[]> { return this.collectPages(() => resourceUrl('https://dialogflow.googleapis.com/', `projects/${projectId}/locations/global/agents`), 'Dialogflow agent list', (body: { agents?: DialogflowAgentSummary[]; nextPageToken?: string }) => ({ items: body.agents ?? [], nextPageToken: body.nextPageToken })); }
+  public async listDialogflowTools(agentName: string): Promise<DialogflowToolSummary[]> { return this.collectPages(() => resourceUrl('https://dialogflow.googleapis.com/', `${agentName}/tools`), 'Dialogflow tool list', (body: { tools?: Array<{ name: string; displayName?: string; openApiSpec?: { textSchema?: string } }>; nextPageToken?: string }) => ({ items: (body.tools ?? []).map((x) => ({ name: x.name, displayName: x.displayName, textSchema: x.openApiSpec?.textSchema })), nextPageToken: body.nextPageToken })); }
+
   public async probeAppIntegration(projectId: string): Promise<void> {
     await this.getJson(this.locationsUrl('https://integrations.googleapis.com/', projectId), 'Application Integration probe');
   }
@@ -468,6 +495,7 @@ export class GcpSdkClient implements GcpDiscoveryClient {
         .filter((id) => id.length > 0),
       attributes: normalizeLabels(item.attributes),
       createTime: typeof item.createTime === 'string' ? item.createTime : undefined
+      ,sourceUri: typeof item.sourceUri === 'string' ? item.sourceUri : undefined
     };
   }
 

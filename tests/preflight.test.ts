@@ -27,6 +27,15 @@ function fakeClient(overrides: Partial<GcpDiscoveryClient> = {}): GcpDiscoveryCl
     listApiHubSpecs: vi.fn(async () => []),
     getApiHubSpec: vi.fn(async () => ({ name: '', specTypeIds: [], attributes: {} })),
     getApiHubSpecContents: vi.fn(async () => ({})),
+    probeApigeePortal: vi.fn(),
+    listApigeePortalSites: vi.fn(async () => []),
+    listApigeePortalApidocs: vi.fn(async () => []),
+    getApigeePortalDocumentation: vi.fn(async () => ({ type: 'missing' as const })),
+    probeVertexExtensions: vi.fn(),
+    listVertexExtensions: vi.fn(async () => []),
+    probeDialogflow: vi.fn(),
+    listDialogflowAgents: vi.fn(async () => []),
+    listDialogflowTools: vi.fn(async () => []),
     probeAppIntegration: vi.fn(),
     listAppIntegrationApiTriggers: vi.fn(async () => []),
     generateAppIntegrationOpenApiSpec: vi.fn(async () => ''),
@@ -89,6 +98,9 @@ describe('GCP preflight and probes', () => {
         { provider: 'api-hub', status: 'available' },
         { provider: 'app-integration', status: 'available' },
         { provider: 'connectors-custom', status: 'available' },
+        { provider: 'apigee-portal', status: 'available' },
+        { provider: 'vertex-extensions', status: 'available' },
+        { provider: 'dialogflow-tools', status: 'available' },
         { provider: 'iac-local', status: 'available' }
       ]);
       expect(result.outputs['resolution-status']).toBe('unresolved');

@@ -7,16 +7,30 @@ import type { GcpDiscoveryClient } from '../src/lib/gcp/clients.js';
 const OAS = 'openapi: 3.0.3\ninfo:\n  title: Apigee\n  version: "1"\npaths:\n  /health:\n    get:\n      responses:\n        "200":\n          description: ok\n';
 
 function zip(entries: Record<string, string>, deflate = true): Buffer {
-  const chunks: Buffer[] = [];
+  const locals: Buffer[] = [];
+  const centrals: Buffer[] = [];
+  let offset = 0;
   for (const [name, text] of Object.entries(entries)) {
     const raw = Buffer.from(text);
     const data = deflate ? deflateRawSync(raw) : raw;
-    const header = Buffer.alloc(30);
-    header.writeUInt32LE(0x04034b50, 0); header.writeUInt16LE(20, 4); header.writeUInt16LE(deflate ? 8 : 0, 8);
-    header.writeUInt32LE(data.length, 18); header.writeUInt32LE(raw.length, 22); header.writeUInt16LE(Buffer.byteLength(name), 26);
-    chunks.push(header, Buffer.from(name), data);
+    const nameBytes = Buffer.from(name);
+    const local = Buffer.alloc(30);
+    local.writeUInt32LE(0x04034b50, 0); local.writeUInt16LE(20, 4); local.writeUInt16LE(deflate ? 8 : 0, 8);
+    local.writeUInt32LE(data.length, 18); local.writeUInt32LE(raw.length, 22); local.writeUInt16LE(nameBytes.length, 26);
+    locals.push(local, nameBytes, data);
+    const central = Buffer.alloc(46);
+    central.writeUInt32LE(0x02014b50, 0); central.writeUInt16LE(20, 6); central.writeUInt16LE(deflate ? 8 : 0, 10);
+    central.writeUInt32LE(data.length, 20); central.writeUInt32LE(raw.length, 24); central.writeUInt16LE(nameBytes.length, 28);
+    central.writeUInt32LE(offset, 42);
+    centrals.push(central, nameBytes);
+    offset += 30 + nameBytes.length + data.length;
   }
-  return Buffer.concat(chunks);
+  const centralSize = centrals.reduce((sum, chunk) => sum + chunk.length, 0);
+  const eocd = Buffer.alloc(22);
+  eocd.writeUInt32LE(0x06054b50, 0);
+  eocd.writeUInt16LE(Object.keys(entries).length, 8); eocd.writeUInt16LE(Object.keys(entries).length, 10);
+  eocd.writeUInt32LE(centralSize, 12); eocd.writeUInt32LE(offset, 16);
+  return Buffer.concat([...locals, ...centrals, eocd]);
 }
 
 function client(bundle: Buffer, overrides: Partial<GcpDiscoveryClient> = {}): GcpDiscoveryClient {

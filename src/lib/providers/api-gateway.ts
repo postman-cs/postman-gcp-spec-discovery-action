@@ -68,7 +68,10 @@ export class ApiGatewayProvider implements SpecProvider {
       if (explicit.projectId !== this.scope.projectId || explicit.location !== this.scope.location) {
         throw new Error('api-id must belong to the configured project-id and global location');
       }
-      return [this.toCandidate(await this.client.getApiGatewayConfig(this.scope.apiId!), undefined)];
+      // The API returns config.name with the numeric project number; keep the
+      // caller's project-id form so the explicit api-id match in the runtime holds.
+      const candidate = this.toCandidate(await this.client.getApiGatewayConfig(this.scope.apiId!), undefined);
+      return [{ ...candidate, apiId: this.scope.apiId! }];
     }
     if (this.scope.apiId) return [];
 

@@ -69,4 +69,18 @@ describe('API Hub provider', () => {
     const provider = new ApiHubProvider(client(), { projectId: 'sample-project-123', apiId: foreign });
     await expect(provider.listCandidates()).rejects.toThrow('api-id must belong to the configured project-id API Hub instance');
   });
+
+  it('GCP-APIHUB-006: falls back to the registered Cloud Storage source when contents are empty', async () => {
+    const getStorageObjectText = vi.fn(async () => OAS);
+    const provider = new ApiHubProvider(client({
+      listApiHubSpecs: vi.fn(async () => [spec({ sourceUri: 'gs://spec-bucket/apis/openapi.yaml' })]),
+      getApiHubSpecContents: vi.fn(async () => ({})),
+      getStorageObjectText
+    }), { projectId: 'sample-project-123' });
+    const candidate = (await provider.listCandidates())[0]!;
+    const exported = await provider.exportSpec(candidate);
+    expect(getStorageObjectText).toHaveBeenCalledWith('spec-bucket', 'apis/openapi.yaml');
+    expect(exported).toMatchObject({ content: OAS, format: 'openapi-yaml' });
+    expect(exported.evidence.join(' ')).toContain('Cloud Storage');
+  });
 });

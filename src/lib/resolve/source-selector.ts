@@ -29,6 +29,9 @@ function sourceTypeFor(providerType: ProviderType): ResolutionResult['sourceType
       return 'app-integration-trigger';
     case 'connectors-custom':
       return 'connectors-custom-spec';
+    case 'apigee-portal': return 'apigee-portal-doc';
+    case 'vertex-extensions': return 'vertex-extension-manifest';
+    case 'dialogflow-tools': return 'dialogflow-tool-schema';
     case 'iac-local':
       return 'iac-embedded';
   }

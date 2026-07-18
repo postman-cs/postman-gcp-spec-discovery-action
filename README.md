@@ -87,7 +87,7 @@ npx @postman-cse/onboarding-gcp-spec-discovery \
 | --- | --- |
 | `resolution-json` | JSON resolution result describing status, source type, confidence, and evidence. |
 | `resolution-status` | Resolution status: resolved or unresolved. |
-| `source-type` | Resolved source type: repo-spec, api-gateway-config, cloud-endpoints-config, apigee-proxy, iac-embedded, manual-review, or discover-many. |
+| `source-type` | Resolved source type: repo-spec, api-gateway-config, cloud-endpoints-config, apigee-proxy, api-hub-spec, app-integration-trigger, connectors-custom-spec, apigee-portal-doc, vertex-extension-manifest, dialogflow-tool-schema, iac-embedded, manual-review, or discover-many. |
 | `mapping-confidence` | Numeric confidence score for the selected service candidate. |
 | `spec-path` | Path to the resolved or generated specification when available. |
 | `api-id` | Full API Gateway, Cloud Endpoints config, or Apigee proxy revision resource name; empty for repo or IaC-local resolutions. |
@@ -96,7 +96,7 @@ npx @postman-cse/onboarding-gcp-spec-discovery \
 | `service-count` | discover-many output: number of exported services. |
 | `export-summary-json` | JSON summary of attempted, exported, failed, and skipped candidates. |
 | `candidates-json` | Ranked ambiguous candidates as JSON when resolution is unresolved with at least two candidates; empty otherwise. |
-| `provider-type` | Provider that produced the resolved spec: api-gateway, cloud-endpoints, apigee, or iac-local. |
+| `provider-type` | Provider that produced the resolved spec: api-gateway, cloud-endpoints, apigee, api-hub, app-integration, connectors-custom, apigee-portal, vertex-extensions, dialogflow-tools, or iac-local. |
 | `spec-format` | Format of the resolved spec: openapi-yaml or openapi-json. |
 | `contract-origin` | Compatibility output; always empty in v1. |
 | `contract-metadata-path` | Compatibility output; always empty in v1. |
@@ -119,9 +119,12 @@ npx @postman-cse/onboarding-gcp-spec-discovery \
 | `api-hub` | `api-hub-spec` | Verbatim OpenAPI stored in Apigee API Hub, exported via `specs:contents` (manually registered or ingested from Apigee / API Gateway plugins) |
 | `app-integration` | `app-integration-trigger` | OpenAPI 3.0 generated server-side by Application Integration `generateOpenApiSpec` for published integrations with API triggers |
 | `connectors-custom` | `connectors-custom-spec` | The OpenAPI document a custom Integration Connector was built from, fetched from its recorded `gs://` `specLocation` |
+| `apigee-portal` | `apigee-portal-doc` | Original OpenAPI documentation published through an Apigee portal API document |
+| `vertex-extensions` | `vertex-extension-manifest` | Inline or Cloud Storage OpenAPI from a Vertex AI extension manifest |
+| `dialogflow-tools` | `dialogflow-tool-schema` | Original OpenAPI text schema stored on a Dialogflow CX tool |
 | `iac-local` | `iac-embedded` / path reference | OpenAPI referenced by local Terraform `google_api_gateway_api_config` or `google_endpoints_service` resources |
 
-The resolver probes providers in this order: `api-gateway`, `cloud-endpoints`, `apigee`, `api-hub`, `app-integration`, `connectors-custom`, then `iac-local`. A committed `repo-spec` wins before remote discovery. Candidates are narrowed by `iac-fingerprint`, `project-correlation`, `label-prefilter`, then `naming-heuristic`; the `postman-repo` label is an ownership signal. Ambiguous or unsupported results are reported for **manual review** rather than guessed.
+The resolver probes providers in this order: `api-gateway`, `cloud-endpoints`, `apigee`, `api-hub`, `app-integration`, `connectors-custom`, `apigee-portal`, `vertex-extensions`, `dialogflow-tools`, `iac-local`. A committed `repo-spec` wins before remote discovery. Candidates are narrowed by `iac-fingerprint`, `project-correlation`, `label-prefilter`, then `naming-heuristic`; the `postman-repo` label is an ownership signal. Ambiguous or unsupported results are reported for **manual review** rather than guessed.
 
 ## v1 boundaries
 

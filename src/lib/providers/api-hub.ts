@@ -1,6 +1,7 @@
 import type { ProviderProbeStatus } from '../../contracts.js';
 import type { ApiHubSpecSummary, GcpDiscoveryClient } from '../gcp/clients.js';
-import { decodeSourceDocument } from './source-document.js';
+import { decodeSourceDocument, decodeUtf8OpenApi } from './source-document.js';
+import { parseGcsSpecLocation } from './connectors-custom.js';
 import { probeFailureStatus } from './probe.js';
 import type { SpecCandidate, SpecExportResult, SpecProvider } from './types.js';
 
@@ -83,10 +84,13 @@ export class ApiHubProvider implements SpecProvider {
 
   public async exportSpec(candidate: SpecCandidate): Promise<SpecExportResult> {
     const contents = await this.client.getApiHubSpecContents(candidate.id);
-    const decoded = decodeSourceDocument(contents.contents);
+    let decoded;
+    const evidence = [`Exported API Hub spec contents for ${shortName(candidate.id)}`];
+    if (contents.contents) decoded = decodeSourceDocument(contents.contents);
+    else { const gcs = parseGcsSpecLocation(candidate.meta.sourceUri ?? ''); if (!gcs) return { ...decodeSourceDocument(contents.contents), evidence }; decoded = decodeUtf8OpenApi(await this.client.getStorageObjectText(gcs.bucket, gcs.object)); evidence.push('Fetched original spec bytes from registered Cloud Storage source_uri'); }
     return {
       ...decoded,
-      evidence: [`Exported API Hub spec contents for ${shortName(candidate.id)}`]
+      evidence
     };
   }
 
@@ -105,7 +109,7 @@ export class ApiHubProvider implements SpecProvider {
         apiName: spec.name.split('/versions/')[0] ?? spec.name,
         versionId: spec.name.split('/versions/')[1]?.split('/')[0] ?? '',
         specId: shortName(spec.name),
-        createTime: spec.createTime ?? ''
+        createTime: spec.createTime ?? '', sourceUri: spec.sourceUri ?? ''
       }
     };
   }

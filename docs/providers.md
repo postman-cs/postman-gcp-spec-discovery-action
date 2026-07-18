@@ -1,6 +1,6 @@
 # Provider contracts
 
-GCP spec discovery probes providers fail-soft in this order: `api-gateway`, `cloud-endpoints`, `apigee`, `api-hub`, `app-integration`, `connectors-custom`, then `iac-local`. Authorization failures become `skipped:iam`; other provider failures become `skipped:error`; remaining providers continue.
+GCP spec discovery probes providers fail-soft in this order: `api-gateway`, `cloud-endpoints`, `apigee`, `api-hub`, `app-integration`, `connectors-custom`, `apigee-portal`, `vertex-extensions`, `dialogflow-tools`, `iac-local`. Authorization failures become `skipped:iam`; other provider failures become `skipped:error`; remaining providers continue.
 
 ## `api-gateway`
 
@@ -40,6 +40,30 @@ GCP spec discovery probes providers fail-soft in this order: `api-gateway`, `clo
 - Lists global custom Integration Connectors and their versions; each version records the `specLocation` of the OpenAPI document it was built from.
 - Fetches `gs://` spec objects through the authenticated Cloud Storage JSON API; `https://` locations are surfaced as manual review because the action never fetches arbitrary remote URLs.
 - Produces `connectors-custom-spec` candidates.
+
+## `apigee-portal`
+
+- Lists Apigee portal sites and their published API documents in the requested project-ID organization.
+- Exports the original `oasDocumentation.spec.contents` document.
+- Produces `apigee-portal-doc` candidates whose `api-id` is `organizations/{org}/sites/{site}/apidocs/{document}`.
+- GraphQL, AsyncAPI, missing, and invalid OpenAPI documentation remains visible as unsupported for manual review.
+- IAM note: authorization failures probing portal sites become `skipped:iam`, and discovery continues.
+
+## `vertex-extensions`
+
+- Lists Vertex AI extensions in `us-central1` for the requested project.
+- Exports the extension manifest's inline `openApiYaml` or fetches its `openApiGcsUri` through authenticated Cloud Storage.
+- Produces `vertex-extension-manifest` candidates whose `api-id` is the full extension resource name.
+- Manifests with neither source, multiple sources, invalid OpenAPI, or invalid storage locations remain unsupported.
+- IAM note: authorization failures probing Vertex AI extensions become `skipped:iam`, and discovery continues.
+
+## `dialogflow-tools`
+
+- Lists Dialogflow CX agents and their tools in the requested project.
+- Exports the original `openApiSpec.textSchema` stored on each tool.
+- Produces `dialogflow-tool-schema` candidates whose `api-id` is the full tool resource name.
+- Tools without `openApiSpec` are skipped; invalid OpenAPI schemas remain unsupported.
+- IAM note: authorization failures probing Dialogflow become `skipped:iam`, and discovery continues.
 
 ## `iac-local`
 

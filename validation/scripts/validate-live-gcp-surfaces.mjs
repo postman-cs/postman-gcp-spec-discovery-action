@@ -53,8 +53,18 @@ export function buildEvidence(results) {
   return { schemaVersion: 1, capturedAt: new Date().toISOString().slice(0, 10), cases: results.length, passed, failed: results.length - passed, results };
 }
 
+function redactSecrets(text) {
+  return String(text ?? '').replace(/Bearer [A-Za-z0-9._-]+/g, 'Bearer [REDACTED]').replace(/ya29\.[A-Za-z0-9._-]+/g, '[REDACTED]');
+}
+
 function defaultRunner(command, args, options = {}) {
-  return execFileSync(command, args, { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, stdio: ['ignore', 'pipe', 'pipe'], ...options });
+  try {
+    return execFileSync(command, args, { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, stdio: ['ignore', 'pipe', 'pipe'], ...options });
+  } catch (error) {
+    const scrubbed = new Error(redactSecrets(error instanceof Error ? error.message : String(error)));
+    scrubbed.stderr = redactSecrets(error?.stderr);
+    throw scrubbed;
+  }
 }
 
 function gcloud(runner, args) { return runner('gcloud', args); }
@@ -88,17 +98,22 @@ function readFileSyncSafe(filePath) {
 }
 
 async function seedIac(workspace) {
+  // Document names deliberately avoid the conventional repo-spec pattern
+  // (openapi|swagger|api|oas).*: the repo-spec scan would otherwise resolve
+  // them first and the IaC path-reference tier would never be exercised.
   await mkdir(path.join(workspace, 'infra'), { recursive: true });
-  await cp(path.join(repoRoot, 'validation/fixtures/gcp/iac-single/main.tf'), path.join(workspace, 'infra/main.tf'));
-  await cp(path.join(repoRoot, 'validation/fixtures/gcp/openapi.yaml'), path.join(workspace, 'infra/openapi.yaml'));
+  const source = await readFile(path.join(repoRoot, 'validation/fixtures/gcp/iac-single/main.tf'), 'utf8');
+  await writeFile(path.join(workspace, 'infra/main.tf'), source.replaceAll('openapi.yaml', 'gateway-doc.yaml'));
+  await cp(path.join(repoRoot, 'validation/fixtures/gcp/openapi.yaml'), path.join(workspace, 'infra/gateway-doc.yaml'));
 }
 
 async function seedAmbiguity(workspace) {
   await mkdir(path.join(workspace, 'infra'), { recursive: true });
   const source = await readFile(path.join(repoRoot, 'validation/fixtures/gcp/iac-single/main.tf'), 'utf8');
-  await writeFile(path.join(workspace, 'infra/alpha.tf'), source.replaceAll('postman-live-api', 'postman-alpha-api'));
-  await writeFile(path.join(workspace, 'infra/bravo.tf'), source.replaceAll('postman-live-api', 'postman-bravo-api'));
-  await cp(path.join(repoRoot, 'validation/fixtures/gcp/openapi.yaml'), path.join(workspace, 'infra/openapi.yaml'));
+  await writeFile(path.join(workspace, 'infra/alpha.tf'), source.replaceAll('postman-live-api', 'postman-alpha-api').replaceAll('openapi.yaml', 'alpha-doc.yaml'));
+  await writeFile(path.join(workspace, 'infra/bravo.tf'), source.replaceAll('postman-live-api', 'postman-bravo-api').replaceAll('openapi.yaml', 'bravo-doc.yaml'));
+  await cp(path.join(repoRoot, 'validation/fixtures/gcp/openapi.yaml'), path.join(workspace, 'infra/alpha-doc.yaml'));
+  await cp(path.join(repoRoot, 'validation/fixtures/gcp/openapi.yaml'), path.join(workspace, 'infra/bravo-doc.yaml'));
 }
 
 async function provision({ runner, token, env, manifest }) {
@@ -110,8 +125,8 @@ async function provision({ runner, token, env, manifest }) {
     // API Gateway and Cloud Endpoints accept OpenAPI 2.0 (Swagger) documents only.
     const gatewaySpecPath = path.join(managed, 'gateway.yaml');
     await writeFile(gatewaySpecPath, swagger2Document({ title: manifest.gatewayName, backend: true }));
-    gcloud(runner, ['api-gateway', 'apis', 'create', manifest.gatewayName, '--project', env.projectId, '--labels', `postman-run-marker=${manifest.runMarker}`]);
-    gcloud(runner, ['api-gateway', 'api-configs', 'create', manifest.gatewayConfigName, '--api', manifest.gatewayName, '--openapi-spec', gatewaySpecPath, '--project', env.projectId, '--labels', `postman-run-marker=${manifest.runMarker}`]);
+    gcloud(runner, ['api-gateway', 'apis', 'create', manifest.gatewayName, '--project', env.projectId, '--labels', `postman-run-marker=${manifest.runMarker},postman-project-name=${manifest.gatewayName}`]);
+    gcloud(runner, ['api-gateway', 'api-configs', 'create', manifest.gatewayConfigName, '--api', manifest.gatewayName, '--openapi-spec', gatewaySpecPath, '--project', env.projectId, '--labels', `postman-run-marker=${manifest.runMarker},postman-project-name=${manifest.gatewayName}`]);
     const endpointsPath = path.join(managed, 'endpoints.yaml');
     await writeFile(endpointsPath, swagger2Document({ title: manifest.endpointsService, host: manifest.endpointsService }));
     gcloud(runner, ['endpoints', 'services', 'deploy', endpointsPath, '--project', env.projectId]);
@@ -131,7 +146,9 @@ async function provision({ runner, token, env, manifest }) {
   return { endpointsConfigId };
 }
 
-async function teardown({ runner, token, env, manifest, log }) {
+async function teardown({ runner, env, manifest, log }) {
+  // Mint a fresh token: the run can outlive the one issued before provisioning.
+  const token = accessToken(runner);
   if (!shouldDeleteGatewayResource({ manifest, resourceName: manifest.gatewayName, marker: manifest.runMarker })) throw new Error('REFUSING Gateway deletion: marker or name mismatch');
   try { gcloud(runner, ['api-gateway', 'api-configs', 'delete', manifest.gatewayConfigName, '--api', manifest.gatewayName, '--project', env.projectId, '--quiet']); } catch (error) { if (!isResourceNotFoundError(error)) throw error; }
   try { gcloud(runner, ['api-gateway', 'apis', 'delete', manifest.gatewayName, '--project', env.projectId, '--quiet']); } catch (error) { if (!isResourceNotFoundError(error)) throw error; }
@@ -154,14 +171,22 @@ async function runCases({ runner, cliPath, env, manifest, endpointsConfigId, log
       } else if (!resolution || (result.resolution && result.resolution.status !== 'resolved')) throw new Error('expected resolved result');
       if (expectedSource && resolution.sourceType !== expectedSource) throw new Error(`expected ${expectedSource}, got ${resolution.sourceType}`);
       results.push(toEvidenceResult(name, 'pass', resolution));
-    } catch (error) { results.push(toEvidenceResult(name, 'fail')); log(`${name}: ${error instanceof Error ? error.message : String(error)}`); }
+    } catch (error) {
+      results.push(toEvidenceResult(name, 'fail'));
+      log(`${name}: ${redactSecrets(error instanceof Error ? error.message : String(error))}`);
+      try {
+        const diag = JSON.parse(String(readFileSync(path.join(workspace, 'result.json'), 'utf8')));
+        const res = diag.resolution ?? {};
+        log(`${name} diagnostics: status=${res.status} confidence=${res.confidence} evidence=${JSON.stringify((res.evidence ?? []).slice(0, 4))} ranked=${JSON.stringify((res.rankedCandidates ?? []).slice(0, 4).map((c) => ({ n: c.serviceName, p: c.providerType, conf: c.confidence, amb: c.ambiguous })))}`);
+      } catch { /* result.json may be absent when the CLI itself failed */ }
+    }
     finally { await rm(workspace, { recursive: true, force: true }); }
   };
   await execute(cases[0], null, ['--api-id', `projects/${env.projectId}/locations/global/apis/${manifest.gatewayName}/configs/${manifest.gatewayConfigName}`], 'api-gateway-config');
   await execute(cases[1], null, ['--expected-service-name', manifest.gatewayName], 'api-gateway-config');
   await execute(cases[2], null, ['--api-id', `services/${manifest.endpointsService}/configs/${endpointsConfigId}`], 'cloud-endpoints-config');
-  await execute(cases[3], null, ['--expected-service-name', manifest.endpointsService], 'cloud-endpoints-config');
-  await execute(cases[4], null, ['--expected-service-name', manifest.proxyName], 'apigee-proxy');
+  await execute(cases[3], null, ['--expected-service-name', manifest.endpointsService, '--expected-api-ids-json', JSON.stringify([`services/${manifest.endpointsService}/configs/${endpointsConfigId}`])], 'cloud-endpoints-config');
+  await execute(cases[4], null, ['--expected-service-name', manifest.proxyName, '--expected-api-ids-json', JSON.stringify([`organizations/${env.apigeeOrg}/apis/${manifest.proxyName}/revisions/1`])], 'apigee-proxy');
   await execute(cases[5], null, ['--mode', 'discover-many'], null);
   await execute(cases[6], seedIac, ['--preflight-checks', 'false'], 'iac-embedded');
   await execute(cases[7], seedAmbiguity, ['--preflight-checks', 'false'], null);

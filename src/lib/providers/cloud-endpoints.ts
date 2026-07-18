@@ -63,6 +63,11 @@ export class CloudEndpointsProvider implements SpecProvider {
 
     const candidates: SpecCandidate[] = [];
     for (const service of await this.client.listManagedServices(this.scope.projectId)) {
+      // API Gateway provisions a hidden managed service per gateway API
+      // (<api>-<hash>.apigateway.<project>.cloud.goog). Those are the gateway's
+      // implementation detail and already surface as api-gateway candidates,
+      // so listing them here would only duplicate every gateway API.
+      if (service.serviceName.endsWith(`.apigateway.${this.scope.projectId}.cloud.goog`)) continue;
       const newest = (await this.client.listEndpointConfigs(service.serviceName))[0];
       if (!newest?.id) continue;
       const full = await this.client.getEndpointConfig(service.serviceName, newest.id);

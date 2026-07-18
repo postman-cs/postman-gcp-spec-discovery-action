@@ -143,6 +143,12 @@ export { findExistingRepoSpecTyped, type RepoSpecMatch } from './lib/repo/specs.
 export { ApiGatewayProvider, parseApiGatewayConfigName } from './lib/providers/api-gateway.js';
 export { CloudEndpointsProvider, parseEndpointConfigName } from './lib/providers/cloud-endpoints.js';
 export { ApigeeProvider, parseApigeeRevisionName } from './lib/providers/apigee.js';
+export { ApiHubProvider, parseApiHubSpecName } from './lib/providers/api-hub.js';
+export { AppIntegrationProvider } from './lib/providers/app-integration.js';
+export { ConnectorsCustomProvider, parseGcsSpecLocation } from './lib/providers/connectors-custom.js';
+export { ApigeePortalProvider, parseApigeePortalApidocName } from './lib/providers/apigee-portal.js';
+export { VertexExtensionsProvider, parseVertexExtensionName } from './lib/providers/vertex-extensions.js';
+export { DialogflowToolsProvider, parseDialogflowToolName } from './lib/providers/dialogflow-tools.js';
 export { IacLocalProvider } from './lib/providers/iac-local.js';
 export { parseAndValidateOpenApi } from './lib/spec/validate-openapi.js';
 export { decodeUtf8OpenApi } from './lib/providers/source-document.js';
