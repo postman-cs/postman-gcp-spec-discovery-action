@@ -1,0 +1,91 @@
+name: Postman API Catalog Onboarding (GCP)
+
+# Per-service-repo spoke for GCP-hosted APIs, adapted from the AWS
+# discovery-hub pattern (central AWS discovery hub) — but hub-less:
+# each service repo discovers its own deployed spec directly from GCP, so no
+# central distributor, cross-repo PAT, or estate scan is required.
+#
+# What it does: resolves the API this repository owns from the configured GCP
+# project (API Gateway, Cloud Endpoints, Apigee, API Hub, and friends), exports
+# its OpenAPI spec, and onboards the service into the Postman API Catalog.
+#
+# How the repo is matched to its deployed API, in precedence order:
+#   1. api-id input (explicit resource name — always wins; set it to bypass
+#      discovery entirely).
+#   2. A spec committed in this repo (repo-spec) or referenced by local IaC.
+#   3. Repository association: the deployed GCP resource carries a
+#      postman-repo=<owner--repo> label (canonicalized: lowercase, / -> --).
+#      Exactly one conflict-free match auto-selects; anything ambiguous stays
+#      unresolved and the guard step below fails loudly instead of guessing.
+#
+# Setup (once per org):
+#   1. Org secret POSTMAN_API_KEY (service-account PMAK).
+#   2. Org variables GCP_PROJECT_ID, GCP_WORKLOAD_IDENTITY_PROVIDER, and
+#      GCP_SERVICE_ACCOUNT for keyless Workload Identity Federation auth.
+#   3. Label the deployed gateway/proxy/config with postman-repo=<owner--repo>
+#      (for github.com/acme/payments-api: postman-repo=acme--payments-api).
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - 'swagger.yaml'
+      - 'swagger.yml'
+      - 'openapi.yaml'
+      - 'openapi.yml'
+      - 'spec/openapi.yaml'
+      - 'api/openapi.yaml'
+      - 'docs/openapi.yaml'
+      - '**/*.tf'
+      # Self-bootstrap: run when this workflow itself lands so the first
+      # onboarding happens the moment the file merges.
+      - '.github/workflows/postman-gcp-onboard.yml'
+  schedule:
+    # Weekly re-discovery catches gateway-side spec drift with no repo change.
+    - cron: '17 6 * * 1'
+  workflow_dispatch: {}
+
+permissions:
+  contents: write        # commit generated Postman assets back to the branch
+  pull-requests: write   # allow breaking-change reporting to comment
+  id-token: write        # Workload Identity Federation (keyless GCP auth)
+
+jobs:
+  onboard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Full history so breaking-change comparison can diff against the
+          # previously committed spec version.
+          fetch-depth: 0
+
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+
+      - name: Discover this repo's API spec from GCP
+        id: spec
+        uses: postman-cs/postman-gcp-spec-discovery-action@v1
+        with:
+          project-id: ${{ vars.GCP_PROJECT_ID }}
+          repo-slug: ${{ github.repository }}
+
+      - name: Require an unambiguous resolution
+        if: steps.spec.outputs.resolution-status != 'resolved'
+        run: |
+          echo "::error::GCP spec discovery did not resolve a single API for this repository."
+          echo "::error::Label the owning resource with postman-repo (see evidence in resolution-json) or set api-id explicitly."
+          echo '${{ steps.spec.outputs.resolution-json }}' | head -c 4000
+          exit 1
+
+      - name: Onboard into the Postman API Catalog (+ drift check)
+        uses: postman-cs/postman-api-onboarding-action@v2
+        with:
+          project-name: ${{ steps.spec.outputs.service-name }}
+          spec-path: ${{ steps.spec.outputs.spec-path }}
+          breaking-change-mode: previous-spec
+          repo-write-mode: commit-and-push
+          postman-api-key: ${{ secrets.POSTMAN_API_KEY }}
+          github-token: ${{ github.token }}

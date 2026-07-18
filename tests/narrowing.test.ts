@@ -65,3 +65,30 @@ describe('GCP narrowing pipeline', () => {
     expect(partitioned.slice(0, 50)).toHaveLength(50);
   });
 });
+
+describe('GCP-REPO-001: canonical repo label edge cases', () => {
+  it('lowercases, folds slash to double dash, and strips invalid characters', () => {
+    expect(canonicalRepoLabelValue('Acme/Payments.API')).toBe('acme--payments-api');
+    expect(canonicalRepoLabelValue('org/repo_name')).toBe('org--repo_name');
+  });
+  it('rejects values longer than 63 characters instead of truncating', () => {
+    const slug = 'org/' + 'a'.repeat(70);
+    expect(canonicalRepoLabelValue(slug)).toBeUndefined();
+  });
+  it('rejects empty-after-trim slugs', () => {
+    expect(canonicalRepoLabelValue('//')).toBeUndefined();
+    expect(canonicalRepoLabelValue(undefined)).toBeUndefined();
+  });
+  it('case-fold collisions map distinct slugs to one canonical value (documented escape hatch: api-id)', () => {
+    expect(canonicalRepoLabelValue('Org/Payments')).toBe(canonicalRepoLabelValue('org/payments'));
+    expect(canonicalRepoLabelValue('org/pay.ments')).toBe(canonicalRepoLabelValue('org/pay-ments'));
+  });
+  it('multiple exact postman-repo matches narrow but never select', async () => {
+    const result = await runNarrowingPipeline(context(), [
+      candidate('projects/p/locations/global/apis/a/configs/c1', { tags: { 'postman-repo': 'org--payments' } }),
+      candidate('projects/p/locations/global/apis/b/configs/c2', { tags: { 'postman-repo': 'org--payments' } })
+    ]);
+    expect(result?.mode).toBe('narrow');
+    expect(result?.apiIds).toHaveLength(2);
+  });
+});

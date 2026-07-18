@@ -68,6 +68,18 @@ describe('Apigee provider', () => {
     expect(candidates[0]?.id).toBe(id);
     expect(fake.listApigeeProxies).not.toHaveBeenCalled();
   });
+  it('GCP-APIGEE-ASSOC-001: projects proxy labels into candidate tags for repo association', async () => {
+    const fake = client(zip({ 'apiproxy/resources/oas/openapi.yaml': OAS }), {
+      listApigeeProxies: vi.fn(async () => [{ name: 'payments', labels: { 'postman-repo': 'acme--payments-api' } }])
+    });
+    const candidate = (await new ApigeeProvider(fake, { projectId: 'sample-project-123' }).listCandidates())[0]!;
+    expect(candidate.tags).toEqual({ 'postman-repo': 'acme--payments-api' });
+  });
+  it('GCP-APIGEE-ASSOC-001: explicit api-id candidates carry no proxy labels', async () => {
+    const id = 'organizations/sample-project-123/apis/orders/revisions/3';
+    const candidates = await new ApigeeProvider(client(zip({ 'apiproxy/resources/oas/openapi.yaml': OAS })), { projectId: 'sample-project-123', apiId: id }).listCandidates();
+    expect(candidates[0]?.tags).toEqual({});
+  });
   it('extracts stored and deflated zip paths', () => {
     expect(inflateZip(zip({ 'a.txt': 'stored' }, false)).get('a.txt')?.toString()).toBe('stored');
     expect(inflateZip(zip({ 'b.txt': 'deflated' })).get('b.txt')?.toString()).toBe('deflated');

@@ -2,6 +2,18 @@
 
 GCP spec discovery probes providers fail-soft in this order: `api-gateway`, `cloud-endpoints`, `apigee`, `api-hub`, `app-integration`, `connectors-custom`, `apigee-portal`, `vertex-extensions`, `dialogflow-tools`, `ces-toolsets`, `iac-local`. Authorization failures become `skipped:iam`; other provider failures become `skipped:error`; remaining providers continue.
 
+## Repository-association capability
+
+Automatic per-repo selection matches the canonical `postman-repo` label against candidate tags. Providers differ in whether the underlying GCP resource can carry labels at all:
+
+| Capability | Providers | Mechanism |
+| --- | --- | --- |
+| Label-capable (auto-select works) | `api-gateway`, `apigee`, `api-hub`, `connectors-custom` | Resource labels flow into candidate tags (`postman-repo=<owner--repo>` on the API/config, proxy, hub attribute, or connector version) |
+| Label-capable via IaC | `iac-local` | Repository-committed IaC fingerprinting selects without cloud labels |
+| Label-incapable (never auto-selects by label) | `cloud-endpoints`, `app-integration`, `apigee-portal`, `vertex-extensions`, `dialogflow-tools`, `ces-toolsets` | The GCP surface exposes no usable label; select with `api-id`, `expected-api-ids-json`, or `service-mapping-json` + `expected-service-name` |
+
+Label-incapable providers still participate in discovery and ranking; they simply cannot be *authorized* for export by repository association alone. See [repository-association.md](repository-association.md).
+
 ## `api-gateway`
 
 - Lists API Gateway APIs and configs in the requested project and `global` location.

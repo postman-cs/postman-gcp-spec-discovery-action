@@ -25,7 +25,7 @@ import {
   type GCPCandidateInput,
   type RankedServiceCandidate
 } from './lib/resolve/service-resolver.js';
-import { runNarrowingPipeline, type NarrowingCandidate, type NarrowingResult } from './lib/resolve/narrowing-pipeline.js';
+import { canonicalRepoLabelValue, runNarrowingPipeline, type NarrowingCandidate, type NarrowingResult } from './lib/resolve/narrowing-pipeline.js';
 import { deriveOpenApiDocument } from './lib/spec/oas-derivation.js';
 import { ApiGatewayProvider, parseApiGatewayConfigName } from './lib/providers/api-gateway.js';
 import { CloudEndpointsProvider, parseEndpointConfigName } from './lib/providers/cloud-endpoints.js';
@@ -722,7 +722,10 @@ async function runResolveOne(inputs: ResolvedInputs, dependencies: GCPDependenci
     rankedCandidates: toAmbiguousViews(ranked.slice(0, inputs.maxCandidates)),
     evidence: [
       ...(best?.evidence ?? ['No candidates matched this repository']),
-      ...(cappedCount > 0 ? [`Candidate cap hid ${cappedCount} lower-ranked candidate(s) from the serialized view (ranking used all candidates)`] : [])
+      ...(cappedCount > 0 ? [`Candidate cap hid ${cappedCount} lower-ranked candidate(s) from the serialized view (ranking used all candidates)`] : []),
+      ...(inputs.repoContext.repoSlug && canonicalRepoLabelValue(inputs.repoContext.repoSlug)
+        ? [`To resolve automatically, label the owning GCP resource with postman-repo=${canonicalRepoLabelValue(inputs.repoContext.repoSlug)} (or pass api-id explicitly)`]
+        : [])
     ]
   };
   return {

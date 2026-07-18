@@ -104,7 +104,7 @@ export interface GcpDiscoveryClient {
   listEndpointConfigs(serviceName: string): Promise<EndpointServiceConfig[]>;
   getEndpointConfig(serviceName: string, configId: string): Promise<EndpointServiceConfig>;
   probeApigee(org: string): Promise<void>;
-  listApigeeProxies(org: string): Promise<Array<{ name: string; apiProxyType?: string }>>;
+  listApigeeProxies(org: string): Promise<Array<{ name: string; apiProxyType?: string; labels: Record<string, string> }>>;
   listApigeeRevisions(org: string, proxyName: string): Promise<string[]>;
   downloadApigeeRevisionBundle(org: string, proxyName: string, revision: string): Promise<Buffer>;
   probeApiHub(projectId: string): Promise<void>;
@@ -279,10 +279,16 @@ export class GcpSdkClient implements GcpDiscoveryClient {
     await this.getJson(this.apigeeUrl(org), 'Apigee probe');
   }
 
-  public async listApigeeProxies(org: string): Promise<Array<{ name: string; apiProxyType?: string }>> {
-    const body = await this.getJson<{ proxies?: Array<string | { name?: string; apiProxyType?: string }> } | string[]>(this.apigeeUrl(org), 'Apigee proxy list');
+  public async listApigeeProxies(org: string): Promise<Array<{ name: string; apiProxyType?: string; labels: Record<string, string> }>> {
+    const url = this.apigeeUrl(org);
+    url.searchParams.set('includeMetaData', 'true');
+    const body = await this.getJson<{ proxies?: Array<string | { name?: string; apiProxyType?: string; labels?: unknown }> } | string[]>(url, 'Apigee proxy list');
     const values = Array.isArray(body) ? body : body.proxies ?? [];
-    return values.map((value) => typeof value === 'string' ? { name: value } : { name: value.name ?? '', apiProxyType: value.apiProxyType }).filter((value) => value.name);
+    return values
+      .map((value) => typeof value === 'string'
+        ? { name: value, labels: {} }
+        : { name: value.name ?? '', apiProxyType: value.apiProxyType, labels: normalizeLabels(value.labels) })
+      .filter((value) => value.name);
   }
 
   public async listApigeeRevisions(org: string, proxyName: string): Promise<string[]> {

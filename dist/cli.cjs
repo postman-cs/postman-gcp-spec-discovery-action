@@ -44883,9 +44883,11 @@ var GcpSdkClient = class {
     await this.getJson(this.apigeeUrl(org), "Apigee probe");
   }
   async listApigeeProxies(org) {
-    const body = await this.getJson(this.apigeeUrl(org), "Apigee proxy list");
+    const url = this.apigeeUrl(org);
+    url.searchParams.set("includeMetaData", "true");
+    const body = await this.getJson(url, "Apigee proxy list");
     const values = Array.isArray(body) ? body : body.proxies ?? [];
-    return values.map((value) => typeof value === "string" ? { name: value } : { name: value.name ?? "", apiProxyType: value.apiProxyType }).filter((value) => value.name);
+    return values.map((value) => typeof value === "string" ? { name: value, labels: {} } : { name: value.name ?? "", apiProxyType: value.apiProxyType, labels: normalizeLabels(value.labels) }).filter((value) => value.name);
   }
   async listApigeeRevisions(org, proxyName) {
     const body = await this.getJson(this.apigeeUrl(org, proxyName, "revisions"), "Apigee revision list");
@@ -45699,6 +45701,11 @@ var actionContract = {
     },
     "api-id": {
       description: "Optional full API Gateway config, Cloud Endpoints config, Apigee proxy revision, or API Hub spec resource name. Use this to bypass broader project discovery.",
+      required: false,
+      default: ""
+    },
+    "repo-slug": {
+      description: "Repository slug (owner/name) used for repository-association matching against postman-repo resource labels. Defaults to the CI-detected repository (GITHUB_REPOSITORY).",
       required: false,
       default: ""
     },
@@ -46982,12 +46989,12 @@ var ApigeeProvider = class {
     const explicit = this.scope.apiId ? parseApigeeRevisionName(this.scope.apiId) : void 0;
     if (this.scope.apiId && !explicit) return [];
     if (explicit && explicit.org !== this.scope.projectId) throw new Error("api-id Apigee revision does not belong to the configured project-id org");
-    const revisions = explicit ? [{ proxyName: explicit.proxyName, revision: explicit.revision }] : await this.latestRevisions();
-    return Promise.all(revisions.map(async ({ proxyName, revision }) => {
+    const revisions = explicit ? [{ proxyName: explicit.proxyName, revision: explicit.revision, labels: {} }] : await this.latestRevisions();
+    return Promise.all(revisions.map(async ({ proxyName, revision, labels }) => {
       const id = `organizations/${this.scope.projectId}/apis/${proxyName}/revisions/${revision}`;
       const count = documents(await this.client.downloadApigeeRevisionBundle(this.scope.projectId, proxyName, revision)).length;
       const evidence = count === 1 ? [`Apigee proxy revision has one OpenAPI source document`] : count === 0 ? ["Apigee proxy revision has no OpenAPI source document"] : [`Apigee proxy revision has ${count} OpenAPI source documents; refusing to merge or guess`];
-      return { id, name: proxyName, providerType: this.type, apiId: id, projectId: this.scope.projectId, tags: {}, supported: count === 1, evidence, meta: { proxyName, revision } };
+      return { id, name: proxyName, providerType: this.type, apiId: id, projectId: this.scope.projectId, tags: labels, supported: count === 1, evidence, meta: { proxyName, revision } };
     }));
   }
   async exportSpec(candidate) {
@@ -47001,7 +47008,7 @@ var ApigeeProvider = class {
     const result = [];
     for (const proxy of await this.client.listApigeeProxies(this.scope.projectId)) {
       const revision = (await this.client.listApigeeRevisions(this.scope.projectId, proxy.name)).filter((value) => /^\d+$/.test(value)).sort((a, b) => Number(b) - Number(a))[0];
-      if (revision) result.push({ proxyName: proxy.name, revision });
+      if (revision) result.push({ proxyName: proxy.name, revision, labels: proxy.labels ?? {} });
     }
     return result;
   }
@@ -47996,7 +48003,8 @@ async function runResolveOne(inputs, dependencies) {
     rankedCandidates: toAmbiguousViews(ranked.slice(0, inputs.maxCandidates)),
     evidence: [
       ...best?.evidence ?? ["No candidates matched this repository"],
-      ...cappedCount > 0 ? [`Candidate cap hid ${cappedCount} lower-ranked candidate(s) from the serialized view (ranking used all candidates)`] : []
+      ...cappedCount > 0 ? [`Candidate cap hid ${cappedCount} lower-ranked candidate(s) from the serialized view (ranking used all candidates)`] : [],
+      ...inputs.repoContext.repoSlug && canonicalRepoLabelValue(inputs.repoContext.repoSlug) ? [`To resolve automatically, label the owning GCP resource with postman-repo=${canonicalRepoLabelValue(inputs.repoContext.repoSlug)} (or pass api-id explicitly)`] : []
     ]
   };
   return {
