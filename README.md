@@ -146,7 +146,7 @@ npx @postman-cse/onboarding-gcp-spec-discovery \
 | `ces-toolsets` | `ces-toolset-schema` | Original OpenAPI schema stored on a Conversational Agents app toolset |
 | `iac-local` | `iac-embedded` / path reference | OpenAPI referenced by local Terraform `google_api_gateway_api_config` or `google_endpoints_service` resources |
 
-The resolver probes providers in this order: `api-gateway`, `cloud-endpoints`, `apigee`, `api-hub`, `app-integration`, `connectors-custom`, `apigee-portal`, `vertex-extensions`, `dialogflow-tools`, `ces-toolsets`, `iac-local`. A committed `repo-spec` wins before remote discovery. Candidates are narrowed by `iac-fingerprint`, `project-correlation`, `label-prefilter`, then `naming-heuristic`; the `postman-repo` label is an ownership signal. Ambiguous or unsupported results are reported for **manual review** rather than guessed.
+The resolver probes providers in this order: `api-gateway`, `cloud-endpoints`, `apigee`, `api-hub`, `app-integration`, `connectors-custom`, `apigee-portal`, `vertex-extensions`, `agent-engines`, `dialogflow-tools`, `ces-toolsets`, `iac-local`. A committed `repo-spec` wins before remote discovery. Candidates are narrowed by `iac-fingerprint`, `project-correlation`, `label-prefilter`, then `naming-heuristic`; the `postman-repo` label is an ownership signal. Ambiguous or unsupported results are reported for **manual review** rather than guessed.
 
 ## v1 boundaries
 

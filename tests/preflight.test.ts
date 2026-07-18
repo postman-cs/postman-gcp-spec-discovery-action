@@ -95,7 +95,8 @@ describe('GCP preflight and probes', () => {
     try {
       const client = fakeClient({
         probeApiGateway: vi.fn(async () => { throw new Error('Permission denied with HTTP 403'); }),
-        probeCloudEndpoints: vi.fn(async () => { throw new Error('service unavailable'); })
+        probeCloudEndpoints: vi.fn(async () => { throw new Error('service unavailable'); }),
+        probeAgentEngines: vi.fn(async () => { throw new Error('service unavailable'); })
       });
       const result = await execute(
         resolveInputs({ INPUT_PROJECT_ID: 'sample-project-123', INPUT_REPO_ROOT: root }),
