@@ -50127,7 +50127,7 @@ var AgentEnginesProvider = class {
     const evidence = ["OpenAPI assembled from Agent Engine classMethods declarations; confidence is lower than stored specification sources"];
     try {
       for (const declaration of engine.classMethods) {
-        if (typeof declaration.name !== "string" || declaration.httpMethod !== void 0 && !/^(get|put|post|delete|options|head|patch|trace)$/i.test(String(declaration.httpMethod))) throw new Error("Invalid classMethod declaration");
+        if (typeof declaration.name !== "string") throw new Error("Invalid classMethod declaration");
       }
       parseAndValidateOpenApi(document2);
     } catch {
@@ -50142,13 +50142,45 @@ var AgentEnginesProvider = class {
 };
 function assembleAgentEngineOpenApi(engine) {
   const paths = {};
-  for (const [index, declaration] of engine.classMethods.entries()) {
-    const method = typeof declaration.name === "string" ? declaration.name : `method-${index + 1}`;
-    const path12 = typeof declaration.path === "string" ? declaration.path : `/${method}`;
-    const verb = typeof declaration.httpMethod === "string" ? declaration.httpMethod.toLowerCase() : "post";
-    paths[path12] = { [verb]: { ...declaration, operationId: typeof declaration.operationId === "string" ? declaration.operationId : method, responses: declaration.responses ?? { "200": { description: "Agent Engine method response" } } } };
+  for (const mode of ["", "stream"]) {
+    const declarations = engine.classMethods.filter((declaration) => (declaration.api_mode === "stream" ? "stream" : "") === mode);
+    if (declarations.length === 0) continue;
+    const suffix = mode === "stream" ? "streamQuery" : "query";
+    paths[`/v1/{engine.name}:${suffix}`] = {
+      post: {
+        operationId: suffix,
+        description: declarations.map((declaration) => typeof declaration.description === "string" ? declaration.description : void 0).filter(Boolean).join("\n\n") || void 0,
+        parameters: [{ name: "engine.name", in: "path", required: true, schema: { type: "string" } }],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                oneOf: declarations.map((declaration) => ({
+                  type: "object",
+                  required: ["class_method", "input"],
+                  properties: {
+                    class_method: { type: "string", enum: [declaration.name] },
+                    input: parameterSchema(declaration)
+                  }
+                }))
+              }
+            }
+          }
+        },
+        responses: { "200": { description: "Agent Engine method response" } }
+      }
+    };
   }
   return { openapi: "3.0.3", info: { title: engine.displayName || engine.name.split("/").pop(), version: "generated", description: "Generated from Vertex AI Agent Engine classMethods declarations" }, paths };
+}
+function parameterSchema(declaration) {
+  if (isRecord(declaration.parameters)) return declaration.parameters;
+  if (isRecord(declaration.properties)) return { type: "object", properties: declaration.properties };
+  return { type: "object", additionalProperties: true };
+}
+function isRecord(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 // src/lib/providers/dialogflow-tools.ts

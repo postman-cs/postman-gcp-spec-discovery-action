@@ -37,7 +37,7 @@ export class AgentEnginesProvider implements SpecProvider {
     const evidence = ['OpenAPI assembled from Agent Engine classMethods declarations; confidence is lower than stored specification sources'];
     try {
       for (const declaration of engine.classMethods) {
-        if (typeof declaration.name !== 'string' || (declaration.httpMethod !== undefined && !/^(get|put|post|delete|options|head|patch|trace)$/i.test(String(declaration.httpMethod)))) throw new Error('Invalid classMethod declaration');
+        if (typeof declaration.name !== 'string') throw new Error('Invalid classMethod declaration');
       }
       parseAndValidateOpenApi(document);
     } catch { supported = false; evidence.push('Generated spec has no operations or is invalid; manual review'); }
@@ -51,11 +51,45 @@ export class AgentEnginesProvider implements SpecProvider {
 
 function assembleAgentEngineOpenApi(engine: AgentEngineSummary): Record<string, unknown> {
   const paths: Record<string, unknown> = {};
-  for (const [index, declaration] of engine.classMethods.entries()) {
-    const method = typeof declaration.name === 'string' ? declaration.name : `method-${index + 1}`;
-    const path = typeof declaration.path === 'string' ? declaration.path : `/${method}`;
-    const verb = typeof declaration.httpMethod === 'string' ? declaration.httpMethod.toLowerCase() : 'post';
-    paths[path] = { [verb]: { ...declaration, operationId: typeof declaration.operationId === 'string' ? declaration.operationId : method, responses: declaration.responses ?? { '200': { description: 'Agent Engine method response' } } } };
+  for (const mode of ['', 'stream'] as const) {
+    const declarations = engine.classMethods.filter((declaration) => (declaration.api_mode === 'stream' ? 'stream' : '') === mode);
+    if (declarations.length === 0) continue;
+    const suffix = mode === 'stream' ? 'streamQuery' : 'query';
+    paths[`/v1/{engine.name}:${suffix}`] = {
+      post: {
+        operationId: suffix,
+        description: declarations.map((declaration) => typeof declaration.description === 'string' ? declaration.description : undefined).filter(Boolean).join('\n\n') || undefined,
+        parameters: [{ name: 'engine.name', in: 'path', required: true, schema: { type: 'string' } }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                oneOf: declarations.map((declaration) => ({
+                  type: 'object',
+                  required: ['class_method', 'input'],
+                  properties: {
+                    class_method: { type: 'string', enum: [declaration.name] },
+                    input: parameterSchema(declaration)
+                  }
+                }))
+              }
+            }
+          }
+        },
+        responses: { '200': { description: 'Agent Engine method response' } }
+      }
+    };
   }
   return { openapi: '3.0.3', info: { title: engine.displayName || engine.name.split('/').pop()!, version: 'generated', description: 'Generated from Vertex AI Agent Engine classMethods declarations' }, paths };
+}
+
+function parameterSchema(declaration: Record<string, unknown>): Record<string, unknown> {
+  if (isRecord(declaration.parameters)) return declaration.parameters;
+  if (isRecord(declaration.properties)) return { type: 'object', properties: declaration.properties };
+  return { type: 'object', additionalProperties: true };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
