@@ -47,10 +47,20 @@ export class ConnectorsCustomProvider implements SpecProvider {
   public async listCandidates(): Promise<SpecCandidate[]> {
     if (this.scope.apiId) return [];
     const versions = await this.client.listCustomConnectorVersions(this.scope.projectId);
-    return versions.map((version) => this.toCandidate(version));
+    const candidates = versions.map((version) => this.toCandidate(version));
+    for (const connection of await this.client.listConnectorConnections(this.scope.projectId)) {
+      const schema = await this.client.getConnectorSchemaMetadata(connection.name);
+      if (!schema) continue;
+      const document = JSON.stringify(schemaToOpenApi(connection.name, schema));
+      candidates.push({ id: connection.name, apiId: connection.name, name: shortName(connection.name), providerType: this.type, sourceType: 'connectors-generated-spec', projectId: this.scope.projectId, tags: {}, supported: true, evidence: ['OpenAPI generated from connector schema metadata; confidence is lower than stored specification sources'], meta: { generatedOpenApi: document } });
+    }
+    return candidates;
   }
 
   public async exportSpec(candidate: SpecCandidate): Promise<SpecExportResult> {
+    if (candidate.sourceType === 'connectors-generated-spec') {
+      return { ...decodeUtf8OpenApi(candidate.meta.generatedOpenApi ?? ''), evidence: ['OpenAPI generated from connector schema metadata'] };
+    }
     const location = candidate.meta.specLocation ?? '';
     const gcs = parseGcsSpecLocation(location);
     if (!gcs) throw new Error('Custom connector specLocation is not a gs:// object; v1.0.0 does not fetch remote URLs');
@@ -90,4 +100,22 @@ export class ConnectorsCustomProvider implements SpecProvider {
       }
     };
   }
+}
+
+function schemaToOpenApi(connectionName: string, schema: import('../gcp/clients.js').ConnectorSchemaMetadata): Record<string, unknown> {
+  const paths: Record<string, unknown> = {};
+  for (const [entity, metadata] of Object.entries(schema.entities ?? {})) {
+    const properties = Object.fromEntries((metadata.fields ?? []).filter((field) => field.name).map((field) => [field.name!, { type: connectorType(field.dataType), ...(field.description ? { description: field.description } : {}) }]));
+    paths[`/${entity}`] = { get: { operationId: `list_${entity}`, responses: { '200': { description: 'Connector schema-derived response', content: { 'application/json': { schema: { type: 'array', items: { type: 'object', properties } } } } } } } };
+  }
+  for (const action of schema.actions ?? []) if (action.name) paths[`/actions/${action.name}`] = { post: { operationId: action.name, description: action.description, responses: { '200': { description: 'Connector action response' } } } };
+  return { openapi: '3.0.3', info: { title: `${shortName(connectionName)} connector`, version: 'generated', description: 'Generated from connector schema metadata' }, paths };
+}
+
+function connectorType(value?: string): string {
+  if (/bool/i.test(value ?? '')) return 'boolean';
+  if (/int|number|decimal|double|float/i.test(value ?? '')) return 'number';
+  if (/array|list/i.test(value ?? '')) return 'array';
+  if (/object|json|struct/i.test(value ?? '')) return 'object';
+  return 'string';
 }

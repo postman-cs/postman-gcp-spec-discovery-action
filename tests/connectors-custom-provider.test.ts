@@ -64,4 +64,17 @@ describe('Integration Connectors custom connector provider', () => {
     await expect(provider.exportSpec(candidates[0]!)).rejects.toThrow('not a gs:// object');
     expect(getObject).not.toHaveBeenCalled();
   });
+  it('generates OpenAPI from connection schema metadata and skips absent schemas', async () => {
+    const provider = new ConnectorsCustomProvider(client({
+      listCustomConnectorVersions: vi.fn(async () => []),
+      listConnectorConnections: vi.fn(async () => [{ name: 'projects/sample-project-123/locations/us-central1/connections/salesforce' }, { name: 'projects/sample-project-123/locations/us-central1/connections/empty' }]),
+      getConnectorSchemaMetadata: vi.fn(async (name) => name.endsWith('/empty') ? undefined : { entities: { Account: { fields: [{ name: 'id', dataType: 'STRING' }] } } })
+    }), { projectId: 'sample-project-123' });
+    const candidates = await provider.listCandidates();
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0]).toMatchObject({ sourceType: 'connectors-generated-spec', supported: true });
+    const exported = await provider.exportSpec(candidates[0]!);
+    expect(exported.evidence.join(' ')).toContain('generated from connector schema metadata');
+    expect(JSON.parse(exported.content)).toMatchObject({ openapi: '3.0.3', paths: { '/Account': {} } });
+  });
 });

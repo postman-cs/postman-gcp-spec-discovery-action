@@ -47317,7 +47317,7 @@ var actionContract = {
       description: "Resolution status: resolved or unresolved."
     },
     "source-type": {
-      description: "Resolved source type: repo-spec, api-gateway-config, cloud-endpoints-config, apigee-proxy, api-hub-spec, app-integration-trigger, connectors-custom-spec, apigee-portal-doc, vertex-extension-manifest, dialogflow-tool-schema, ces-tool-schema, ces-toolset-schema, iac-embedded, manual-review, or discover-many."
+      description: "Resolved source type: repo-spec, api-gateway-config, cloud-endpoints-config, apigee-proxy, apigee-env-oas, api-hub-spec, app-integration-trigger, connectors-custom-spec, connectors-generated-spec, apigee-portal-doc, vertex-extension-manifest, dialogflow-tool-schema, ces-tool-schema, ces-toolset-schema, iac-embedded, manual-review, or discover-many."
     },
     "mapping-confidence": {
       description: "Numeric confidence score for the selected service candidate."
@@ -47527,6 +47527,20 @@ var GcpSdkClient = class {
     const url = this.apigeeUrl(org, proxyName, "revisions", revision);
     url.searchParams.set("format", "bundle");
     return this.getBinary(url, "Apigee revision bundle download");
+  }
+  async listApigeeEnvironments(org) {
+    const body = await this.getJson(resourceUrl("https://apigee.googleapis.com/", `organizations/${org}/environments`), "Apigee environment list");
+    return Array.isArray(body) ? body.map(String) : [];
+  }
+  async listApigeeEnvironmentOasFiles(org, environment) {
+    const url = resourceUrl("https://apigee.googleapis.com/", `organizations/${org}/environments/${environment}/resourcefiles`);
+    url.searchParams.set("type", "oas");
+    const body = await this.getJson(url, "Apigee environment OAS resource list");
+    return (body.resourceFile ?? []).map((file) => file.name ?? "").filter(Boolean);
+  }
+  async getApigeeEnvironmentOasFile(org, environment, name) {
+    const bytes = await this.getBinary(resourceUrl("https://apigee.googleapis.com/", `organizations/${org}/environments/${environment}/resourcefiles/oas/${name}`), "Apigee environment OAS resource download");
+    return bytes.toString("utf8");
   }
   apigeeUrl(org, ...segments) {
     return resourceUrl("https://apigee.googleapis.com/", `organizations/${org}/apis/${segments.join("/")}`.replace(/\/$/, ""));
@@ -47766,6 +47780,31 @@ var GcpSdkClient = class {
       versions.push(...raw.map((item) => this.toCustomConnectorVersion(item)));
     }
     return versions;
+  }
+  async listConnectorConnections(projectId) {
+    const connections = [];
+    for (const location of await this.listLocations("https://connectors.googleapis.com/", projectId, "Integration Connectors location list")) {
+      try {
+        connections.push(...await this.collectPages(
+          () => resourceUrl("https://connectors.googleapis.com/", `projects/${projectId}/locations/${location}/connections`),
+          "Integration Connectors connection list",
+          (body) => ({ items: body.connections ?? [], nextPageToken: body.nextPageToken })
+        ));
+      } catch {
+      }
+    }
+    return connections.filter((connection) => Boolean(connection.name));
+  }
+  async getConnectorSchemaMetadata(connectionName) {
+    const url = resourceUrl("https://connectors.googleapis.com/", connectionName);
+    url.pathname = `${url.pathname}:getConnectionSchemaMetadata`;
+    try {
+      const body = await this.postJson(url, "Integration Connectors schema metadata retrieval", {});
+      return Object.keys(body.entities ?? {}).length || (body.actions?.length ?? 0) ? body : void 0;
+    } catch (error2) {
+      if (/HTTP (?:400|404)/.test(error2 instanceof Error ? error2.message : String(error2))) return void 0;
+      throw error2;
+    }
   }
   async getStorageObjectText(bucket, object) {
     const url = new URL(
@@ -49546,6 +49585,7 @@ function inflateZip(bytes) {
 
 // src/lib/providers/apigee.ts
 var PATTERN = /^organizations\/([^/]+)\/apis\/([^/]+)\/revisions\/([^/]+)$/;
+var ENV_OAS_PATTERN = /^organizations\/([^/]+)\/environments\/([^/]+)\/resourcefiles\/oas\/(.+)$/;
 function parseApigeeRevisionName(value) {
   const match = PATTERN.exec(value);
   return match ? { org: match[1], proxyName: match[2], revision: match[3] } : void 0;
@@ -49582,14 +49622,35 @@ var ApigeeProvider = class {
     if (this.scope.apiId && !explicit) return [];
     if (explicit && explicit.org !== this.scope.projectId) throw new Error("api-id Apigee revision does not belong to the configured project-id org");
     const revisions = explicit ? [{ proxyName: explicit.proxyName, revision: explicit.revision, labels: {} }] : await this.latestRevisions();
-    return Promise.all(revisions.map(async ({ proxyName, revision, labels }) => {
+    const proxies = await Promise.all(revisions.map(async ({ proxyName, revision, labels }) => {
       const id = `organizations/${this.scope.projectId}/apis/${proxyName}/revisions/${revision}`;
       const count = documents(await this.client.downloadApigeeRevisionBundle(this.scope.projectId, proxyName, revision)).length;
       const evidence = count === 1 ? [`Apigee proxy revision has one OpenAPI source document`] : count === 0 ? ["Apigee proxy revision has no OpenAPI source document"] : [`Apigee proxy revision has ${count} OpenAPI source documents; refusing to merge or guess`];
       return { id, name: proxyName, providerType: this.type, apiId: id, projectId: this.scope.projectId, tags: labels, supported: count === 1, evidence, meta: { proxyName, revision } };
     }));
+    if (explicit) return proxies;
+    const resources = [];
+    for (const environment of await this.client.listApigeeEnvironments(this.scope.projectId)) {
+      for (const name of await this.client.listApigeeEnvironmentOasFiles(this.scope.projectId, environment)) {
+        const id = `organizations/${this.scope.projectId}/environments/${environment}/resourcefiles/oas/${name}`;
+        let supported = false;
+        try {
+          decodeUtf8OpenApi(await this.client.getApigeeEnvironmentOasFile(this.scope.projectId, environment, name));
+          supported = true;
+        } catch {
+        }
+        resources.push({ id, apiId: id, name, providerType: this.type, sourceType: "apigee-env-oas", projectId: this.scope.projectId, tags: {}, supported, evidence: [supported ? "Apigee environment stores one validated OpenAPI OAS resource file" : "Apigee environment OAS resource file is not valid OpenAPI"], meta: { environment, resourceName: name } });
+      }
+    }
+    return [...proxies, ...resources];
   }
   async exportSpec(candidate) {
+    const environmentResource = ENV_OAS_PATTERN.exec(candidate.id);
+    if (environmentResource) {
+      if (environmentResource[1] !== this.scope.projectId) throw new Error("Apigee environment OAS candidate belongs to another organization");
+      const decoded = decodeUtf8OpenApi(await this.client.getApigeeEnvironmentOasFile(environmentResource[1], environmentResource[2], environmentResource[3]));
+      return { ...decoded, evidence: ["Exported original validated Apigee environment OAS resource file"] };
+    }
     const parsed = parseApigeeRevisionName(candidate.id);
     if (!parsed || parsed.org !== this.scope.projectId) throw new Error("Apigee candidate has an invalid revision resource name");
     const found = documents(await this.client.downloadApigeeRevisionBundle(parsed.org, parsed.proxyName, parsed.revision));
@@ -49634,9 +49695,19 @@ var ConnectorsCustomProvider = class {
   async listCandidates() {
     if (this.scope.apiId) return [];
     const versions = await this.client.listCustomConnectorVersions(this.scope.projectId);
-    return versions.map((version) => this.toCandidate(version));
+    const candidates = versions.map((version) => this.toCandidate(version));
+    for (const connection of await this.client.listConnectorConnections(this.scope.projectId)) {
+      const schema = await this.client.getConnectorSchemaMetadata(connection.name);
+      if (!schema) continue;
+      const document2 = JSON.stringify(schemaToOpenApi(connection.name, schema));
+      candidates.push({ id: connection.name, apiId: connection.name, name: shortName2(connection.name), providerType: this.type, sourceType: "connectors-generated-spec", projectId: this.scope.projectId, tags: {}, supported: true, evidence: ["OpenAPI generated from connector schema metadata; confidence is lower than stored specification sources"], meta: { generatedOpenApi: document2 } });
+    }
+    return candidates;
   }
   async exportSpec(candidate) {
+    if (candidate.sourceType === "connectors-generated-spec") {
+      return { ...decodeUtf8OpenApi(candidate.meta.generatedOpenApi ?? ""), evidence: ["OpenAPI generated from connector schema metadata"] };
+    }
     const location = candidate.meta.specLocation ?? "";
     const gcs = parseGcsSpecLocation(location);
     if (!gcs) throw new Error("Custom connector specLocation is not a gs:// object; v1.0.0 does not fetch remote URLs");
@@ -49676,6 +49747,22 @@ var ConnectorsCustomProvider = class {
     };
   }
 };
+function schemaToOpenApi(connectionName, schema) {
+  const paths = {};
+  for (const [entity, metadata] of Object.entries(schema.entities ?? {})) {
+    const properties = Object.fromEntries((metadata.fields ?? []).filter((field) => field.name).map((field) => [field.name, { type: connectorType(field.dataType), ...field.description ? { description: field.description } : {} }]));
+    paths[`/${entity}`] = { get: { operationId: `list_${entity}`, responses: { "200": { description: "Connector schema-derived response", content: { "application/json": { schema: { type: "array", items: { type: "object", properties } } } } } } } };
+  }
+  for (const action of schema.actions ?? []) if (action.name) paths[`/actions/${action.name}`] = { post: { operationId: action.name, description: action.description, responses: { "200": { description: "Connector action response" } } } };
+  return { openapi: "3.0.3", info: { title: `${shortName2(connectionName)} connector`, version: "generated", description: "Generated from connector schema metadata" }, paths };
+}
+function connectorType(value) {
+  if (/bool/i.test(value ?? "")) return "boolean";
+  if (/int|number|decimal|double|float/i.test(value ?? "")) return "number";
+  if (/array|list/i.test(value ?? "")) return "array";
+  if (/object|json|struct/i.test(value ?? "")) return "object";
+  return "string";
+}
 
 // src/lib/providers/api-hub.ts
 var SPEC_PATTERN = /^projects\/([^/]+)\/locations\/([^/]+)\/apis\/([^/]+)\/versions\/([^/]+)\/specs\/([^/]+)$/;

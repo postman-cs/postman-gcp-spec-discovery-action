@@ -31,6 +31,7 @@ Label-incapable providers still participate in discovery and ranking; they simpl
 - Lists accessible Apigee proxies and revisions for the requested project context.
 - Downloads the selected proxy revision zip and extracts OpenAPI documents only from `resources/oas` or `resources/openapi`.
 - Produces `apigee-proxy` candidates and records the proxy revision resource name in `api-id`.
+- Enumerates environments and exports validated `type=oas` resource files as `apigee-env-oas` candidates.
 - A proxy without a supported embedded document is surfaced for manual review; the action does not synthesize routes or convert gRPC definitions.
 
 ## `api-hub`
@@ -52,6 +53,7 @@ Label-incapable providers still participate in discovery and ranking; they simpl
 - Lists global custom Integration Connectors and their versions; each version records the `specLocation` of the OpenAPI document it was built from.
 - Fetches `gs://` spec objects through the authenticated Cloud Storage JSON API; `https://` locations are surfaced as manual review because the action never fetches arbitrary remote URLs.
 - Produces `connectors-custom-spec` candidates.
+- Lists regional connections and, when schema metadata is available, derives an OpenAPI 3.0 document as `connectors-generated-spec`. Evidence explicitly identifies generated contracts, which rank below stored specification sources; connections without schema metadata are skipped fail-soft.
 
 ## `apigee-portal`
 
@@ -103,4 +105,4 @@ The `postman-repo` label is an ownership signal for label prefiltering. The sele
 
 ## Deferred surfaces
 
-Runtime URL probing (`Cloud Run`, `GKE`, `Functions`, Firebase hosting) is outside v1 because GCP has no catalog of runtime spec endpoints. Traffic-derived surfaces (APIM shadow-API observation jobs, API Hub discovered observations) yield operations, not contracts, and are not spec sources. Convention-only storage (arbitrary GCS buckets, Artifact Registry generic repos, Cloud Build artifacts) and the legacy Apigee Registry (superseded by API Hub) are also excluded. The action does not fetch arbitrary remote URLs, synthesize routes, or convert gRPC / `google.api.Service` definitions.
+Runtime URL probing (`Cloud Run`, `GKE`, `Functions`, Firebase hosting, App Engine `_ah/api/discovery` endpoints) is outside v1 because GCP has no catalog of runtime spec endpoints. Traffic-derived surfaces (APIM shadow-API observation jobs, API Hub discovered observations) yield operations, not contracts, and are not spec sources. Convention-only storage (arbitrary GCS buckets, Secret Manager / Parameter Manager payloads, Artifact Registry generic repos, Cloud Build artifacts) and the legacy Apigee Registry (superseded by API Hub) are also excluded. Service Directory holds endpoint routing metadata with no schema payloads. Google API Discovery documents describe Google's own services, not customer APIs. GKE Gateway `HTTPRoute`/Ingress resources carry path skeletons without schemas, and synthesizing routes from them would violate the no-guessed-contract rule. The action does not fetch arbitrary remote URLs, synthesize routes, or convert gRPC descriptor sets (API Gateway `grpcServices`, Cloud Endpoints `FILE_DESCRIPTOR_SET_PROTO`, `google.api.Service` definitions) — descriptor-to-OpenAPI reconstruction produces an inferred contract, not a stored one.

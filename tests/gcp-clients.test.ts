@@ -101,6 +101,33 @@ describe('GCP authenticated REST client', () => {
     expect(request.mock.calls[0]?.[0].url).toContain('/organizations/sample-project-123/apis/proxy%20name/revisions');
     expect(request.mock.calls[1]?.[0]).toMatchObject({ responseType: 'arraybuffer' });
   });
+  it('uses encoded Apigee environment OAS wire calls', async () => {
+    const { client, request } = clientWith(async (options) => options.responseType === 'arraybuffer'
+      ? { data: Buffer.from('openapi: 3.0.3') }
+      : options.url.includes('/resourcefiles') ? { data: { resourceFile: [{ name: 'payments spec.yaml' }] } } : { data: ['test env'] });
+    await expect(client.listApigeeEnvironments('sample-project-123')).resolves.toEqual(['test env']);
+    await expect(client.listApigeeEnvironmentOasFiles('sample-project-123', 'test env')).resolves.toEqual(['payments spec.yaml']);
+    await client.getApigeeEnvironmentOasFile('sample-project-123', 'test env', 'payments spec.yaml');
+    expect(request.mock.calls.map((call) => call[0].url)).toEqual([
+      'https://apigee.googleapis.com/v1/organizations/sample-project-123/environments',
+      'https://apigee.googleapis.com/v1/organizations/sample-project-123/environments/test%20env/resourcefiles?type=oas',
+      'https://apigee.googleapis.com/v1/organizations/sample-project-123/environments/test%20env/resourcefiles/oas/payments%20spec.yaml'
+    ]);
+  });
+
+  it('lists connector connections and posts schema metadata retrieval', async () => {
+    const connection = 'projects/sample-project-123/locations/us-central1/connections/salesforce';
+    const { client, request } = clientWith(async (options) => {
+      if (options.url.includes('/locations?')) return { data: { locations: [{ locationId: 'us-central1' }] } };
+      if (options.url.includes('/connections?')) return { data: { connections: [{ name: connection }] } };
+      return { data: { entities: { Account: { fields: [] } } } };
+    });
+    await expect(client.listConnectorConnections('sample-project-123')).resolves.toEqual([{ name: connection }]);
+    await expect(client.getConnectorSchemaMetadata(connection)).resolves.toMatchObject({ entities: { Account: {} } });
+    expect(request.mock.calls.map((call) => call[0])).toEqual(expect.arrayContaining([
+      expect.objectContaining({ url: `https://connectors.googleapis.com/v1/${connection}:getConnectionSchemaMetadata`, method: 'POST', data: {} })
+    ]));
+  });
 
   it('regionalizes Vertex Extensions and Dialogflow agents and tools', async () => {
     const { client, request } = clientWith(async (options) => {
