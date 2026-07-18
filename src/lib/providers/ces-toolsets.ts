@@ -4,7 +4,7 @@ import { decodeUtf8OpenApi } from './source-document.js';
 import { probeFailureStatus } from './probe.js';
 import type { SpecCandidate, SpecExportResult, SpecProvider } from './types.js';
 
-const PATTERN = /^projects\/([^/]+)\/locations\/global\/apps\/[^/]+\/(?:toolsets|tools)\/[^/]+$/;
+const PATTERN = /^projects\/([^/]+)\/locations\/global\/apps\/[^/]+\/(?:tools\/[^/]+|toolsets\/[^/]+(?:\/tools\/[^/]+)?)$/;
 
 export class CesToolsetsProvider implements SpecProvider {
   public readonly type = 'ces-toolsets' as const;
@@ -23,8 +23,9 @@ export class CesToolsetsProvider implements SpecProvider {
   }
   private toCandidate(toolset: CesToolsetSummary): SpecCandidate {
     const schema = toolset.openApiSchema?.trim();
-    const standaloneTool = toolset.name.includes('/tools/');
-    const resourceKind = standaloneTool ? 'tool' : 'toolset';
+    const toolsetScopedTool = /\/toolsets\/[^/]+\/tools\/[^/]+$/.test(toolset.name);
+    const standaloneTool = /\/apps\/[^/]+\/tools\/[^/]+$/.test(toolset.name);
+    const resourceKind = toolsetScopedTool ? 'toolset-scoped tool' : standaloneTool ? 'tool' : 'toolset';
     let supported = Boolean(schema);
     if (schema) try { decodeUtf8OpenApi(schema); } catch { supported = false; }
     return { id: toolset.name, apiId: toolset.name, name: toolset.displayName || toolset.name.split('/').pop()!, providerType: this.type, sourceType: standaloneTool ? 'ces-tool-schema' : 'ces-toolset-schema', projectId: this.scope.projectId, tags: {}, supported, evidence: [schema ? `CES ${resourceKind} stores an OpenAPI schema` : `CES ${resourceKind} has no OpenAPI schema`], meta: { openApiSchema: schema ?? '', resourceKind } };

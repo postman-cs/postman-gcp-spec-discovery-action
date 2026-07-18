@@ -47660,6 +47660,25 @@ var GcpSdkClient = class {
       for (const value of [...embedded, ...listed]) {
         const item = value ?? {};
         if (!item.name) continue;
+        const retrieved = [];
+        let pageToken;
+        const seenTokens = /* @__PURE__ */ new Set();
+        for (let page = 1; page <= MAX_LIST_PAGES; page += 1) {
+          const retrieveUrl = resourceUrl("https://ces.googleapis.com/", item.name);
+          retrieveUrl.pathname = `${retrieveUrl.pathname}:retrieveTools`;
+          const body = await this.postJson(
+            retrieveUrl,
+            "CES toolset tool retrieval",
+            pageToken ? { pageSize: 1e3, pageToken } : { pageSize: 1e3 }
+          );
+          retrieved.push(...body.tools ?? []);
+          const next = body.nextPageToken?.trim() || void 0;
+          if (!next) break;
+          if (seenTokens.has(next)) throw new Error("CES toolset tool retrieval returned a repeated page token; aborting");
+          seenTokens.add(next);
+          pageToken = next;
+          if (page === MAX_LIST_PAGES) throw new Error(`CES toolset tool retrieval exceeded ${MAX_LIST_PAGES} pages; aborting`);
+        }
         const directSchema = item.openApiToolset?.openApiSchema?.trim();
         if (directSchema) toolsets.push({ name: item.name, displayName: item.displayName, openApiSchema: directSchema });
         const nested = [...item.openApiToolset?.tools ?? [], ...item.tools ?? []].filter((tool) => Boolean(tool.openApiTool?.openApiSchema?.trim()));
@@ -47668,6 +47687,9 @@ var GcpSdkClient = class {
           toolsets.push({ name: first.name ?? item.name, displayName: first.displayName ?? item.displayName, openApiSchema: first.openApiTool.openApiSchema });
         }
         for (const tool of nested.slice(directSchema ? 0 : 1)) {
+          if (tool.name) toolsets.push({ name: tool.name, displayName: tool.displayName ?? item.displayName, openApiSchema: tool.openApiTool.openApiSchema });
+        }
+        for (const tool of retrieved.filter((value2) => Boolean(value2.openApiTool?.openApiSchema?.trim()))) {
           if (tool.name) toolsets.push({ name: tool.name, displayName: tool.displayName ?? item.displayName, openApiSchema: tool.openApiTool.openApiSchema });
         }
         if (!directSchema && nested.length === 0) toolsets.push({ name: item.name, displayName: item.displayName });
@@ -49998,7 +50020,7 @@ var DialogflowToolsProvider = class {
 };
 
 // src/lib/providers/ces-toolsets.ts
-var PATTERN5 = /^projects\/([^/]+)\/locations\/global\/apps\/[^/]+\/(?:toolsets|tools)\/[^/]+$/;
+var PATTERN5 = /^projects\/([^/]+)\/locations\/global\/apps\/[^/]+\/(?:tools\/[^/]+|toolsets\/[^/]+(?:\/tools\/[^/]+)?)$/;
 var CesToolsetsProvider = class {
   constructor(client, scope) {
     this.client = client;
@@ -50025,8 +50047,9 @@ var CesToolsetsProvider = class {
   }
   toCandidate(toolset) {
     const schema = toolset.openApiSchema?.trim();
-    const standaloneTool = toolset.name.includes("/tools/");
-    const resourceKind = standaloneTool ? "tool" : "toolset";
+    const toolsetScopedTool = /\/toolsets\/[^/]+\/tools\/[^/]+$/.test(toolset.name);
+    const standaloneTool = /\/apps\/[^/]+\/tools\/[^/]+$/.test(toolset.name);
+    const resourceKind = toolsetScopedTool ? "toolset-scoped tool" : standaloneTool ? "tool" : "toolset";
     let supported = Boolean(schema);
     if (schema) try {
       decodeUtf8OpenApi(schema);

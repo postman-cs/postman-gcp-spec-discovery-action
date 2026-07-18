@@ -9,6 +9,7 @@ import { execute, resolveInputs, type ReporterLike } from '../src/runtime.js';
 const OAS = 'openapi: 3.0.3\ninfo:\n  title: CES Toolset\n  version: "1"\npaths:\n  /health:\n    get:\n      responses:\n        "200":\n          description: ok\n';
 const ID = 'projects/sample-project-123/locations/global/apps/support/toolsets/payments';
 const TOOL_ID = 'projects/sample-project-123/locations/global/apps/support/tools/refunds';
+const NESTED_TOOL_ID = `${ID}/tools/charge`;
 function client(overrides: Partial<GcpDiscoveryClient> = {}): GcpDiscoveryClient {
   return new Proxy({ probeCes: vi.fn(), listCesToolsets: vi.fn(async () => [{ name: ID, displayName: 'Payments', openApiSchema: OAS }]), ...overrides }, { get: (target, key) => key in target ? target[key as keyof typeof target] : vi.fn(async () => []) }) as GcpDiscoveryClient;
 }
@@ -33,6 +34,17 @@ describe('CES toolsets provider', () => {
     const candidates = await provider.listCandidates();
     expect(candidates).toEqual([expect.objectContaining({ id: TOOL_ID, supported: true })]);
     await expect(provider.exportSpec(candidates[0]!)).resolves.toMatchObject({ content: OAS, format: 'openapi-yaml' });
+  });
+  it('selects an exact toolset-scoped tool as ces-toolset-schema while standalone tools remain ces-tool-schema', async () => {
+    const values = [{ name: NESTED_TOOL_ID, displayName: 'Charge', openApiSchema: OAS }, { name: TOOL_ID, displayName: 'Refunds', openApiSchema: OAS }];
+    const nested = new CesToolsetsProvider(client({ listCesToolsets: vi.fn(async () => values) }), { projectId: 'sample-project-123', apiId: NESTED_TOOL_ID });
+    await expect(nested.listCandidates()).resolves.toEqual([
+      expect.objectContaining({ id: NESTED_TOOL_ID, sourceType: 'ces-toolset-schema', evidence: ['CES toolset-scoped tool stores an OpenAPI schema'] })
+    ]);
+    const standalone = new CesToolsetsProvider(client({ listCesToolsets: vi.fn(async () => values) }), { projectId: 'sample-project-123', apiId: TOOL_ID });
+    await expect(standalone.listCandidates()).resolves.toEqual([
+      expect.objectContaining({ id: TOOL_ID, sourceType: 'ces-tool-schema' })
+    ]);
   });
   it('preserves standalone tool and toolset source identity through execute', async () => {
     const core: ReporterLike = { group: async (_name, fn) => fn(), info: () => undefined, warning: () => undefined };
