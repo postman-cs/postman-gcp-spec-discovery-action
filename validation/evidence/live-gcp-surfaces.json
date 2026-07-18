@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "capturedAt": "2026-07-18",
+  "cases": 8,
+  "passed": 0,
+  "failed": 8,
+  "results": [
+    { "name": "gateway-explicit-api-id", "status": "pending", "sourceType": "api-gateway-config", "providerType": "api-gateway", "specFormat": "openapi-yaml" },
+    { "name": "gateway-discovery", "status": "pending", "sourceType": "api-gateway-config", "providerType": "api-gateway", "specFormat": "openapi-yaml" },
+    { "name": "endpoints-explicit-api-id", "status": "pending", "sourceType": "cloud-endpoints-config", "providerType": "cloud-endpoints", "specFormat": "openapi-yaml" },
+    { "name": "endpoints-discovery", "status": "pending", "sourceType": "cloud-endpoints-config", "providerType": "cloud-endpoints", "specFormat": "openapi-yaml" },
+    { "name": "apigee-discovery", "status": "pending", "sourceType": "apigee-proxy", "providerType": "apigee", "specFormat": "openapi-yaml" },
+    { "name": "discover-many", "status": "pending", "sourceType": "discover-many", "providerType": "", "specFormat": "" },
+    { "name": "iac-single", "status": "pending", "sourceType": "iac-path-reference", "providerType": "iac-local", "specFormat": "openapi-yaml" },
+    { "name": "ambiguity", "status": "pending", "sourceType": "manual-review", "providerType": "", "specFormat": "" }
+  ]
+}
