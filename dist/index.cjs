@@ -47660,25 +47660,10 @@ var GcpSdkClient = class {
       for (const value of [...embedded, ...listed]) {
         const item = value ?? {};
         if (!item.name) continue;
-        const retrieved = [];
-        let pageToken;
-        const seenTokens = /* @__PURE__ */ new Set();
-        for (let page = 1; page <= MAX_LIST_PAGES; page += 1) {
-          const retrieveUrl = resourceUrl("https://ces.googleapis.com/", item.name);
-          retrieveUrl.pathname = `${retrieveUrl.pathname}:retrieveTools`;
-          const body = await this.postJson(
-            retrieveUrl,
-            "CES toolset tool retrieval",
-            pageToken ? { pageSize: 1e3, pageToken } : { pageSize: 1e3 }
-          );
-          retrieved.push(...body.tools ?? []);
-          const next = body.nextPageToken?.trim() || void 0;
-          if (!next) break;
-          if (seenTokens.has(next)) throw new Error("CES toolset tool retrieval returned a repeated page token; aborting");
-          seenTokens.add(next);
-          pageToken = next;
-          if (page === MAX_LIST_PAGES) throw new Error(`CES toolset tool retrieval exceeded ${MAX_LIST_PAGES} pages; aborting`);
-        }
+        const retrieveUrl = resourceUrl("https://ces.googleapis.com/", item.name);
+        retrieveUrl.pathname = `${retrieveUrl.pathname}:retrieveTools`;
+        const retrieveBody = await this.postJson(retrieveUrl, "CES toolset tool retrieval", {});
+        const retrieved = retrieveBody.tools ?? [];
         const directSchema = item.openApiToolset?.openApiSchema?.trim();
         if (directSchema) toolsets.push({ name: item.name, displayName: item.displayName, openApiSchema: directSchema });
         const nested = [...item.openApiToolset?.tools ?? [], ...item.tools ?? []].filter((tool) => Boolean(tool.openApiTool?.openApiSchema?.trim()));

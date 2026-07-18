@@ -80,7 +80,6 @@ export interface DialogflowToolSummary { name: string; displayName?: string; tex
 export interface CesToolsetSummary { name: string; displayName?: string; openApiSchema?: string; }
 interface CesRetrieveToolsResponse {
   tools?: Array<{ name?: string; displayName?: string; openApiTool?: { openApiSchema?: string } }>;
-  nextPageToken?: string;
 }
 
 export interface AppIntegrationApiTrigger {
@@ -407,25 +406,10 @@ export class GcpSdkClient implements GcpDiscoveryClient {
       for (const value of [...embedded, ...listed]) {
         const item = (value ?? {}) as { name?: string; displayName?: string; openApiToolset?: { openApiSchema?: string; tools?: Array<{ name?: string; displayName?: string; openApiTool?: { openApiSchema?: string } }> }; tools?: Array<{ name?: string; displayName?: string; openApiTool?: { openApiSchema?: string } }> };
         if (!item.name) continue;
-        const retrieved: CesRetrieveToolsResponse['tools'] = [];
-        let pageToken: string | undefined;
-        const seenTokens = new Set<string>();
-        for (let page = 1; page <= MAX_LIST_PAGES; page += 1) {
-          const retrieveUrl = resourceUrl('https://ces.googleapis.com/', item.name);
-          retrieveUrl.pathname = `${retrieveUrl.pathname}:retrieveTools`;
-          const body = await this.postJson<CesRetrieveToolsResponse>(
-            retrieveUrl,
-            'CES toolset tool retrieval',
-            pageToken ? { pageSize: 1000, pageToken } : { pageSize: 1000 }
-          );
-          retrieved.push(...(body.tools ?? []));
-          const next = body.nextPageToken?.trim() || undefined;
-          if (!next) break;
-          if (seenTokens.has(next)) throw new Error('CES toolset tool retrieval returned a repeated page token; aborting');
-          seenTokens.add(next);
-          pageToken = next;
-          if (page === MAX_LIST_PAGES) throw new Error(`CES toolset tool retrieval exceeded ${MAX_LIST_PAGES} pages; aborting`);
-        }
+        const retrieveUrl = resourceUrl('https://ces.googleapis.com/', item.name);
+        retrieveUrl.pathname = `${retrieveUrl.pathname}:retrieveTools`;
+        const retrieveBody = await this.postJson<CesRetrieveToolsResponse>(retrieveUrl, 'CES toolset tool retrieval', {});
+        const retrieved = retrieveBody.tools ?? [];
         const directSchema = item.openApiToolset?.openApiSchema?.trim();
         if (directSchema) toolsets.push({ name: item.name, displayName: item.displayName, openApiSchema: directSchema });
         const nested = [...(item.openApiToolset?.tools ?? []), ...(item.tools ?? [])]

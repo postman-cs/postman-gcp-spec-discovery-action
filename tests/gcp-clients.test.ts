@@ -125,9 +125,7 @@ describe('GCP authenticated REST client', () => {
     const { client, request } = clientWith(async (options) => {
       if (options.url.includes('/apps?')) return { data: { apps: [{ name: app }] } };
       if (options.url.includes('toolsets/payments:retrieveTools')) {
-        return options.data && (options.data as { pageToken?: string }).pageToken
-          ? { data: { tools: [{ name: nestedTool, openApiTool: { openApiSchema: 'nested-schema' } }] } }
-          : { data: { tools: [], nextPageToken: 'tools-2' } };
+        return { data: { tools: [{ name: nestedTool, openApiTool: { openApiSchema: 'nested-schema' } }] } };
       }
       if (options.url.includes('/toolsets?') && !options.url.includes(':retrieveTools')) return { data: { toolsets: [{ name: toolset, openApiToolset: { openApiSchema: 'toolset-schema' } }] } };
       if (options.url.includes('/tools?')) return { data: { tools: [{ name: tool, openApiTool: { openApiSchema: 'tool-schema' } }] } };
@@ -145,8 +143,7 @@ describe('GCP authenticated REST client', () => {
       `https://ces.googleapis.com/v1/${app}/tools?pageSize=1000`
     ]));
     expect(request.mock.calls.filter((call) => call[0].url.endsWith(':retrieveTools')).map((call) => call[0])).toEqual([
-      expect.objectContaining({ method: 'POST', data: { pageSize: 1000 } }),
-      expect.objectContaining({ method: 'POST', data: { pageSize: 1000, pageToken: 'tools-2' } })
+      expect.objectContaining({ method: 'POST', data: {} })
     ]);
   });
 
