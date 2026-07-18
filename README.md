@@ -93,8 +93,11 @@ npx @postman-cse/onboarding-gcp-spec-discovery \
 | `mode` | Discovery mode: resolve-one selects the single best service for this repository; discover-many exports every exportable candidate. | no | `resolve-one` |
 | `project-id` | Google Cloud project ID used as the exact discovery and credential preflight scope. | yes | n/a |
 | `location` | Google Cloud API Gateway location. v1 supports global. | no | `global` |
-| `api-id` | Optional full API Gateway config, Cloud Endpoints config, or Apigee proxy revision resource name. Use this to bypass broader project discovery. | no | n/a |
+| `api-id` | Optional full API Gateway config, Cloud Endpoints config, Apigee proxy revision, API Hub spec, Apigee portal apidoc, Vertex extension, Dialogflow tool, or CES tool/toolset resource name. Use this to bypass broader project discovery. | no | n/a |
 | `repo-slug` | Repository slug (owner/name) used for repository-association matching against postman-repo resource labels. Defaults to the CI-detected repository (GITHUB_REPOSITORY). | no | n/a |
+| `expected-service-name` | Optional expected service name used as a ranking hint and as the reported service name when resolution stays manual-review. | no | n/a |
+| `expected-api-ids-json` | Optional JSON array of full resource names that this repository expects to own; exact matches rank highest during resolution. | no | `[]` |
+| `service-mapping-json` | Optional JSON object mapping resource names to service names, used to name exported specs for label-incapable providers. | no | `{}` |
 | `output-dir` | Directory under the repository root where generated specs are written. | no | `discovered-specs` |
 | `postman-api-key` | Optional service-account PMAK used to mint or re-mint a postman-access-token for telemetry enrichment (account_type). Not used for any GCP or Postman asset operation. | no | n/a |
 | `postman-access-token` | Optional Postman service-account access token, used only to enrich anonymous telemetry with the session account_type. When omitted, postman-api-key alone can mint one for the same purpose. Not used for any GCP or Postman asset operation. | no | n/a |
@@ -110,7 +113,7 @@ npx @postman-cse/onboarding-gcp-spec-discovery \
 | `source-type` | Resolved source type: repo-spec, api-gateway-config, cloud-endpoints-config, apigee-proxy, apigee-env-oas, api-hub-spec, app-integration-trigger, connectors-custom-spec, connectors-generated-spec, apigee-portal-doc, vertex-extension-manifest, agent-engine-generated-spec, dialogflow-tool-schema, ces-tool-schema, ces-toolset-schema, iac-embedded, manual-review, or discover-many. |
 | `mapping-confidence` | Numeric confidence score for the selected service candidate. |
 | `spec-path` | Path to the resolved or generated specification when available. |
-| `api-id` | Full API Gateway, Cloud Endpoints config, Apigee proxy revision, or API Hub spec resource name; empty for repo, generated, or IaC-local resolutions. |
+| `api-id` | Full resource name of the exported cloud source (API Gateway config, Cloud Endpoints config, Apigee proxy revision, API Hub spec, Apigee portal apidoc, Vertex extension, Agent Engine, Dialogflow tool, or CES tool/toolset); empty for repo, generated, or IaC-local resolutions. |
 | `service-name` | Resolved service name. |
 | `services-json` | discover-many output: JSON array of exported services. |
 | `service-count` | discover-many output: number of exported services. |

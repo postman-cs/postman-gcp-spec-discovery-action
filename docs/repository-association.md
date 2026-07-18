@@ -53,7 +53,7 @@ Precedence: explicit `api-id` → spec committed in the repo (`repo-spec`) → s
 [`templates/postman-gcp-onboard.yml`](../templates/postman-gcp-onboard.yml) is a ready-to-distribute workflow for service repos:
 
 1. `google-github-actions/auth` with Workload Identity Federation (org-level variables `GCP_WORKLOAD_IDENTITY_PROVIDER`, `GCP_SERVICE_ACCOUNT`, `GCP_PROJECT_ID`; keyless, no exported SA keys).
-2. This action with only `project-id` — `repo-slug` defaults to `GITHUB_REPOSITORY`.
+2. This action with `project-id` and an explicit `repo-slug: ${{ github.repository }}` (the same value `GITHUB_REPOSITORY` would supply by default).
 3. A guard step that fails the run when `resolution-status != resolved`, echoing the resolution evidence (including the expected label) instead of guessing.
 4. `postman-cs/postman-api-onboarding-action` with the resolved `spec-path`/`service-name` and the org-level `POSTMAN_API_KEY` secret.
 

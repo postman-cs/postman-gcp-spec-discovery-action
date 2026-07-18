@@ -141,7 +141,7 @@ export const actionContract: GCPSpecDiscoveryActionContract = {
       default: 'global'
     },
     'api-id': {
-      description: 'Optional full API Gateway config, Cloud Endpoints config, Apigee proxy revision, or API Hub spec resource name. Use this to bypass broader project discovery.',
+      description: 'Optional full API Gateway config, Cloud Endpoints config, Apigee proxy revision, API Hub spec, Apigee portal apidoc, Vertex extension, Dialogflow tool, or CES tool/toolset resource name. Use this to bypass broader project discovery.',
       required: false,
       default: ''
     },
@@ -149,6 +149,21 @@ export const actionContract: GCPSpecDiscoveryActionContract = {
       description: 'Repository slug (owner/name) used for repository-association matching against postman-repo resource labels. Defaults to the CI-detected repository (GITHUB_REPOSITORY).',
       required: false,
       default: ''
+    },
+    'expected-service-name': {
+      description: 'Optional expected service name used as a ranking hint and as the reported service name when resolution stays manual-review.',
+      required: false,
+      default: ''
+    },
+    'expected-api-ids-json': {
+      description: 'Optional JSON array of full resource names that this repository expects to own; exact matches rank highest during resolution.',
+      required: false,
+      default: '[]'
+    },
+    'service-mapping-json': {
+      description: 'Optional JSON object mapping resource names to service names, used to name exported specs for label-incapable providers.',
+      required: false,
+      default: '{}'
     },
     'output-dir': {
       description: 'Directory under the repository root where generated specs are written.',
@@ -183,7 +198,7 @@ export const actionContract: GCPSpecDiscoveryActionContract = {
       description: 'Path to the resolved or generated specification when available.'
     },
     'api-id': {
-      description: 'Full API Gateway, Cloud Endpoints config, Apigee proxy revision, or API Hub spec resource name; empty for repo, generated, or IaC-local resolutions.'
+      description: 'Full resource name of the exported cloud source (API Gateway config, Cloud Endpoints config, Apigee proxy revision, API Hub spec, Apigee portal apidoc, Vertex extension, Agent Engine, Dialogflow tool, or CES tool/toolset); empty for repo, generated, or IaC-local resolutions.'
     },
     'service-name': {
       description: 'Resolved service name.'

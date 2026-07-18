@@ -38,6 +38,13 @@ describe('gcp log sanitization', () => {
     expect(sanitized).toContain('https://storage.googleapis.com/exports/payments.json');
   });
 
+  it('GCP-CLIENT-006: redacts Apigee organizations/... resource names', () => {
+    const message = 'selected organizations/sample-org-1/apis/payments/revisions/3 and organizations/sample-org-1/sites/dev/apidocs/12';
+    const sanitized = sanitizeLogMessage(message);
+    expect(sanitized).not.toContain('organizations/sample-org-1');
+    expect(sanitized).toContain('[redacted-gcp-resource]');
+  });
+
   it('GCP-CLIENT-005: redacts inline private key material', () => {
     const message = 'credential blob -----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBg\n-----END PRIVATE KEY----- leaked';
     const sanitized = sanitizeLogMessage(message);

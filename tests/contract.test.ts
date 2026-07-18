@@ -8,7 +8,7 @@ import { buildExecutionOutputs, resolveInputs } from '../src/runtime.js';
 
 const repoRoot = resolve(import.meta.dirname, '..');
 const actionManifest = parse(readFileSync(resolve(repoRoot, 'action.yml'), 'utf8')) as {
-  inputs: Record<string, { required?: boolean; default?: string }>;
+  inputs: Record<string, { description?: string; required?: boolean; default?: string }>;
   outputs: Record<string, { description?: string }>;
 };
 
@@ -43,6 +43,9 @@ const LOCKED_INPUT_ORDER = [
   'location',
   'api-id',
   'repo-slug',
+  'expected-service-name',
+  'expected-api-ids-json',
+  'service-mapping-json',
   'output-dir',
   'postman-api-key',
   'postman-access-token'
@@ -61,6 +64,10 @@ describe('action contract', () => {
     for (const name of contractOutputNames) expect(actionManifest.outputs[name]?.description).toBe(actionContract.outputs[name].description);
   });
 
+  it('keeps every action.yml input description aligned with the contract', () => {
+    for (const name of contractInputNames) expect(actionManifest.inputs[name]?.description).toBe(actionContract.inputs[name].description);
+  });
+
   it('GCP-CONTRACT-002: mode/project/location defaults and validation are locked', () => {
     const base = { GITHUB_WORKSPACE: '/tmp/example-repo', INPUT_PROJECT_ID: 'sample-project-123' };
     expect(resolveInputs({ ...base }).mode).toBe('resolve-one');
@@ -73,6 +80,31 @@ describe('action contract', () => {
     expect(() => resolveInputs({ GITHUB_WORKSPACE: '/tmp/example-repo' })).toThrow('project-id is required');
     expect(() => resolveInputs({ ...base, INPUT_PROJECT_ID: 'INVALID' })).toThrow('project-id must be a valid Google Cloud project ID, got: INVALID');
     expect(() => resolveInputs({ ...base, INPUT_LOCATION: 'us-central1' })).toThrow('location must be global in v1.0.0, got: us-central1');
+  });
+
+
+  it('GCP-CONTRACT-006: api-id accepts every documented explicitly selectable resource shape', () => {
+    const base = { GITHUB_WORKSPACE: '/tmp/example-repo', INPUT_PROJECT_ID: 'sample-project-123' };
+    const accepted = [
+      'projects/sample-project-123/locations/global/apis/payments/configs/v1',
+      'services/payments.endpoints.sample-project-123.cloud.goog/configs/2026-01-01r0',
+      'organizations/sample-project-123/apis/payments/revisions/3',
+      'projects/sample-project-123/locations/global/apis/payments/versions/v1/specs/main',
+      'organizations/sample-project-123/sites/dev-portal/apidocs/12345',
+      'projects/sample-project-123/locations/global/agents/support/tools/lookup',
+      'projects/sample-project-123/locations/us-central1/extensions/ext-1',
+      'projects/sample-project-123/locations/global/apps/support/tools/tool-1',
+      'projects/sample-project-123/locations/global/apps/support/toolsets/ts-1',
+      'projects/sample-project-123/locations/global/apps/support/toolsets/ts-1/tools/tool-1'
+    ];
+    for (const apiId of accepted) {
+      expect(resolveInputs({ ...base, INPUT_API_ID: apiId }).apiId).toBe(apiId);
+    }
+    expect(() => resolveInputs({ ...base, INPUT_API_ID: 'not/a/resource' })).toThrow(/api-id must be a full/);
+    // Cross-project names for the newly accepted shapes stay rejected.
+    expect(() => resolveInputs({ ...base, INPUT_API_ID: 'organizations/other-org/sites/s/apidocs/1' })).toThrow(/Apigee portal org/);
+    expect(() => resolveInputs({ ...base, INPUT_API_ID: 'projects/other-project/locations/global/agents/a/tools/t' })).toThrow(/Dialogflow agent/);
+    expect(() => resolveInputs({ ...base, INPUT_API_ID: 'projects/other-project/locations/us-central1/extensions/e' })).toThrow(/Vertex extension registry/);
   });
 
   it('GCP-CONTRACT-005: buildExecutionOutputs emits all 22 keys in both modes with locked empty behavior', () => {

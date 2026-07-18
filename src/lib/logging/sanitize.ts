@@ -1,6 +1,6 @@
 const BEARER_TOKEN_RE = /\bBearer\s+[A-Za-z0-9._~+/=-]{8,}/gi;
 const URL_QUERY_RE = /(https:\/\/[^\s'"?]+)\?[^\s'"]*/gi;
-const GOOGLE_RESOURCE_RE = /\b(?:projects\/[a-z0-9-]+\/locations\/[^\s'"]+|services\/[a-z0-9.-]+\/configs\/[^\s'"]+)/gi;
+const GOOGLE_RESOURCE_RE = /\b(?:projects\/[a-z0-9-]+\/locations\/[^\s'"]+|organizations\/[a-z0-9-]+\/[^\s'"]+|services\/[a-z0-9.-]+\/configs\/[^\s'"]+)/gi;
 const SERVICE_ACCOUNT_RE = /\b[a-z0-9._%+-]+@[a-z0-9.-]+\.iam\.gserviceaccount\.com\b/gi;
 const PROJECT_NUMBER_RE = /\b\d{10,15}\b/g;
 const PRIVATE_KEY_RE = /-----BEGIN PRIVATE KEY-----[\s\S]*?-----END PRIVATE KEY-----/g;
