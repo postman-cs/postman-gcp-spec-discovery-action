@@ -4,7 +4,7 @@ import { decodeUtf8OpenApi } from './source-document.js';
 import { probeFailureStatus } from './probe.js';
 import type { SpecCandidate, SpecExportResult, SpecProvider } from './types.js';
 
-const PATTERN = /^projects\/([^/]+)\/locations\/global\/apps\/([^/]+)\/toolsets\/([^/]+)(?:\/tools\/[^/]+)?$/;
+const PATTERN = /^projects\/([^/]+)\/locations\/global\/apps\/[^/]+\/(?:toolsets|tools)\/[^/]+$/;
 
 export class CesToolsetsProvider implements SpecProvider {
   public readonly type = 'ces-toolsets' as const;
@@ -16,7 +16,7 @@ export class CesToolsetsProvider implements SpecProvider {
   public async listCandidates(): Promise<SpecCandidate[]> {
     const parsed = this.scope.apiId ? PATTERN.exec(this.scope.apiId) : undefined;
     if (this.scope.apiId && !parsed) return [];
-    if (parsed?.[1] !== undefined && parsed[1] !== this.scope.projectId) throw new Error('api-id CES toolset does not belong to configured project-id');
+    if (parsed?.[1] !== undefined && parsed[1] !== this.scope.projectId) throw new Error('api-id CES resource does not belong to configured project-id');
     let toolsets = await this.client.listCesToolsets(this.scope.projectId);
     if (this.scope.apiId) toolsets = toolsets.filter((toolset) => toolset.name === this.scope.apiId);
     return toolsets.map((toolset) => this.toCandidate(toolset));
