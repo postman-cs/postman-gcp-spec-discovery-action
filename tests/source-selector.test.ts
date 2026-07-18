@@ -70,6 +70,14 @@ describe('source selector', () => {
     const result = chooseSource({ candidate: ranked });
     expect(result.status).toBe('unresolved');
   });
+
+  it('ranks generated connector specs below stored specs with identical hints', () => {
+    const stored = input('/x/connectors/stored', { name: 'payments', sourceType: 'connectors-custom-spec', providerType: 'connectors-custom' });
+    const generated = input('/x/connectors/generated', { name: 'payments', sourceType: 'connectors-generated-spec', providerType: 'connectors-custom' });
+    const ranked = rankServiceCandidates([generated, stored], signals({ serviceHints: ['payments'] }));
+    expect(ranked.map((candidate) => candidate.resourceId)).toEqual([stored.id, generated.id]);
+    expect(ranked[0]!.confidence).toBeGreaterThan(ranked[1]!.confidence);
+  });
 });
 
 describe('exact tag equality precedence (GCP-RESOLVE-EXACT)', () => {

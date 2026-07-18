@@ -3,6 +3,7 @@ import type { CustomConnectorVersionSummary, GcpDiscoveryClient } from '../gcp/c
 import { decodeUtf8OpenApi } from './source-document.js';
 import { probeFailureStatus } from './probe.js';
 import type { SpecCandidate, SpecExportResult, SpecProvider } from './types.js';
+import { parseAndValidateOpenApi } from '../spec/validate-openapi.js';
 
 const GCS_PATTERN = /^gs:\/\/([a-z0-9][a-z0-9._-]{1,220}[a-z0-9])\/(.+)$/;
 
@@ -52,7 +53,15 @@ export class ConnectorsCustomProvider implements SpecProvider {
       const schema = await this.client.getConnectorSchemaMetadata(connection.name);
       if (!schema) continue;
       const document = JSON.stringify(schemaToOpenApi(connection.name, schema));
-      candidates.push({ id: connection.name, apiId: connection.name, name: shortName(connection.name), providerType: this.type, sourceType: 'connectors-generated-spec', projectId: this.scope.projectId, tags: {}, supported: true, evidence: ['OpenAPI generated from connector schema metadata; confidence is lower than stored specification sources'], meta: { generatedOpenApi: document } });
+      let supported = true;
+      const evidence = ['OpenAPI generated from connector schema metadata; confidence is lower than stored specification sources'];
+      try {
+        parseAndValidateOpenApi(document);
+      } catch {
+        supported = false;
+        evidence.push('Generated spec has no operations; manual review');
+      }
+      candidates.push({ id: connection.name, apiId: connection.name, name: shortName(connection.name), providerType: this.type, sourceType: 'connectors-generated-spec', projectId: this.scope.projectId, tags: {}, supported, evidence, meta: { generatedOpenApi: document } });
     }
     return candidates;
   }
