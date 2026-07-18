@@ -22,7 +22,7 @@ Canonicalization of the repository slug (`owner/name`):
 | --- | --- |
 | `api-gateway` | The API and/or API config (`gcloud api-gateway apis create --labels` / `api-configs create --labels`); config labels override API labels on conflict |
 | `apigee` | The API proxy (proxy `labels`, surfaced through the proxy list with metadata) |
-| `api-hub` | API/version/spec attributes that normalize into candidate tags |
+| `api-hub` | A user-defined string attribute named `postman-repo` on the API/version/spec. API Hub attributes are `map<string, AttributeValues>`, not GCP labels; the action flattens each attribute's first scalar (`stringValues`/`uriValues`/`enumValues`) into candidate tags |
 | `connectors-custom` | The custom connector version labels |
 | `iac-local` | No cloud label needed — committed IaC in the repo fingerprints the API config directly |
 
