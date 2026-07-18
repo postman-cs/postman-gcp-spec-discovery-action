@@ -8,7 +8,7 @@ Release: `v1.0.0`; npm `@postman-cse/onboarding-gcp-spec-discovery@1.0.0`
 
 ## Product Contract
 
-The action discovers an existing OpenAPI 3.x or Swagger 2.0 document from one explicitly named Google Cloud project. It never infers a contract from runtime routes. Resolution order is direct repo spec, one local-IaC referenced spec, then cloud candidates. Ambiguity or unsupported source shape returns `unresolved/manual-review` with sanitized evidence and writes no guessed artifact.
+The action discovers or derives an OpenAPI 3.x or Swagger 2.0 document from one explicitly named Google Cloud project. Resolution order is direct repo spec, one local-IaC referenced spec, then cloud candidates. Ambiguity or unsupported source shape returns `unresolved/manual-review` with sanitized evidence and writes no guessed artifact.
 
 ### Inputs
 
@@ -53,7 +53,7 @@ The action MUST set all 22 outputs in this order on every successful invocation:
 21. `derived-openapi-evidence-json`
 22. `narrowing-strategy`
 
-Provider types are `api-gateway | cloud-endpoints | iac-local`. Source types are `repo-spec | api-gateway-config | cloud-endpoints-config | iac-embedded | manual-review | discover-many`. Spec formats are `openapi-json | openapi-yaml`. Compatibility outputs 14-16 are empty in v1. Dotenv names use `POSTMAN_GCP_SPEC_*`.
+Provider types are `api-gateway | cloud-endpoints | apigee | api-hub | app-integration | connectors-custom | apigee-portal | dialogflow-tools | vertex-extensions | ces-toolsets | iac-local`. Source types are `repo-spec | api-gateway-config | cloud-endpoints-config | apigee-proxy | apigee-env-oas | api-hub-spec | app-integration-trigger | connectors-custom-spec | connectors-generated-spec | apigee-portal-doc | vertex-extension-manifest | dialogflow-tool-schema | ces-tool-schema | ces-toolset-schema | iac-embedded | manual-review | discover-many`. Spec formats are `openapi-json | openapi-yaml`. Compatibility outputs 14-16 are empty in v1. Dotenv names use `POSTMAN_GCP_SPEC_*`.
 
 ## Requirements
 

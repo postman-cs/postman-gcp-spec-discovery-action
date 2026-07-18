@@ -77,4 +77,16 @@ describe('Integration Connectors custom connector provider', () => {
     expect(exported.evidence.join(' ')).toContain('generated from connector schema metadata');
     expect(JSON.parse(exported.content)).toMatchObject({ openapi: '3.0.3', paths: { '/Account': {} } });
   });
+
+  it('marks an operation-less generated document unsupported so it cannot be auto-exported', async () => {
+    const provider = new ConnectorsCustomProvider(client({
+      listCustomConnectorVersions: vi.fn(async () => []),
+      listConnectorConnections: vi.fn(async () => [{ name: 'projects/sample-project-123/locations/us-central1/connections/empty' }]),
+      getConnectorSchemaMetadata: vi.fn(async () => ({ entities: {} }))
+    }), { projectId: 'sample-project-123' });
+    const candidates = await provider.listCandidates();
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0]).toMatchObject({ sourceType: 'connectors-generated-spec', supported: false });
+    expect(candidates[0]?.evidence.join(' ')).toContain('Generated spec has no operations; manual review');
+  });
 });

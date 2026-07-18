@@ -46521,6 +46521,10 @@ function scoreCandidate(candidate, signals) {
     score += 40;
     evidence.push("Resource tags match service hint");
   }
+  if (candidate.sourceType === "connectors-generated-spec") {
+    score = Math.max(0, score - 1);
+    evidence.push("Generated connector specification ranks below stored specification sources");
+  }
   return { score, evidence };
 }
 function toRanked(candidate, signals, score, evidence) {
@@ -47147,7 +47151,15 @@ var ConnectorsCustomProvider = class {
       const schema = await this.client.getConnectorSchemaMetadata(connection.name);
       if (!schema) continue;
       const document2 = JSON.stringify(schemaToOpenApi(connection.name, schema));
-      candidates.push({ id: connection.name, apiId: connection.name, name: shortName2(connection.name), providerType: this.type, sourceType: "connectors-generated-spec", projectId: this.scope.projectId, tags: {}, supported: true, evidence: ["OpenAPI generated from connector schema metadata; confidence is lower than stored specification sources"], meta: { generatedOpenApi: document2 } });
+      let supported = true;
+      const evidence = ["OpenAPI generated from connector schema metadata; confidence is lower than stored specification sources"];
+      try {
+        parseAndValidateOpenApi(document2);
+      } catch {
+        supported = false;
+        evidence.push("Generated spec has no operations; manual review");
+      }
+      candidates.push({ id: connection.name, apiId: connection.name, name: shortName2(connection.name), providerType: this.type, sourceType: "connectors-generated-spec", projectId: this.scope.projectId, tags: {}, supported, evidence, meta: { generatedOpenApi: document2 } });
     }
     return candidates;
   }
