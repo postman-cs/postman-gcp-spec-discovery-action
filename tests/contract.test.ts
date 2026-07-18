@@ -42,6 +42,7 @@ const LOCKED_INPUT_ORDER = [
   'project-id',
   'location',
   'api-id',
+  'repo-slug',
   'output-dir',
   'postman-api-key',
   'postman-access-token'

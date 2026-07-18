@@ -15,7 +15,6 @@ const repoRoot = resolve(import.meta.dirname, '..');
 
 const CLI_ONLY_INPUTS = [
   'repo-url',
-  'repo-slug',
   'git-provider',
   'ref',
   'sha',

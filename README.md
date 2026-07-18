@@ -39,6 +39,25 @@ jobs:
     project-id: my-gcp-project
 ```
 
+### Discover automatically from the gateway (repository association)
+
+Label the deployed GCP resource that owns this repository's API with `postman-repo=<owner--repo>` (canonicalized slug: lowercase, `/` folded to `--`, invalid characters folded to `-`; for `github.com/acme/payments-api` the value is `acme--payments-api`). The action then resolves the right API from repository identity alone — no `api-id`, no service-name hints:
+
+```yaml
+- id: spec
+  uses: postman-cs/postman-gcp-spec-discovery-action@v1
+  with:
+    project-id: my-gcp-project
+    # repo-slug defaults to the CI-detected repository (GITHUB_REPOSITORY);
+    # set it only to resolve on behalf of a different repository.
+```
+
+Exactly one conflict-free exact label match auto-selects. Zero matches, multiple matches, or colliding label values stay `unresolved` (`manual-review`) with the expected label value printed in the evidence — the action never guesses. Colliding repositories (same canonical value, e.g. case-fold or punctuation collisions, or slugs longer than 63 characters) must set `api-id` or `expected-api-ids-json` explicitly.
+
+`postman-repo` is an owner assertion, not a verified binding: anyone with `*.update` on the resource can point it at any repository. Keep IAM label-write privileges scoped to the deployment pipeline; ambiguity still always forces `manual-review`.
+
+A ready-to-distribute per-service-repo workflow using this pattern (adapted from the Fox AWS discovery hub, but hub-less — each repo discovers its own spec) ships in [`templates/postman-gcp-onboard.yml`](templates/postman-gcp-onboard.yml). See [docs/repository-association.md](docs/repository-association.md) for marker placement per provider, ambiguity semantics, and WIF bootstrap.
+
 ### Resolve a known config or Apigee proxy revision
 
 ```yaml
@@ -75,6 +94,7 @@ npx @postman-cse/onboarding-gcp-spec-discovery \
 | `project-id` | Google Cloud project ID used as the exact discovery and credential preflight scope. | yes | n/a |
 | `location` | Google Cloud API Gateway location. v1 supports global. | no | `global` |
 | `api-id` | Optional full API Gateway config, Cloud Endpoints config, or Apigee proxy revision resource name. Use this to bypass broader project discovery. | no | n/a |
+| `repo-slug` | Repository slug (owner/name) used for repository-association matching against postman-repo resource labels. Defaults to the CI-detected repository (GITHUB_REPOSITORY). | no | n/a |
 | `output-dir` | Directory under the repository root where generated specs are written. | no | `discovered-specs` |
 | `postman-api-key` | Optional service-account PMAK used to mint or re-mint a postman-access-token for telemetry enrichment (account_type). Not used for any GCP or Postman asset operation. | no | n/a |
 | `postman-access-token` | Optional Postman service-account access token, used only to enrich anonymous telemetry with the session account_type. When omitted, postman-api-key alone can mint one for the same purpose. Not used for any GCP or Postman asset operation. | no | n/a |
@@ -143,6 +163,8 @@ v1 does not probe `Cloud Run`, `GKE`, or `Functions` runtime URLs (there is no G
 ## Resources
 
 - [Provider contracts](docs/providers.md)
+- [Repository association](docs/repository-association.md)
+- [Per-service-repo onboarding workflow template](templates/postman-gcp-onboard.yml)
 - [Live testing runbook](docs/LIVE_TESTING_RUNBOOK.md)
 - [RELEASE_POLICY.md](RELEASE_POLICY.md), [SECURITY.md](SECURITY.md), [SUPPORT.md](SUPPORT.md)
 

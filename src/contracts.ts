@@ -142,6 +142,11 @@ export const actionContract: GCPSpecDiscoveryActionContract = {
       required: false,
       default: ''
     },
+    'repo-slug': {
+      description: 'Repository slug (owner/name) used for repository-association matching against postman-repo resource labels. Defaults to the CI-detected repository (GITHUB_REPOSITORY).',
+      required: false,
+      default: ''
+    },
     'output-dir': {
       description: 'Directory under the repository root where generated specs are written.',
       required: false,

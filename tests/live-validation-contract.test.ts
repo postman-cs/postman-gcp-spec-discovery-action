@@ -52,13 +52,13 @@ describe('GCP live validation contract', () => {
     expect(calls.some((call) => call.includes('curl') && call.includes('DELETE'))).toBe(true);
   });
 
-  it('committed evidence contains only eight GCP cases and matching totals', () => {
+  it('committed evidence contains only ten GCP cases and matching totals', () => {
     const root = process.cwd();
     const raw = readFileSync(join(root, 'validation/evidence/live-gcp-surfaces.json'), 'utf8');
     const evidence = JSON.parse(raw);
-    expect(evidence.results).toHaveLength(8);
+    expect(evidence.results).toHaveLength(10);
     expect(evidence.passed + evidence.failed).toBe(evidence.cases);
-    expect(evidence.results.map((result: { name: string }) => result.name)).toEqual(['gateway-explicit-api-id', 'gateway-discovery', 'endpoints-explicit-api-id', 'endpoints-discovery', 'apigee-discovery', 'discover-many', 'iac-single', 'ambiguity']);
+    expect(evidence.results.map((result: { name: string }) => result.name)).toEqual(['gateway-explicit-api-id', 'gateway-discovery', 'gateway-repo-label', 'gateway-label-conflict', 'endpoints-explicit-api-id', 'endpoints-discovery', 'apigee-discovery', 'discover-many', 'iac-single', 'ambiguity']);
     expect(raw).not.toMatch(/https?:\/\/|Bearer |projectNumber|specBody/i);
     expect(readFileSync(join(root, 'validation/evidence/README.md'), 'utf8')).toContain('latest credentialed live run');
   });

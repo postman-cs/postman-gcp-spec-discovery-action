@@ -30,12 +30,12 @@ export class ApigeeProvider implements SpecProvider {
     const explicit = this.scope.apiId ? parseApigeeRevisionName(this.scope.apiId) : undefined;
     if (this.scope.apiId && !explicit) return [];
     if (explicit && explicit.org !== this.scope.projectId) throw new Error('api-id Apigee revision does not belong to the configured project-id org');
-    const revisions = explicit ? [{ proxyName: explicit.proxyName, revision: explicit.revision }] : await this.latestRevisions();
-    return Promise.all(revisions.map(async ({ proxyName, revision }) => {
+    const revisions = explicit ? [{ proxyName: explicit.proxyName, revision: explicit.revision, labels: {} as Record<string, string> }] : await this.latestRevisions();
+    return Promise.all(revisions.map(async ({ proxyName, revision, labels }) => {
       const id = `organizations/${this.scope.projectId}/apis/${proxyName}/revisions/${revision}`;
       const count = documents(await this.client.downloadApigeeRevisionBundle(this.scope.projectId, proxyName, revision)).length;
       const evidence = count === 1 ? [`Apigee proxy revision has one OpenAPI source document`] : count === 0 ? ['Apigee proxy revision has no OpenAPI source document'] : [`Apigee proxy revision has ${count} OpenAPI source documents; refusing to merge or guess`];
-      return { id, name: proxyName, providerType: this.type, apiId: id, projectId: this.scope.projectId, tags: {}, supported: count === 1, evidence, meta: { proxyName, revision } };
+      return { id, name: proxyName, providerType: this.type, apiId: id, projectId: this.scope.projectId, tags: labels, supported: count === 1, evidence, meta: { proxyName, revision } };
     }));
   }
   public async exportSpec(candidate: SpecCandidate): Promise<SpecExportResult> {
@@ -45,11 +45,11 @@ export class ApigeeProvider implements SpecProvider {
     if (found.length !== 1) throw new Error(found.length ? `Apigee proxy revision has ${found.length} OpenAPI source documents; refusing to merge or guess` : 'Apigee proxy revision has no OpenAPI source document');
     return { ...found[0]!.decoded, evidence: [`Exported original Apigee source ${found[0]!.path}`] };
   }
-  private async latestRevisions(): Promise<Array<{ proxyName: string; revision: string }>> {
-    const result: Array<{ proxyName: string; revision: string }> = [];
+  private async latestRevisions(): Promise<Array<{ proxyName: string; revision: string; labels: Record<string, string> }>> {
+    const result: Array<{ proxyName: string; revision: string; labels: Record<string, string> }> = [];
     for (const proxy of await this.client.listApigeeProxies(this.scope.projectId)) {
       const revision = (await this.client.listApigeeRevisions(this.scope.projectId, proxy.name)).filter((value) => /^\d+$/.test(value)).sort((a, b) => Number(b) - Number(a))[0];
-      if (revision) result.push({ proxyName: proxy.name, revision });
+      if (revision) result.push({ proxyName: proxy.name, revision, labels: proxy.labels ?? {} });
     }
     return result;
   }

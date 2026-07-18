@@ -8,7 +8,7 @@ import os from 'node:os';
 import path from 'node:path';
 
 const repoRoot = process.cwd();
-const cases = ['gateway-explicit-api-id', 'gateway-discovery', 'endpoints-explicit-api-id', 'endpoints-discovery', 'apigee-discovery', 'discover-many', 'iac-single', 'ambiguity'];
+const cases = ['gateway-explicit-api-id', 'gateway-discovery', 'gateway-repo-label', 'gateway-label-conflict', 'endpoints-explicit-api-id', 'endpoints-discovery', 'apigee-discovery', 'discover-many', 'iac-single', 'ambiguity'];
 
 export function parseFlags(argv) {
   return { provision: argv.includes('--provision'), teardown: argv.includes('--teardown') };
@@ -135,8 +135,11 @@ async function provision({ runner, token, env, manifest }) {
     // API Gateway and Cloud Endpoints accept OpenAPI 2.0 (Swagger) documents only.
     const gatewaySpecPath = path.join(managed, 'gateway.yaml');
     await writeFile(gatewaySpecPath, swagger2Document({ title: manifest.gatewayName, backend: true }));
-    gcloud(runner, ['api-gateway', 'apis', 'create', manifest.gatewayName, '--project', env.projectId, '--labels', `postman-run-marker=${manifest.runMarker},postman-project-name=${manifest.gatewayName}`]);
-    gcloud(runner, ['api-gateway', 'api-configs', 'create', manifest.gatewayConfigName, '--api', manifest.gatewayName, '--openapi-spec', gatewaySpecPath, '--project', env.projectId, '--labels', `postman-run-marker=${manifest.runMarker},postman-project-name=${manifest.gatewayName}`]);
+    gcloud(runner, ['api-gateway', 'apis', 'create', manifest.gatewayName, '--project', env.projectId, '--labels', `postman-run-marker=${manifest.runMarker},postman-project-name=${manifest.gatewayName},postman-repo=${manifest.repoLabel}`]);
+    gcloud(runner, ['api-gateway', 'api-configs', 'create', manifest.gatewayConfigName, '--api', manifest.gatewayName, '--openapi-spec', gatewaySpecPath, '--project', env.projectId, '--labels', `postman-run-marker=${manifest.runMarker},postman-project-name=${manifest.gatewayName},postman-repo=${manifest.repoLabel}`]);
+    // Two extra configs sharing one postman-repo label: proves identical-label collisions narrow but never auto-select.
+    gcloud(runner, ['api-gateway', 'api-configs', 'create', `${manifest.gatewayConfigName}-b`, '--api', manifest.gatewayName, '--openapi-spec', gatewaySpecPath, '--project', env.projectId, '--labels', `postman-run-marker=${manifest.runMarker},postman-project-name=${manifest.gatewayName},postman-repo=${manifest.conflictLabel}`]);
+    gcloud(runner, ['api-gateway', 'api-configs', 'create', `${manifest.gatewayConfigName}-c`, '--api', manifest.gatewayName, '--openapi-spec', gatewaySpecPath, '--project', env.projectId, '--labels', `postman-run-marker=${manifest.runMarker},postman-project-name=${manifest.gatewayName},postman-repo=${manifest.conflictLabel}`]);
     const endpointsPath = path.join(managed, 'endpoints.yaml');
     await writeFile(endpointsPath, swagger2Document({ title: manifest.endpointsService, host: manifest.endpointsService }));
     gcloud(runner, ['endpoints', 'services', 'deploy', endpointsPath, '--project', env.projectId]);
@@ -165,6 +168,8 @@ export async function teardown({ runner, env, manifest, log }) {
     verifyRemoteGatewayOwnership(manifest, described);
   } catch (error) { if (isResourceNotFoundError(error)) gatewayExists = false; else throw error; }
   if (gatewayExists) {
+    try { gcloud(runner, ['api-gateway', 'api-configs', 'delete', `${manifest.gatewayConfigName}-c`, '--api', manifest.gatewayName, '--project', env.projectId, '--quiet']); } catch (error) { if (!isResourceNotFoundError(error)) throw error; }
+    try { gcloud(runner, ['api-gateway', 'api-configs', 'delete', `${manifest.gatewayConfigName}-b`, '--api', manifest.gatewayName, '--project', env.projectId, '--quiet']); } catch (error) { if (!isResourceNotFoundError(error)) throw error; }
     try { gcloud(runner, ['api-gateway', 'api-configs', 'delete', manifest.gatewayConfigName, '--api', manifest.gatewayName, '--project', env.projectId, '--quiet']); } catch (error) { if (!isResourceNotFoundError(error)) throw error; }
     try { gcloud(runner, ['api-gateway', 'apis', 'delete', manifest.gatewayName, '--project', env.projectId, '--quiet']); } catch (error) { if (!isResourceNotFoundError(error)) throw error; }
   }
@@ -187,7 +192,7 @@ async function runCases({ runner, cliPath, env, manifest, endpointsConfigId, log
       if (setup) await setup(workspace);
       const result = runCli(runner, cliPath, [...args, '--project-id', env.projectId, '--repo-root', workspace, '--result-json', 'result.json'], workspace);
       const resolution = result.resolution ?? result.discovered?.[0];
-      if (name === 'ambiguity') {
+      if (name === 'ambiguity' || name === 'gateway-label-conflict') {
         if (result.resolution?.status !== 'unresolved' || (result.resolution.rankedCandidates?.length ?? 0) < 2) throw new Error('expected unresolved ambiguity');
       } else if (!resolution || (result.resolution && result.resolution.status !== 'resolved')) throw new Error('expected resolved result');
       if (expectedSource && resolution.sourceType !== expectedSource) throw new Error(`expected ${expectedSource}, got ${resolution.sourceType}`);
@@ -205,12 +210,16 @@ async function runCases({ runner, cliPath, env, manifest, endpointsConfigId, log
   };
   await execute(cases[0], null, ['--api-id', `projects/${env.projectId}/locations/global/apis/${manifest.gatewayName}/configs/${manifest.gatewayConfigName}`], 'api-gateway-config');
   await execute(cases[1], null, ['--expected-service-name', manifest.gatewayName], 'api-gateway-config');
-  await execute(cases[2], null, ['--api-id', `services/${manifest.endpointsService}/configs/${endpointsConfigId}`], 'cloud-endpoints-config');
-  await execute(cases[3], null, ['--expected-service-name', manifest.endpointsService, '--expected-api-ids-json', JSON.stringify([`services/${manifest.endpointsService}/configs/${endpointsConfigId}`])], 'cloud-endpoints-config');
-  await execute(cases[4], null, ['--expected-service-name', manifest.proxyName, '--expected-api-ids-json', JSON.stringify([`organizations/${env.apigeeOrg}/apis/${manifest.proxyName}/revisions/1`])], 'apigee-proxy');
-  await execute(cases[5], null, ['--mode', 'discover-many'], null);
-  await execute(cases[6], seedIac, ['--preflight-checks', 'false'], 'iac-embedded');
-  await execute(cases[7], seedAmbiguity, ['--preflight-checks', 'false'], null);
+  // Repo association: one exact postman-repo label match resolves with no api-id and no service-name hints.
+  await execute(cases[2], null, ['--repo-slug', manifest.repoSlug], 'api-gateway-config');
+  // Two configs sharing a postman-repo label narrow but never auto-select: must stay unresolved.
+  await execute(cases[3], null, ['--repo-slug', manifest.conflictSlug], null);
+  await execute(cases[4], null, ['--api-id', `services/${manifest.endpointsService}/configs/${endpointsConfigId}`], 'cloud-endpoints-config');
+  await execute(cases[5], null, ['--expected-service-name', manifest.endpointsService, '--expected-api-ids-json', JSON.stringify([`services/${manifest.endpointsService}/configs/${endpointsConfigId}`])], 'cloud-endpoints-config');
+  await execute(cases[6], null, ['--expected-service-name', manifest.proxyName, '--expected-api-ids-json', JSON.stringify([`organizations/${env.apigeeOrg}/apis/${manifest.proxyName}/revisions/1`])], 'apigee-proxy');
+  await execute(cases[7], null, ['--mode', 'discover-many'], null);
+  await execute(cases[8], seedIac, ['--preflight-checks', 'false'], 'iac-embedded');
+  await execute(cases[9], seedAmbiguity, ['--preflight-checks', 'false'], null);
   return results;
 }
 
@@ -221,7 +230,7 @@ export async function runLiveValidation({ argv = process.argv.slice(2), env: raw
   const runner = deps.runner ?? defaultRunner;
   const log = deps.log ?? ((line) => console.error(line));
   const suffix = randomBytes(4).toString('hex');
-  const manifest = { runId: suffix, runMarker: `postman-${suffix}`, gatewayName: `postman-live-${suffix}`, gatewayConfigName: `postman-live-config-${suffix}`, endpointsService: `postman-live-${suffix}.endpoints.${env.projectId}.cloud.goog`, proxyName: `postman-live-${suffix}` };
+  const manifest = { runId: suffix, runMarker: `postman-${suffix}`, gatewayName: `postman-live-${suffix}`, gatewayConfigName: `postman-live-config-${suffix}`, endpointsService: `postman-live-${suffix}.endpoints.${env.projectId}.cloud.goog`, proxyName: `postman-live-${suffix}`, repoSlug: `postman-live/${suffix}`, repoLabel: `postman-live--${suffix}`, conflictSlug: `postman-conflict/${suffix}`, conflictLabel: `postman-conflict--${suffix}` };
   const cliPath = path.join(repoRoot, 'dist/cli.cjs');
   if (!existsSync(cliPath)) throw new Error(`Missing CLI bundle at ${cliPath}; run npm run build first`);
   const token = accessToken(runner);
