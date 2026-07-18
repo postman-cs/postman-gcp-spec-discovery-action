@@ -239,4 +239,11 @@ describe('GCP authenticated REST client', () => {
     expect(specs).toHaveLength(1);
     expect(specs[0]?.attributes).toEqual({ 'postman-repo': 'org--payments', team: 'payments-team' });
   });
+
+  it('GCP-CLIENT-010: constructing GcpSdkClient never starts ADC credential resolution', () => {
+    const getClient = vi.fn(() => Promise.reject(new Error('ADC lookup must not run at construction')));
+    const auth = { getClient } as unknown as GoogleAuth;
+    new GcpSdkClient(auth, { requestTimeoutMs: 1234, maxAttempts: 3 });
+    expect(getClient).not.toHaveBeenCalled();
+  });
 });
