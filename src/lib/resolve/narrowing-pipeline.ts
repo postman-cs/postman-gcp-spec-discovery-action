@@ -7,6 +7,13 @@ export interface NarrowingResult {
   mode: 'select' | 'narrow';
   droppedCount: number;
   evidence: string[];
+  /**
+   * True when more than one candidate carries the SAME exact canonical
+   * `postman-repo` value. Multiple authoritative ownership claims are a hard
+   * conflict: the runtime returns unresolved and never breaks the tie with
+   * incidental tags or name heuristics.
+   */
+  conflict?: boolean;
 }
 
 export interface NarrowingContext {
@@ -27,6 +34,7 @@ interface TierHit {
   ids: string[];
   selectId?: string;
   evidence: string[];
+  conflict?: boolean;
 }
 
 function repoNameVariants(repoSlug?: string): string[] {
@@ -72,7 +80,7 @@ function tierLabels(candidates: NarrowingCandidate[], context: NarrowingContext)
   if (exact.length > 0) {
     return {
       ids: exact,
-      ...(exact.length === 1 ? { selectId: exact[0] } : {}),
+      ...(exact.length === 1 ? { selectId: exact[0] } : { conflict: true }),
       evidence: [`Found ${exact.length} exact postman-repo=${canonical} label match(es)`]
     };
   }
@@ -117,6 +125,7 @@ export async function runNarrowingPipeline(
       tier,
       mode: select ? 'select' : 'narrow',
       droppedCount,
+      ...(hit.conflict ? { conflict: true } : {}),
       evidence: [...hit.evidence, `Narrowing (${tier}) ranked ${intersecting.length} candidate(s) first and demoted ${droppedCount} (not deleted)`]
     };
   }

@@ -459,8 +459,12 @@ async function collectCandidates(
 async function runResolveOne(inputs: ResolvedInputs, dependencies: GCPDependencies): Promise<ExecutionResult> {
   const core = dependencies.core;
 
-  // 1. Existing repo spec always wins.
-  const existingSpec = await findExistingRepoSpecTyped(inputs.repoRoot);
+  // 1. Explicit api-id is a caller override: it always wins and bypasses the
+  // repo-local shortcuts below, matching the documented precedence
+  // (api-id -> repo-spec -> local IaC -> repository association). When api-id
+  // is absent, a committed repo spec still wins before any cloud call so
+  // spec-carrying repos never need GCP auth.
+  const existingSpec = inputs.apiId ? undefined : await findExistingRepoSpecTyped(inputs.repoRoot);
   if (existingSpec) {
     const resolution = chooseSource({
       existingSpecPath: existingSpec.path,
@@ -479,7 +483,7 @@ async function runResolveOne(inputs: ResolvedInputs, dependencies: GCPDependenci
   // 2. Repo-local IaC scan (fingerprint + inline candidates).
   const iacScan = await scanGCPIac(inputs.repoRoot, inputs.outputDir);
   const iacCandidates = iacScan.candidates;
-  if (iacCandidates.length === 1 && iacCandidates[0]) {
+  if (!inputs.apiId && iacCandidates.length === 1 && iacCandidates[0]) {
     const only = iacCandidates[0];
     const provider = new IacLocalProvider(iacScan);
     const exportResult = await provider.exportSpec(only);
@@ -511,7 +515,7 @@ async function runResolveOne(inputs: ResolvedInputs, dependencies: GCPDependenci
       outputs: buildExecutionOutputs({ mode: inputs.mode, discovered: [], resolution })
     };
   }
-  if (iacCandidates.length > 1) {
+  if (!inputs.apiId && iacCandidates.length > 1) {
     const signals = await collectRepoSignals({
       repoRoot: inputs.repoRoot,
       expectedServiceName: inputs.expectedServiceName,
@@ -615,6 +619,7 @@ async function runResolveOne(inputs: ResolvedInputs, dependencies: GCPDependenci
       serviceName: inputs.expectedServiceName ?? 'unknown-service',
       confidence: 0,
       providerProbes: probes,
+      rankedCandidates: toAmbiguousViews(rankServiceCandidates(enumerated.map(toCandidateInput), signals).slice(0, inputs.maxCandidates)),
       evidence: [`Requested api-id was not found among ${enumerated.length} enumerated candidate(s)`]
     };
     return {
@@ -670,7 +675,7 @@ async function runResolveOne(inputs: ResolvedInputs, dependencies: GCPDependenci
     ? { tier: narrowing.tier, mode: narrowing.mode, droppedCount: narrowing.droppedCount }
     : undefined;
 
-  if (best && !best.ambiguous && best.supported && best.confidence >= MINIMUM_RESOLVED_CONFIDENCE) {
+  if (best && !best.ambiguous && !narrowing?.conflict && best.supported && best.confidence >= MINIMUM_RESOLVED_CONFIDENCE) {
     const target = partitioned.find((candidate) => candidate.id === best?.resourceId);
     const provider = target ? availableProviders.find((p) => p.type === target.providerType) : undefined;
     if (target && provider) {
@@ -836,7 +841,7 @@ async function runDiscoverMany(inputs: ResolvedInputs, dependencies: GCPDependen
     mode: inputs.mode,
     discovered,
     exportSummary: summary,
-    outputs: buildExecutionOutputs({ mode: inputs.mode, discovered, exportSummary: summary, providerProbes: probes })
+    outputs: buildExecutionOutputs({ mode: inputs.mode, discovered, exportSummary: summary, providerProbes: probes, narrowing })
   };
 }
 
@@ -846,6 +851,7 @@ export function buildExecutionOutputs(result: {
   resolution?: ResolutionResult;
   exportSummary?: ExportSummary;
   providerProbes?: ProviderProbeResult[];
+  narrowing?: NarrowingResult;
 }): Record<string, string> {
   if (result.mode === 'discover-many') {
     const discovered = result.discovered;
@@ -879,7 +885,7 @@ export function buildExecutionOutputs(result: {
       'derived-openapi-completeness': '',
       'derived-openapi-format': '',
       'derived-openapi-evidence-json': '',
-      'narrowing-strategy': 'none'
+      'narrowing-strategy': result.narrowing?.tier ?? 'none'
     };
   }
 
