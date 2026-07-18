@@ -23,6 +23,9 @@ function fakeClient(overrides: Partial<GcpDiscoveryClient> = {}): GcpDiscoveryCl
     listApigeeProxies: vi.fn(async () => []),
     listApigeeRevisions: vi.fn(async () => []),
     downloadApigeeRevisionBundle: vi.fn(),
+    listApigeeEnvironments: vi.fn(async () => []),
+    listApigeeEnvironmentOasFiles: vi.fn(async () => []),
+    getApigeeEnvironmentOasFile: vi.fn(async () => ''),
     probeApiHub: vi.fn(),
     listApiHubSpecs: vi.fn(async () => []),
     getApiHubSpec: vi.fn(async () => ({ name: '', specTypeIds: [], attributes: {} })),
@@ -44,6 +47,8 @@ function fakeClient(overrides: Partial<GcpDiscoveryClient> = {}): GcpDiscoveryCl
     generateAppIntegrationOpenApiSpec: vi.fn(async () => ''),
     probeConnectors: vi.fn(),
     listCustomConnectorVersions: vi.fn(async () => []),
+    listConnectorConnections: vi.fn(async () => []),
+    getConnectorSchemaMetadata: vi.fn(async () => undefined),
     getStorageObjectText: vi.fn(async () => ''),
     ...overrides
   };

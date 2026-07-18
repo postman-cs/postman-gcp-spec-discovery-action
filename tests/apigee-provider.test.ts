@@ -84,4 +84,15 @@ describe('Apigee provider', () => {
     expect(inflateZip(zip({ 'a.txt': 'stored' }, false)).get('a.txt')?.toString()).toBe('stored');
     expect(inflateZip(zip({ 'b.txt': 'deflated' })).get('b.txt')?.toString()).toBe('deflated');
   });
+  it('lists, validates, and exports environment OAS resource files', async () => {
+    const fake = client(zip({}), {
+      listApigeeEnvironments: vi.fn(async () => ['test env']),
+      listApigeeEnvironmentOasFiles: vi.fn(async () => ['payments.yaml']),
+      getApigeeEnvironmentOasFile: vi.fn(async () => OAS)
+    });
+    const provider = new ApigeeProvider(fake, { projectId: 'sample-project-123' });
+    const candidate = (await provider.listCandidates()).find((value) => value.sourceType === 'apigee-env-oas')!;
+    expect(candidate).toMatchObject({ id: 'organizations/sample-project-123/environments/test env/resourcefiles/oas/payments.yaml', supported: true, sourceType: 'apigee-env-oas' });
+    await expect(provider.exportSpec(candidate)).resolves.toMatchObject({ content: OAS, evidence: ['Exported original validated Apigee environment OAS resource file'] });
+  });
 });

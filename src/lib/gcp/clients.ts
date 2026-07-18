@@ -96,6 +96,9 @@ export interface CustomConnectorVersionSummary {
   updateTime?: string;
 }
 
+export interface ConnectorConnectionSummary { name: string; description?: string; serviceAccount?: string; }
+export interface ConnectorSchemaMetadata { entities?: Record<string, { fields?: Array<{ name?: string; dataType?: string; description?: string }> }>; actions?: Array<{ name?: string; description?: string }> }
+
 export interface GcpDiscoveryClient {
   preflightProject(projectId: string): Promise<void>;
   probeApiGateway(projectId: string, location: string): Promise<void>;
@@ -110,6 +113,9 @@ export interface GcpDiscoveryClient {
   listApigeeProxies(org: string): Promise<Array<{ name: string; apiProxyType?: string; labels: Record<string, string> }>>;
   listApigeeRevisions(org: string, proxyName: string): Promise<string[]>;
   downloadApigeeRevisionBundle(org: string, proxyName: string, revision: string): Promise<Buffer>;
+  listApigeeEnvironments(org: string): Promise<string[]>;
+  listApigeeEnvironmentOasFiles(org: string, environment: string): Promise<string[]>;
+  getApigeeEnvironmentOasFile(org: string, environment: string, name: string): Promise<string>;
   probeApiHub(projectId: string): Promise<void>;
   listApiHubSpecs(projectId: string): Promise<ApiHubSpecSummary[]>;
   getApiHubSpec(specName: string): Promise<ApiHubSpecSummary>;
@@ -131,6 +137,8 @@ export interface GcpDiscoveryClient {
   generateAppIntegrationOpenApiSpec(location: string, integrationResource: string, triggerIds: string[]): Promise<string>;
   probeConnectors(projectId: string): Promise<void>;
   listCustomConnectorVersions(projectId: string): Promise<CustomConnectorVersionSummary[]>;
+  listConnectorConnections(projectId: string): Promise<ConnectorConnectionSummary[]>;
+  getConnectorSchemaMetadata(connectionName: string): Promise<ConnectorSchemaMetadata | undefined>;
   getStorageObjectText(bucket: string, object: string): Promise<string>;
 }
 
@@ -303,6 +311,23 @@ export class GcpSdkClient implements GcpDiscoveryClient {
     const url = this.apigeeUrl(org, proxyName, 'revisions', revision);
     url.searchParams.set('format', 'bundle');
     return this.getBinary(url, 'Apigee revision bundle download');
+  }
+
+  public async listApigeeEnvironments(org: string): Promise<string[]> {
+    const body = await this.getJson<string[]>(resourceUrl('https://apigee.googleapis.com/', `organizations/${org}/environments`), 'Apigee environment list');
+    return Array.isArray(body) ? body.map(String) : [];
+  }
+
+  public async listApigeeEnvironmentOasFiles(org: string, environment: string): Promise<string[]> {
+    const url = resourceUrl('https://apigee.googleapis.com/', `organizations/${org}/environments/${environment}/resourcefiles`);
+    url.searchParams.set('type', 'oas');
+    const body = await this.getJson<{ resourceFile?: Array<{ name?: string }> }>(url, 'Apigee environment OAS resource list');
+    return (body.resourceFile ?? []).map((file) => file.name ?? '').filter(Boolean);
+  }
+
+  public async getApigeeEnvironmentOasFile(org: string, environment: string, name: string): Promise<string> {
+    const bytes = await this.getBinary(resourceUrl('https://apigee.googleapis.com/', `organizations/${org}/environments/${environment}/resourcefiles/oas/${name}`), 'Apigee environment OAS resource download');
+    return bytes.toString('utf8');
   }
 
   private apigeeUrl(org: string, ...segments: string[]): URL {
@@ -523,6 +548,32 @@ export class GcpSdkClient implements GcpDiscoveryClient {
       versions.push(...raw.map((item) => this.toCustomConnectorVersion(item)));
     }
     return versions;
+  }
+
+  public async listConnectorConnections(projectId: string): Promise<ConnectorConnectionSummary[]> {
+    const connections: ConnectorConnectionSummary[] = [];
+    for (const location of await this.listLocations('https://connectors.googleapis.com/', projectId, 'Integration Connectors location list')) {
+      try {
+        connections.push(...await this.collectPages(
+          () => resourceUrl('https://connectors.googleapis.com/', `projects/${projectId}/locations/${location}/connections`),
+          'Integration Connectors connection list',
+          (body: { connections?: ConnectorConnectionSummary[]; nextPageToken?: string }) => ({ items: body.connections ?? [], nextPageToken: body.nextPageToken })
+        ));
+      } catch { /* regional surface is absent or unauthorized; continue */ }
+    }
+    return connections.filter((connection) => Boolean(connection.name));
+  }
+
+  public async getConnectorSchemaMetadata(connectionName: string): Promise<ConnectorSchemaMetadata | undefined> {
+    const url = resourceUrl('https://connectors.googleapis.com/', connectionName);
+    url.pathname = `${url.pathname}:getConnectionSchemaMetadata`;
+    try {
+      const body = await this.postJson<ConnectorSchemaMetadata>(url, 'Integration Connectors schema metadata retrieval', {});
+      return Object.keys(body.entities ?? {}).length || (body.actions?.length ?? 0) ? body : undefined;
+    } catch (error) {
+      if (/HTTP (?:400|404)/.test(error instanceof Error ? error.message : String(error))) return undefined;
+      throw error;
+    }
   }
 
   public async getStorageObjectText(bucket: string, object: string): Promise<string> {

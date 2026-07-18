@@ -7,6 +7,7 @@ import { decodeUtf8OpenApi, type DecodedSourceDocument } from './source-document
 import type { SpecCandidate, SpecExportResult, SpecProvider } from './types.js';
 
 const PATTERN = /^organizations\/([^/]+)\/apis\/([^/]+)\/revisions\/([^/]+)$/;
+const ENV_OAS_PATTERN = /^organizations\/([^/]+)\/environments\/([^/]+)\/resourcefiles\/oas\/(.+)$/;
 
 export function parseApigeeRevisionName(value: string): { org: string; proxyName: string; revision: string } | undefined {
   const match = PATTERN.exec(value);
@@ -31,14 +32,31 @@ export class ApigeeProvider implements SpecProvider {
     if (this.scope.apiId && !explicit) return [];
     if (explicit && explicit.org !== this.scope.projectId) throw new Error('api-id Apigee revision does not belong to the configured project-id org');
     const revisions = explicit ? [{ proxyName: explicit.proxyName, revision: explicit.revision, labels: {} as Record<string, string> }] : await this.latestRevisions();
-    return Promise.all(revisions.map(async ({ proxyName, revision, labels }) => {
+    const proxies = await Promise.all(revisions.map(async ({ proxyName, revision, labels }) => {
       const id = `organizations/${this.scope.projectId}/apis/${proxyName}/revisions/${revision}`;
       const count = documents(await this.client.downloadApigeeRevisionBundle(this.scope.projectId, proxyName, revision)).length;
       const evidence = count === 1 ? [`Apigee proxy revision has one OpenAPI source document`] : count === 0 ? ['Apigee proxy revision has no OpenAPI source document'] : [`Apigee proxy revision has ${count} OpenAPI source documents; refusing to merge or guess`];
       return { id, name: proxyName, providerType: this.type, apiId: id, projectId: this.scope.projectId, tags: labels, supported: count === 1, evidence, meta: { proxyName, revision } };
     }));
+    if (explicit) return proxies;
+    const resources: SpecCandidate[] = [];
+    for (const environment of await this.client.listApigeeEnvironments(this.scope.projectId)) {
+      for (const name of await this.client.listApigeeEnvironmentOasFiles(this.scope.projectId, environment)) {
+        const id = `organizations/${this.scope.projectId}/environments/${environment}/resourcefiles/oas/${name}`;
+        let supported = false;
+        try { decodeUtf8OpenApi(await this.client.getApigeeEnvironmentOasFile(this.scope.projectId, environment, name)); supported = true; } catch { /* invalid or oversized */ }
+        resources.push({ id, apiId: id, name, providerType: this.type, sourceType: 'apigee-env-oas', projectId: this.scope.projectId, tags: {}, supported, evidence: [supported ? 'Apigee environment stores one validated OpenAPI OAS resource file' : 'Apigee environment OAS resource file is not valid OpenAPI'], meta: { environment, resourceName: name } });
+      }
+    }
+    return [...proxies, ...resources];
   }
   public async exportSpec(candidate: SpecCandidate): Promise<SpecExportResult> {
+    const environmentResource = ENV_OAS_PATTERN.exec(candidate.id);
+    if (environmentResource) {
+      if (environmentResource[1] !== this.scope.projectId) throw new Error('Apigee environment OAS candidate belongs to another organization');
+      const decoded = decodeUtf8OpenApi(await this.client.getApigeeEnvironmentOasFile(environmentResource[1]!, environmentResource[2]!, environmentResource[3]!));
+      return { ...decoded, evidence: ['Exported original validated Apigee environment OAS resource file'] };
+    }
     const parsed = parseApigeeRevisionName(candidate.id);
     if (!parsed || parsed.org !== this.scope.projectId) throw new Error('Apigee candidate has an invalid revision resource name');
     const found = documents(await this.client.downloadApigeeRevisionBundle(parsed.org, parsed.proxyName, parsed.revision));
