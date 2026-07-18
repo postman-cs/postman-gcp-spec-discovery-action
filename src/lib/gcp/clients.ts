@@ -179,6 +179,36 @@ function normalizeLabels(value: unknown): Record<string, string> {
   );
 }
 
+/**
+ * API Hub attributes are not GCP labels: the wire shape is
+ * `map<string, AttributeValues>` keyed by the full attribute resource name
+ * (`projects/.../locations/.../attributes/<attr-id>`), where each value is an
+ * object carrying `stringValues`, `uriValues`, or `enumValues`. Flatten each
+ * entry to `<attr-id> -> first scalar value` so a user-defined string attribute
+ * named `postman-repo` lands in candidate tags and the repository-association
+ * matcher works exactly as it does for real labels. Non-scalar shapes are skipped.
+ */
+function flattenApiHubAttributes(value: unknown): Record<string, string> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  const flattened: Record<string, string> = {};
+  for (const [attributeName, attributeValue] of Object.entries(value as Record<string, unknown>)) {
+    const attributeId = attributeName.split('/').pop();
+    if (!attributeId) continue;
+    const values = attributeValue as {
+      stringValues?: { values?: unknown[] };
+      uriValues?: { values?: unknown[] };
+      enumValues?: { values?: Array<{ id?: unknown }> };
+    } | null;
+    if (!values || typeof values !== 'object') continue;
+    const scalar =
+      values.stringValues?.values?.find((entry): entry is string => typeof entry === 'string') ??
+      values.uriValues?.values?.find((entry): entry is string => typeof entry === 'string') ??
+      values.enumValues?.values?.map((entry) => entry.id).find((id): id is string => typeof id === 'string');
+    if (typeof scalar === 'string' && scalar.length > 0) flattened[attributeId] = scalar;
+  }
+  return flattened;
+}
+
 export class GcpSdkClient implements GcpDiscoveryClient {
   private readonly requesterPromise: Promise<GcpAuthenticatedRequester>;
   private readonly options: GcpClientOptions;
@@ -614,7 +644,7 @@ export class GcpSdkClient implements GcpDiscoveryClient {
       specTypeIds: (specType?.enumValues?.values ?? [])
         .map((entry) => entry.id ?? '')
         .filter((id) => id.length > 0),
-      attributes: normalizeLabels(item.attributes),
+      attributes: flattenApiHubAttributes(item.attributes),
       createTime: typeof item.createTime === 'string' ? item.createTime : undefined
       ,sourceUri: typeof item.sourceUri === 'string' ? item.sourceUri : undefined
     };

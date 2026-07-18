@@ -196,4 +196,32 @@ describe('GCP authenticated REST client', () => {
     await expect(client.listVertexLocations('sample-project-123')).rejects.toThrow('Vertex AI location list returned a repeated page token; aborting');
     expect(request).toHaveBeenCalledTimes(2);
   });
+
+  it('GCP-CLIENT-005: API Hub attributes flatten from nested AttributeValues to string tags', async () => {
+    // Real API Hub attributes are map<string, AttributeValues> keyed by the full
+    // attribute resource name; a labels-flattener would drop them to {}. The
+    // client must surface the scalar so postman-repo reaches the matcher.
+    const { client } = clientWith(async (options) => {
+      const url = new URL(options.url);
+      if (url.hostname !== 'apihub.googleapis.com') return { data: {} };
+      if (url.pathname.endsWith('/locations')) return { data: { locations: [{ locationId: 'us-central1' }] } };
+      if (url.pathname.endsWith('/apis')) return { data: { apis: [{ name: 'projects/sample-project-123/locations/us-central1/apis/payments', displayName: 'payments' }] } };
+      if (url.pathname.endsWith('/versions')) return { data: { versions: [{ name: 'projects/sample-project-123/locations/us-central1/apis/payments/versions/v1' }] } };
+      if (url.pathname.endsWith('/specs')) {
+        return { data: { specs: [{
+          name: 'projects/sample-project-123/locations/us-central1/apis/payments/versions/v1/specs/openapi',
+          specType: { enumValues: { values: [{ id: 'openapi' }] } },
+          attributes: {
+            'projects/sample-project-123/locations/us-central1/attributes/postman-repo': { stringValues: { values: ['org--payments'] } },
+            'projects/sample-project-123/locations/us-central1/attributes/team': { enumValues: { values: [{ id: 'payments-team' }] } },
+            'projects/sample-project-123/locations/us-central1/attributes/ignored': { jsonValues: { values: ['{}'] } }
+          }
+        }] } };
+      }
+      return { data: {} };
+    });
+    const specs = await client.listApiHubSpecs('sample-project-123');
+    expect(specs).toHaveLength(1);
+    expect(specs[0]?.attributes).toEqual({ 'postman-repo': 'org--payments', team: 'payments-team' });
+  });
 });

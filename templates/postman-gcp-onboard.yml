@@ -74,10 +74,12 @@ jobs:
 
       - name: Require an unambiguous resolution
         if: steps.spec.outputs.resolution-status != 'resolved'
+        env:
+          RESOLUTION_JSON: ${{ steps.spec.outputs.resolution-json }}
         run: |
           echo "::error::GCP spec discovery did not resolve a single API for this repository."
           echo "::error::Label the owning resource with postman-repo (see evidence in resolution-json) or set api-id explicitly."
-          echo '${{ steps.spec.outputs.resolution-json }}' | head -c 4000
+          printf '%s' "$RESOLUTION_JSON" | head -c 4000
           exit 1
 
       - name: Onboard into the Postman API Catalog (+ drift check)

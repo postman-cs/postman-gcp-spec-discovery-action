@@ -132,4 +132,42 @@ describe('GCP runtime execute', () => {
     expect(many.exportSummary).toMatchObject({ exported: 1, failed: 1 });
     expect(many.outputs['resolution-status']).toBe('unresolved');
   });
+
+  it('GCP-RESOLVE-001: explicit api-id overrides a committed repo spec (precedence: api-id wins)', async () => {
+    // A repo that both carries a committed spec AND passes api-id must resolve
+    // the caller-selected cloud resource, not the local file.
+    await writeFile(path.join(repoRoot, 'openapi.yaml'), 'openapi: 3.0.3\ninfo:\n  title: local\n  version: "1"\npaths:\n  /a: {}\n');
+    const id = configId('payments');
+    const result = await execute(inputs({ apiId: id }), dependencies(provider([candidate('payments'), candidate('orders')])));
+    expect(result.resolution).toMatchObject({ status: 'resolved', sourceType: 'api-gateway-config', confidence: 100, apiId: id });
+    expect(result.resolution?.evidence?.[0]).toContain('Caller-selected API ID');
+  });
+
+  it('GCP-RESOLVE-001: two exact postman-repo labels stay unresolved and never break the tie', async () => {
+    // Both candidates carry the SAME exact canonical label; heuristic names differ.
+    // The action must refuse to guess despite one being name-rankable.
+    const a = candidate('target', { tags: { 'postman-repo': 'org--target' } });
+    const b = candidate('target-extra', { tags: { 'postman-repo': 'org--target' } });
+    const result = await execute(inputs({ repoContext: { provider: 'github', repoSlug: 'org/target' } }), dependencies(provider([a, b])));
+    expect(result.resolution).toMatchObject({ status: 'unresolved', sourceType: 'manual-review' });
+    expect(result.resolution?.narrowing).toMatchObject({ tier: 'label-prefilter', mode: 'narrow' });
+  });
+
+  it('GCP-DISCOVER-001: discover-many narrowing-strategy reports the real tier, not a hardcoded none', async () => {
+    const tagged = candidate('target', { tags: { 'postman-repo': 'org--target' } });
+    const result = await execute(
+      inputs({ mode: 'discover-many', repoContext: { provider: 'github', repoSlug: 'org/target' } }),
+      dependencies(provider([tagged, candidate('orders')]))
+    );
+    expect(result.outputs['narrowing-strategy']).toBe('label-prefilter');
+  });
+
+  it('GCP-RESOLVE-001: a missed api-id still emits a ranked audit trail', async () => {
+    const result = await execute(
+      inputs({ apiId: configId('absent'), expectedServiceName: 'payments' }),
+      dependencies(provider([candidate('payments'), candidate('orders')]))
+    );
+    expect(result.resolution).toMatchObject({ status: 'unresolved', sourceType: 'manual-review' });
+    expect(result.resolution?.rankedCandidates?.length).toBe(2);
+  });
 });
