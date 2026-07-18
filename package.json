@@ -1,6 +1,10 @@
 {
   "name": "@postman-cse/onboarding-gcp-spec-discovery",
   "version": "1.0.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/postman-cs/postman-gcp-spec-discovery-action"
+  },
   "description": "Discover GCP-hosted API specs and hand the result to Postman API onboarding.",
   "type": "module",
   "main": "dist/index.cjs",
