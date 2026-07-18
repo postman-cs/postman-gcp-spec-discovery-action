@@ -32,10 +32,13 @@ function fakeClient(overrides: Partial<GcpDiscoveryClient> = {}): GcpDiscoveryCl
     listApigeePortalApidocs: vi.fn(async () => []),
     getApigeePortalDocumentation: vi.fn(async () => ({ type: 'missing' as const })),
     probeVertexExtensions: vi.fn(),
+    listVertexLocations: vi.fn(async () => ['us-central1']),
     listVertexExtensions: vi.fn(async () => []),
     probeDialogflow: vi.fn(),
     listDialogflowAgents: vi.fn(async () => []),
     listDialogflowTools: vi.fn(async () => []),
+    probeCes: vi.fn(),
+    listCesToolsets: vi.fn(async () => []),
     probeAppIntegration: vi.fn(),
     listAppIntegrationApiTriggers: vi.fn(async () => []),
     generateAppIntegrationOpenApiSpec: vi.fn(async () => ''),
@@ -101,6 +104,7 @@ describe('GCP preflight and probes', () => {
         { provider: 'apigee-portal', status: 'available' },
         { provider: 'vertex-extensions', status: 'available' },
         { provider: 'dialogflow-tools', status: 'available' },
+        { provider: 'ces-toolsets', status: 'available' },
         { provider: 'iac-local', status: 'available' }
       ]);
       expect(result.outputs['resolution-status']).toBe('unresolved');

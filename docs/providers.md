@@ -1,6 +1,6 @@
 # Provider contracts
 
-GCP spec discovery probes providers fail-soft in this order: `api-gateway`, `cloud-endpoints`, `apigee`, `api-hub`, `app-integration`, `connectors-custom`, `apigee-portal`, `vertex-extensions`, `dialogflow-tools`, `iac-local`. Authorization failures become `skipped:iam`; other provider failures become `skipped:error`; remaining providers continue.
+GCP spec discovery probes providers fail-soft in this order: `api-gateway`, `cloud-endpoints`, `apigee`, `api-hub`, `app-integration`, `connectors-custom`, `apigee-portal`, `vertex-extensions`, `dialogflow-tools`, `ces-toolsets`, `iac-local`. Authorization failures become `skipped:iam`; other provider failures become `skipped:error`; remaining providers continue.
 
 ## `api-gateway`
 
@@ -51,7 +51,7 @@ GCP spec discovery probes providers fail-soft in this order: `api-gateway`, `clo
 
 ## `vertex-extensions`
 
-- Lists Vertex AI extensions in `us-central1` for the requested project.
+- Enumerates Vertex AI project locations and lists extensions in each region.
 - Exports the extension manifest's inline `openApiYaml` or fetches its `openApiGcsUri` through authenticated Cloud Storage.
 - Produces `vertex-extension-manifest` candidates whose `api-id` is the full extension resource name.
 - Manifests with neither source, multiple sources, invalid OpenAPI, or invalid storage locations remain unsupported.
@@ -64,6 +64,13 @@ GCP spec discovery probes providers fail-soft in this order: `api-gateway`, `clo
 - Produces `dialogflow-tool-schema` candidates whose `api-id` is the full tool resource name.
 - Tools without `openApiSpec` are skipped; invalid OpenAPI schemas remain unsupported.
 - IAM note: authorization failures probing Dialogflow become `skipped:iam`, and discovery continues.
+
+## `ces-toolsets`
+
+- Lists Conversational Agents (Agent Studio) apps and OpenAPI toolsets in the global CES location.
+- Exports inline `openApiToolset.openApiSchema` and tool-level `openApiTool.openApiSchema` documents.
+- Produces `ces-toolset-schema` candidates whose `api-id` identifies the app toolset resource.
+- Disabled, absent, and unauthorized CES surfaces probe fail-soft so discovery continues.
 
 ## `iac-local`
 

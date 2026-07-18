@@ -156,22 +156,26 @@ async function provision({ runner, token, env, manifest }) {
   return { endpointsConfigId };
 }
 
-async function teardown({ runner, env, manifest, log }) {
+export async function teardown({ runner, env, manifest, log }) {
   // Mint a fresh token: the run can outlive the one issued before provisioning.
   const token = accessToken(runner);
+  let gatewayExists = true;
   try {
     const described = JSON.parse(gcloud(runner, ['api-gateway', 'apis', 'describe', manifest.gatewayName, '--project', env.projectId, '--format', 'json']));
     verifyRemoteGatewayOwnership(manifest, described);
-  } catch (error) { if (isResourceNotFoundError(error)) return; throw error; }
-  try { gcloud(runner, ['api-gateway', 'api-configs', 'delete', manifest.gatewayConfigName, '--api', manifest.gatewayName, '--project', env.projectId, '--quiet']); } catch (error) { if (!isResourceNotFoundError(error)) throw error; }
-  try { gcloud(runner, ['api-gateway', 'apis', 'delete', manifest.gatewayName, '--project', env.projectId, '--quiet']); } catch (error) { if (!isResourceNotFoundError(error)) throw error; }
+  } catch (error) { if (isResourceNotFoundError(error)) gatewayExists = false; else throw error; }
+  if (gatewayExists) {
+    try { gcloud(runner, ['api-gateway', 'api-configs', 'delete', manifest.gatewayConfigName, '--api', manifest.gatewayName, '--project', env.projectId, '--quiet']); } catch (error) { if (!isResourceNotFoundError(error)) throw error; }
+    try { gcloud(runner, ['api-gateway', 'apis', 'delete', manifest.gatewayName, '--project', env.projectId, '--quiet']); } catch (error) { if (!isResourceNotFoundError(error)) throw error; }
+  }
   verifyRemoteEndpointsOwnership(manifest, manifest.endpointsService);
   try { gcloud(runner, ['endpoints', 'services', 'delete', manifest.endpointsService, '--project', env.projectId, '--quiet']); } catch (error) { if (!isResourceNotFoundError(error)) throw error; }
+  let apigeeExists = true;
   try {
     const described = JSON.parse(rest(runner, token, 'GET', `https://apigee.googleapis.com/v1/organizations/${env.apigeeOrg}/apis/${manifest.proxyName}`));
     verifyRemoteApigeeOwnership(manifest, described);
-  } catch (error) { if (isResourceNotFoundError(error)) return; throw error; }
-  try { rest(runner, token, 'DELETE', `https://apigee.googleapis.com/v1/organizations/${env.apigeeOrg}/apis/${manifest.proxyName}`); } catch (error) { if (!isResourceNotFoundError(error)) throw error; }
+  } catch (error) { if (isResourceNotFoundError(error)) apigeeExists = false; else throw error; }
+  if (apigeeExists) try { rest(runner, token, 'DELETE', `https://apigee.googleapis.com/v1/organizations/${env.apigeeOrg}/apis/${manifest.proxyName}`); } catch (error) { if (!isResourceNotFoundError(error)) throw error; }
   log('Deleted only current-run Gateway, Endpoints, and Apigee resources');
 }
 

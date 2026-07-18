@@ -149,6 +149,7 @@ export { ConnectorsCustomProvider, parseGcsSpecLocation } from './lib/providers/
 export { ApigeePortalProvider, parseApigeePortalApidocName } from './lib/providers/apigee-portal.js';
 export { VertexExtensionsProvider, parseVertexExtensionName } from './lib/providers/vertex-extensions.js';
 export { DialogflowToolsProvider, parseDialogflowToolName } from './lib/providers/dialogflow-tools.js';
+export { CesToolsetsProvider } from './lib/providers/ces-toolsets.js';
 export { IacLocalProvider } from './lib/providers/iac-local.js';
 export { parseAndValidateOpenApi } from './lib/spec/validate-openapi.js';
 export { decodeUtf8OpenApi } from './lib/providers/source-document.js';

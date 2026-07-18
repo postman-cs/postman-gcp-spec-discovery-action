@@ -12,4 +12,5 @@ export function classifyProbeError(message: unknown): 'fatal' | 'retryable';
 export function isResourceNotFoundError(error: unknown): boolean;
 export function toEvidenceResult(name: string, status: string, resolution?: Partial<EvidenceResult>): EvidenceResult;
 export function buildEvidence(results: EvidenceResult[]): Evidence;
+export function teardown(options: { runner: (command: string, args: string[], options?: Record<string, unknown>) => unknown; env: LiveEnv; manifest: LiveManifest; log: (message: string) => void }): Promise<void>;
 export function runLiveValidation(options?: { argv?: string[]; env?: Record<string, string | undefined>; deps?: Record<string, unknown> }): Promise<Evidence>;

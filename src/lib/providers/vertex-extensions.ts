@@ -19,8 +19,13 @@ export class VertexExtensionsProvider implements SpecProvider {
   ) {}
   public async probe(): Promise<ProviderProbeStatus> {
     try {
-      await this.client.probeVertexExtensions(this.scope.projectId, this.scope.location ?? 'us-central1');
-      return 'available';
+      const locations = await this.locations();
+      let failure: unknown;
+      for (const location of locations) {
+        try { await this.client.probeVertexExtensions(this.scope.projectId, location); return 'available'; }
+        catch (error) { failure = error; }
+      }
+      return probeFailureStatus(failure ?? new Error('Vertex AI returned no locations'));
     } catch (error) {
       return probeFailureStatus(error);
     }
@@ -29,11 +34,24 @@ export class VertexExtensionsProvider implements SpecProvider {
     const parsed = this.scope.apiId ? parseVertexExtensionName(this.scope.apiId) : undefined;
     if (this.scope.apiId && !parsed) return [];
     if (parsed && parsed.projectId !== this.scope.projectId) throw new Error('api-id Vertex extension does not belong to configured project-id');
-    const location = parsed?.location ?? this.scope.location ?? 'us-central1';
+    const location = parsed?.location;
     const extensions = parsed
-      ? [await this.findExplicit(this.scope.apiId!, location)]
-      : await this.client.listVertexExtensions(this.scope.projectId, location);
+      ? [await this.findExplicit(this.scope.apiId!, location!)]
+      : await this.listAllLocations();
     return extensions.map((extension) => this.toCandidate(extension));
+  }
+  private async locations(): Promise<string[]> {
+    return this.scope.location && this.scope.location !== 'global'
+      ? [this.scope.location]
+      : this.client.listVertexLocations(this.scope.projectId);
+  }
+  private async listAllLocations(): Promise<VertexExtensionSummary[]> {
+    const extensions: VertexExtensionSummary[] = [];
+    for (const location of await this.locations()) {
+      try { extensions.push(...await this.client.listVertexExtensions(this.scope.projectId, location)); }
+      catch { /* Regional Vertex surfaces are probed fail-soft. */ }
+    }
+    return extensions;
   }
   private async findExplicit(id: string, location: string): Promise<VertexExtensionSummary> {
     const extensions = await this.client.listVertexExtensions(this.scope.projectId, location);

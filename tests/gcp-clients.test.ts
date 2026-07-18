@@ -116,4 +116,27 @@ describe('GCP authenticated REST client', () => {
     expect(urls).toContain('https://europe-west1-dialogflow.googleapis.com/v1/projects/sample-project-123/locations/europe-west1/agents?pageSize=1000');
     expect(urls).toContain('https://europe-west1-dialogflow.googleapis.com/v1/projects/sample-project-123/locations/europe-west1/agents/support/tools?pageSize=1000');
   });
+
+  it('paginates location enumeration and merges both pages', async () => {
+    const { client, request } = clientWith(async (options) => {
+      const token = new URL(options.url).searchParams.get('pageToken');
+      if (options.url.includes('/locations?')) return token
+        ? { data: { locations: [{ locationId: 'europe-west1' }] } }
+        : { data: { locations: [{ locationId: 'global' }], nextPageToken: 'locations-2' } };
+      return { data: {} };
+    });
+    await client.listDialogflowAgents('sample-project-123');
+    expect(request.mock.calls.map((call) => call[0].url)).toEqual(expect.arrayContaining([
+      'https://dialogflow.googleapis.com/v1/projects/sample-project-123/locations?pageSize=200',
+      'https://dialogflow.googleapis.com/v1/projects/sample-project-123/locations?pageSize=200&pageToken=locations-2',
+      'https://dialogflow.googleapis.com/v1/projects/sample-project-123/locations/global/agents?pageSize=1000',
+      'https://europe-west1-dialogflow.googleapis.com/v1/projects/sample-project-123/locations/europe-west1/agents?pageSize=1000'
+    ]));
+  });
+
+  it('terminates repeated location tokens via the collectPages guard', async () => {
+    const { client, request } = clientWith(async () => ({ data: { locations: [], nextPageToken: 'same-location' } }));
+    await expect(client.listVertexLocations('sample-project-123')).rejects.toThrow('Vertex AI location list returned a repeated page token; aborting');
+    expect(request).toHaveBeenCalledTimes(2);
+  });
 });

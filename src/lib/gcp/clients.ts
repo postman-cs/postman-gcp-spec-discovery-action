@@ -77,6 +77,7 @@ export interface ApigeePortalDocumentation { type: 'oasDocumentation' | 'graphql
 export interface VertexExtensionSummary { name: string; displayName?: string; openApiYaml?: string; openApiGcsUri?: string; }
 export interface DialogflowAgentSummary { name: string; displayName?: string; }
 export interface DialogflowToolSummary { name: string; displayName?: string; textSchema?: string; }
+export interface CesToolsetSummary { name: string; displayName?: string; openApiSchema?: string; }
 
 export interface AppIntegrationApiTrigger {
   integrationResource: string;
@@ -115,10 +116,13 @@ export interface GcpDiscoveryClient {
   listApigeePortalApidocs(org: string, siteId: string): Promise<ApigeePortalApidoc[]>;
   getApigeePortalDocumentation(org: string, siteId: string, apidocId: string): Promise<ApigeePortalDocumentation>;
   probeVertexExtensions(projectId: string, location: string): Promise<void>;
+  listVertexLocations(projectId: string): Promise<string[]>;
   listVertexExtensions(projectId: string, location: string): Promise<VertexExtensionSummary[]>;
   probeDialogflow(projectId: string): Promise<void>;
   listDialogflowAgents(projectId: string): Promise<DialogflowAgentSummary[]>;
   listDialogflowTools(agentName: string): Promise<DialogflowToolSummary[]>;
+  probeCes(projectId: string): Promise<void>;
+  listCesToolsets(projectId: string): Promise<CesToolsetSummary[]>;
   probeAppIntegration(projectId: string): Promise<void>;
   listAppIntegrationApiTriggers(projectId: string): Promise<AppIntegrationApiTrigger[]>;
   generateAppIntegrationOpenApiSpec(location: string, integrationResource: string, triggerIds: string[]): Promise<string>;
@@ -361,10 +365,38 @@ export class GcpSdkClient implements GcpDiscoveryClient {
   public async listApigeePortalApidocs(org: string, siteId: string): Promise<ApigeePortalApidoc[]> { return this.collectPages(() => resourceUrl('https://apigee.googleapis.com/', `organizations/${org}/sites/${siteId}/apidocs`), 'Apigee portal apidoc list', (body: { data?: ApigeePortalApidoc[]; nextPageToken?: string }) => ({ items: body.data ?? [], nextPageToken: body.nextPageToken })); }
   public async getApigeePortalDocumentation(org: string, siteId: string, apidocId: string): Promise<ApigeePortalDocumentation> { const body = await this.getJson<{ data?: Record<string, unknown> }>(resourceUrl('https://apigee.googleapis.com/', `organizations/${org}/sites/${siteId}/apidocs/${apidocId}/documentation`), 'Apigee portal documentation get'); const data = body.data ?? {}; for (const type of ['oasDocumentation', 'graphqlDocumentation', 'asyncapiDocumentation'] as const) { if (data[type]) return { type, contents: type === 'oasDocumentation' ? (data[type] as { spec?: { contents?: string } }).spec?.contents : undefined }; } return { type: 'missing' }; }
   public async probeVertexExtensions(projectId: string, location: string): Promise<void> { const url = resourceUrl(`https://${location}-aiplatform.googleapis.com/`, `projects/${projectId}/locations/${location}/extensions`); url.searchParams.set('pageSize', '1'); await this.getJson(url, 'Vertex Extensions probe'); }
+  public async listVertexLocations(projectId: string): Promise<string[]> { return this.listLocations('https://aiplatform.googleapis.com/', projectId, 'Vertex AI location list'); }
   public async listVertexExtensions(projectId: string, location: string): Promise<VertexExtensionSummary[]> { return this.collectPages(() => resourceUrl(`https://${location}-aiplatform.googleapis.com/`, `projects/${projectId}/locations/${location}/extensions`), 'Vertex Extensions list', (body: { extensions?: Array<{ name?: string; displayName?: string; manifest?: { apiSpec?: { openApiYaml?: string; openApiGcsUri?: string } } }>; nextPageToken?: string }) => ({ items: (body.extensions ?? []).filter((x) => x.name).map((x) => ({ name: x.name!, displayName: x.displayName, openApiYaml: x.manifest?.apiSpec?.openApiYaml, openApiGcsUri: x.manifest?.apiSpec?.openApiGcsUri })), nextPageToken: body.nextPageToken })); }
   public async probeDialogflow(projectId: string): Promise<void> { const url = resourceUrl('https://dialogflow.googleapis.com/', `projects/${projectId}/locations/global/agents`); url.searchParams.set('pageSize', '1'); await this.getJson(url, 'Dialogflow probe'); }
   public async listDialogflowAgents(projectId: string): Promise<DialogflowAgentSummary[]> { const agents: DialogflowAgentSummary[]=[]; for(const location of await this.listLocations('https://dialogflow.googleapis.com/',projectId,'Dialogflow location list')){const origin=location==='global'?'https://dialogflow.googleapis.com/':`https://${location}-dialogflow.googleapis.com/`;agents.push(...await this.collectPages(() => resourceUrl(origin, `projects/${projectId}/locations/${location}/agents`), 'Dialogflow agent list', (body: { agents?: DialogflowAgentSummary[]; nextPageToken?: string }) => ({ items: body.agents ?? [], nextPageToken: body.nextPageToken })));}return agents; }
   public async listDialogflowTools(agentName: string): Promise<DialogflowToolSummary[]> { const location=/\/locations\/([^/]+)\//.exec(agentName)?.[1]??'global';const origin=location==='global'?'https://dialogflow.googleapis.com/':`https://${location}-dialogflow.googleapis.com/`;return this.collectPages(() => resourceUrl(origin, `${agentName}/tools`), 'Dialogflow tool list', (body: { tools?: Array<{ name: string; displayName?: string; openApiSpec?: { textSchema?: string } }>; nextPageToken?: string }) => ({ items: (body.tools ?? []).map((x) => ({ name: x.name, displayName: x.displayName, textSchema: x.openApiSpec?.textSchema })), nextPageToken: body.nextPageToken })); }
+  public async probeCes(projectId: string): Promise<void> { const url = resourceUrl('https://ces.googleapis.com/', `projects/${projectId}/locations/global/apps`); url.searchParams.set('pageSize', '1'); await this.getJson(url, 'CES probe'); }
+  public async listCesToolsets(projectId: string): Promise<CesToolsetSummary[]> {
+    const apps = await this.collectPages(
+      () => resourceUrl('https://ces.googleapis.com/', `projects/${projectId}/locations/global/apps`),
+      'CES app list',
+      (body: { apps?: Array<{ name?: string; toolsets?: unknown[] }>; nextPageToken?: string }) => ({ items: body.apps ?? [], nextPageToken: body.nextPageToken })
+    );
+    const toolsets: CesToolsetSummary[] = [];
+    for (const app of apps) {
+      const embedded = Array.isArray(app.toolsets) ? app.toolsets : [];
+      const listed = app.name
+        ? await this.collectPages(
+          () => resourceUrl('https://ces.googleapis.com/', `${app.name}/toolsets`),
+          'CES toolset list',
+          (body: { toolsets?: unknown[]; nextPageToken?: string }) => ({ items: body.toolsets ?? [], nextPageToken: body.nextPageToken })
+        )
+        : [];
+      for (const value of [...embedded, ...listed]) {
+        const item = (value ?? {}) as { name?: string; displayName?: string; openApiToolset?: { openApiSchema?: string; tools?: Array<{ openApiTool?: { openApiSchema?: string } }> }; tools?: Array<{ openApiTool?: { openApiSchema?: string } }> };
+        if (!item.name) continue;
+        const schemas = [item.openApiToolset?.openApiSchema, ...(item.openApiToolset?.tools ?? []).map((tool) => tool.openApiTool?.openApiSchema), ...(item.tools ?? []).map((tool) => tool.openApiTool?.openApiSchema)].filter((schema): schema is string => Boolean(schema?.trim()));
+        schemas.forEach((openApiSchema, index) => toolsets.push({ name: index === 0 ? item.name! : `${item.name}/tools/${index + 1}`, displayName: item.displayName, openApiSchema }));
+        if (schemas.length === 0) toolsets.push({ name: item.name, displayName: item.displayName });
+      }
+    }
+    return toolsets;
+  }
 
   public async probeAppIntegration(projectId: string): Promise<void> {
     await this.getJson(this.locationsUrl('https://integrations.googleapis.com/', projectId), 'Application Integration probe');
@@ -474,13 +506,15 @@ export class GcpSdkClient implements GcpDiscoveryClient {
   }
 
   private async listLocations(origin: string, projectId: string, operation: string): Promise<string[]> {
-    const body = await this.getJson<{ locations?: Array<{ locationId?: string }> }>(
-      this.locationsUrl(origin, projectId),
-      operation
+    return this.collectPages(
+      () => this.locationsUrl(origin, projectId),
+      operation,
+      (body: { locations?: Array<{ locationId?: string }>; nextPageToken?: string }) => ({
+        items: (body.locations ?? []).map((location) => location.locationId ?? '').filter((locationId) => locationId.length > 0),
+        nextPageToken: body.nextPageToken
+      }),
+      200
     );
-    return (body.locations ?? [])
-      .map((location) => location.locationId ?? '')
-      .filter((locationId) => locationId.length > 0);
   }
 
   private toApiHubSpec(value: unknown, apiDisplayName: string | undefined): ApiHubSpecSummary {

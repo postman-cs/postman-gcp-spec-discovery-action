@@ -7,7 +7,7 @@ const OAS = 'openapi: 3.0.3\ninfo:\n  title: Extension\n  version: "1"\npaths:\n
 const ID = 'projects/sample-project-123/locations/us-central1/extensions/payments';
 
 function client(overrides: Partial<GcpDiscoveryClient> = {}): GcpDiscoveryClient {
-  return new Proxy({ probeVertexExtensions: vi.fn(), listVertexExtensions: vi.fn(async () => [{ name: ID, displayName: 'Payments', openApiYaml: OAS }]), getStorageObjectText: vi.fn(async () => OAS), ...overrides }, { get: (target, key) => key in target ? target[key as keyof typeof target] : vi.fn(async () => []) }) as GcpDiscoveryClient;
+  return new Proxy({ probeVertexExtensions: vi.fn(), listVertexLocations: vi.fn(async () => ['us-central1']), listVertexExtensions: vi.fn(async () => [{ name: ID, displayName: 'Payments', openApiYaml: OAS }]), getStorageObjectText: vi.fn(async () => OAS), ...overrides }, { get: (target, key) => key in target ? target[key as keyof typeof target] : vi.fn(async () => []) }) as GcpDiscoveryClient;
 }
 
 describe('Vertex extensions provider', () => {
@@ -37,5 +37,15 @@ describe('Vertex extensions provider', () => {
     expect((await new VertexExtensionsProvider(client({ listVertexExtensions: list }), { projectId: 'sample-project-123', location: 'europe-west1', apiId: ID }).listCandidates())[0]?.id).toBe(ID);
     expect(list).toHaveBeenCalledWith('sample-project-123', 'us-central1');
     await expect(new VertexExtensionsProvider(client(), { projectId: 'sample-project-123', apiId: ID.replace('sample-project-123', 'other-project') }).listCandidates()).rejects.toThrow('does not belong');
+  });
+
+  it('enumerates all Vertex locations for global and skips failed regions', async () => {
+    const listVertexExtensions = vi.fn(async (_project: string, location: string) => {
+      if (location === 'europe-west1') throw new Error('regional failure');
+      return [{ name: ID, openApiYaml: OAS }];
+    });
+    const provider = new VertexExtensionsProvider(client({ listVertexLocations: vi.fn(async () => ['us-central1', 'europe-west1']), listVertexExtensions }), { projectId: 'sample-project-123', location: 'global' });
+    await expect(provider.listCandidates()).resolves.toHaveLength(1);
+    expect(listVertexExtensions).toHaveBeenCalledTimes(2);
   });
 });

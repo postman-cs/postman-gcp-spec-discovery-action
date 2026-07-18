@@ -44576,6 +44576,7 @@ __export(index_exports, {
   ApigeePortalProvider: () => ApigeePortalProvider,
   ApigeeProvider: () => ApigeeProvider,
   AppIntegrationProvider: () => AppIntegrationProvider,
+  CesToolsetsProvider: () => CesToolsetsProvider,
   CloudEndpointsProvider: () => CloudEndpointsProvider,
   ConnectorsCustomProvider: () => ConnectorsCustomProvider,
   DialogflowToolsProvider: () => DialogflowToolsProvider,
@@ -47311,7 +47312,7 @@ var actionContract = {
       description: "Resolution status: resolved or unresolved."
     },
     "source-type": {
-      description: "Resolved source type: repo-spec, api-gateway-config, cloud-endpoints-config, apigee-proxy, api-hub-spec, app-integration-trigger, connectors-custom-spec, apigee-portal-doc, vertex-extension-manifest, dialogflow-tool-schema, iac-embedded, manual-review, or discover-many."
+      description: "Resolved source type: repo-spec, api-gateway-config, cloud-endpoints-config, apigee-proxy, api-hub-spec, app-integration-trigger, connectors-custom-spec, apigee-portal-doc, vertex-extension-manifest, dialogflow-tool-schema, ces-toolset-schema, iac-embedded, manual-review, or discover-many."
     },
     "mapping-confidence": {
       description: "Numeric confidence score for the selected service candidate."
@@ -47338,7 +47339,7 @@ var actionContract = {
       description: "Ranked ambiguous candidates as JSON when resolution is unresolved with at least two candidates; empty otherwise."
     },
     "provider-type": {
-      description: "Provider that produced the resolved spec: api-gateway, cloud-endpoints, apigee, api-hub, app-integration, connectors-custom, apigee-portal, vertex-extensions, dialogflow-tools, or iac-local."
+      description: "Provider that produced the resolved spec: api-gateway, cloud-endpoints, apigee, api-hub, app-integration, connectors-custom, apigee-portal, vertex-extensions, dialogflow-tools, ces-toolsets, or iac-local."
     },
     "spec-format": {
       description: "Format of the resolved spec: openapi-yaml or openapi-json."
@@ -47601,6 +47602,9 @@ var GcpSdkClient = class {
     url.searchParams.set("pageSize", "1");
     await this.getJson(url, "Vertex Extensions probe");
   }
+  async listVertexLocations(projectId) {
+    return this.listLocations("https://aiplatform.googleapis.com/", projectId, "Vertex AI location list");
+  }
   async listVertexExtensions(projectId, location) {
     return this.collectPages(() => resourceUrl(`https://${location}-aiplatform.googleapis.com/`, `projects/${projectId}/locations/${location}/extensions`), "Vertex Extensions list", (body) => ({ items: (body.extensions ?? []).filter((x2) => x2.name).map((x2) => ({ name: x2.name, displayName: x2.displayName, openApiYaml: x2.manifest?.apiSpec?.openApiYaml, openApiGcsUri: x2.manifest?.apiSpec?.openApiGcsUri })), nextPageToken: body.nextPageToken }));
   }
@@ -47621,6 +47625,35 @@ var GcpSdkClient = class {
     const location = /\/locations\/([^/]+)\//.exec(agentName)?.[1] ?? "global";
     const origin = location === "global" ? "https://dialogflow.googleapis.com/" : `https://${location}-dialogflow.googleapis.com/`;
     return this.collectPages(() => resourceUrl(origin, `${agentName}/tools`), "Dialogflow tool list", (body) => ({ items: (body.tools ?? []).map((x2) => ({ name: x2.name, displayName: x2.displayName, textSchema: x2.openApiSpec?.textSchema })), nextPageToken: body.nextPageToken }));
+  }
+  async probeCes(projectId) {
+    const url = resourceUrl("https://ces.googleapis.com/", `projects/${projectId}/locations/global/apps`);
+    url.searchParams.set("pageSize", "1");
+    await this.getJson(url, "CES probe");
+  }
+  async listCesToolsets(projectId) {
+    const apps = await this.collectPages(
+      () => resourceUrl("https://ces.googleapis.com/", `projects/${projectId}/locations/global/apps`),
+      "CES app list",
+      (body) => ({ items: body.apps ?? [], nextPageToken: body.nextPageToken })
+    );
+    const toolsets = [];
+    for (const app of apps) {
+      const embedded = Array.isArray(app.toolsets) ? app.toolsets : [];
+      const listed = app.name ? await this.collectPages(
+        () => resourceUrl("https://ces.googleapis.com/", `${app.name}/toolsets`),
+        "CES toolset list",
+        (body) => ({ items: body.toolsets ?? [], nextPageToken: body.nextPageToken })
+      ) : [];
+      for (const value of [...embedded, ...listed]) {
+        const item = value ?? {};
+        if (!item.name) continue;
+        const schemas = [item.openApiToolset?.openApiSchema, ...(item.openApiToolset?.tools ?? []).map((tool) => tool.openApiTool?.openApiSchema), ...(item.tools ?? []).map((tool) => tool.openApiTool?.openApiSchema)].filter((schema) => Boolean(schema?.trim()));
+        schemas.forEach((openApiSchema, index) => toolsets.push({ name: index === 0 ? item.name : `${item.name}/tools/${index + 1}`, displayName: item.displayName, openApiSchema }));
+        if (schemas.length === 0) toolsets.push({ name: item.name, displayName: item.displayName });
+      }
+    }
+    return toolsets;
   }
   async probeAppIntegration(projectId) {
     await this.getJson(this.locationsUrl("https://integrations.googleapis.com/", projectId), "Application Integration probe");
@@ -47718,11 +47751,15 @@ var GcpSdkClient = class {
     return url;
   }
   async listLocations(origin, projectId, operation) {
-    const body = await this.getJson(
-      this.locationsUrl(origin, projectId),
-      operation
+    return this.collectPages(
+      () => this.locationsUrl(origin, projectId),
+      operation,
+      (body) => ({
+        items: (body.locations ?? []).map((location) => location.locationId ?? "").filter((locationId) => locationId.length > 0),
+        nextPageToken: body.nextPageToken
+      }),
+      200
     );
-    return (body.locations ?? []).map((location) => location.locationId ?? "").filter((locationId) => locationId.length > 0);
   }
   toApiHubSpec(value, apiDisplayName) {
     const item = value ?? {};
@@ -48882,6 +48919,8 @@ function sourceTypeFor(providerType) {
       return "vertex-extension-manifest";
     case "dialogflow-tools":
       return "dialogflow-tool-schema";
+    case "ces-toolsets":
+      return "ces-toolset-schema";
     case "iac-local":
       return "iac-embedded";
   }
@@ -49824,8 +49863,17 @@ var VertexExtensionsProvider = class {
   type = "vertex-extensions";
   async probe() {
     try {
-      await this.client.probeVertexExtensions(this.scope.projectId, this.scope.location ?? "us-central1");
-      return "available";
+      const locations = await this.locations();
+      let failure;
+      for (const location of locations) {
+        try {
+          await this.client.probeVertexExtensions(this.scope.projectId, location);
+          return "available";
+        } catch (error2) {
+          failure = error2;
+        }
+      }
+      return probeFailureStatus(failure ?? new Error("Vertex AI returned no locations"));
     } catch (error2) {
       return probeFailureStatus(error2);
     }
@@ -49834,9 +49882,22 @@ var VertexExtensionsProvider = class {
     const parsed = this.scope.apiId ? parseVertexExtensionName(this.scope.apiId) : void 0;
     if (this.scope.apiId && !parsed) return [];
     if (parsed && parsed.projectId !== this.scope.projectId) throw new Error("api-id Vertex extension does not belong to configured project-id");
-    const location = parsed?.location ?? this.scope.location ?? "us-central1";
-    const extensions = parsed ? [await this.findExplicit(this.scope.apiId, location)] : await this.client.listVertexExtensions(this.scope.projectId, location);
+    const location = parsed?.location;
+    const extensions = parsed ? [await this.findExplicit(this.scope.apiId, location)] : await this.listAllLocations();
     return extensions.map((extension) => this.toCandidate(extension));
+  }
+  async locations() {
+    return this.scope.location && this.scope.location !== "global" ? [this.scope.location] : this.client.listVertexLocations(this.scope.projectId);
+  }
+  async listAllLocations() {
+    const extensions = [];
+    for (const location of await this.locations()) {
+      try {
+        extensions.push(...await this.client.listVertexExtensions(this.scope.projectId, location));
+      } catch {
+      }
+    }
+    return extensions;
   }
   async findExplicit(id, location) {
     const extensions = await this.client.listVertexExtensions(this.scope.projectId, location);
@@ -49908,6 +49969,47 @@ var DialogflowToolsProvider = class {
   }
   async exportSpec(candidate) {
     return { ...decodeUtf8OpenApi(candidate.meta.textSchema ?? ""), evidence: ["Exported original Dialogflow tool OpenAPI text schema"] };
+  }
+};
+
+// src/lib/providers/ces-toolsets.ts
+var PATTERN5 = /^projects\/([^/]+)\/locations\/global\/apps\/([^/]+)\/toolsets\/([^/]+)(?:\/tools\/[^/]+)?$/;
+var CesToolsetsProvider = class {
+  constructor(client, scope) {
+    this.client = client;
+    this.scope = scope;
+  }
+  client;
+  scope;
+  type = "ces-toolsets";
+  async probe() {
+    try {
+      await this.client.probeCes(this.scope.projectId);
+      return "available";
+    } catch (error2) {
+      return probeFailureStatus(error2);
+    }
+  }
+  async listCandidates() {
+    const parsed = this.scope.apiId ? PATTERN5.exec(this.scope.apiId) : void 0;
+    if (this.scope.apiId && !parsed) return [];
+    if (parsed?.[1] !== void 0 && parsed[1] !== this.scope.projectId) throw new Error("api-id CES toolset does not belong to configured project-id");
+    let toolsets = await this.client.listCesToolsets(this.scope.projectId);
+    if (this.scope.apiId) toolsets = toolsets.filter((toolset) => toolset.name === this.scope.apiId);
+    return toolsets.map((toolset) => this.toCandidate(toolset));
+  }
+  toCandidate(toolset) {
+    const schema = toolset.openApiSchema?.trim();
+    let supported = Boolean(schema);
+    if (schema) try {
+      decodeUtf8OpenApi(schema);
+    } catch {
+      supported = false;
+    }
+    return { id: toolset.name, apiId: toolset.name, name: toolset.displayName || toolset.name.split("/").pop(), providerType: this.type, projectId: this.scope.projectId, tags: {}, supported, evidence: [schema ? "CES toolset stores an OpenAPI schema" : "CES toolset has no OpenAPI schema"], meta: { openApiSchema: schema ?? "" } };
+  }
+  async exportSpec(candidate) {
+    return { ...decodeUtf8OpenApi(candidate.meta.openApiSchema ?? ""), evidence: ["Exported original CES toolset OpenAPI schema"] };
   }
 };
 
@@ -50149,6 +50251,7 @@ function sourceTypeForProvider(provider) {
   if (provider === "apigee-portal") return "apigee-portal-doc";
   if (provider === "vertex-extensions") return "vertex-extension-manifest";
   if (provider === "dialogflow-tools") return "dialogflow-tool-schema";
+  if (provider === "ces-toolsets") return "ces-toolset-schema";
   return "iac-embedded";
 }
 async function writeSpecExport(inputs, serviceName, exportResult, writeSpecFile) {
@@ -50229,8 +50332,9 @@ function buildProviders(inputs, dependencies, iacScan) {
     new AppIntegrationProvider(dependencies.client, { projectId: inputs.projectId, apiId: inputs.apiId }),
     new ConnectorsCustomProvider(dependencies.client, { projectId: inputs.projectId, apiId: inputs.apiId }),
     new ApigeePortalProvider(dependencies.client, { projectId: inputs.projectId, apiId: inputs.apiId }),
-    new VertexExtensionsProvider(dependencies.client, { projectId: inputs.projectId, location: inputs.location === "global" ? "us-central1" : inputs.location, apiId: inputs.apiId }),
+    new VertexExtensionsProvider(dependencies.client, { projectId: inputs.projectId, location: inputs.location, apiId: inputs.apiId }),
     new DialogflowToolsProvider(dependencies.client, { projectId: inputs.projectId, apiId: inputs.apiId }),
+    new CesToolsetsProvider(dependencies.client, { projectId: inputs.projectId, apiId: inputs.apiId }),
     new IacLocalProvider(iacScan)
   ];
 }
@@ -50752,6 +50856,7 @@ var outputNames = contractOutputNames;
   ApigeePortalProvider,
   ApigeeProvider,
   AppIntegrationProvider,
+  CesToolsetsProvider,
   CloudEndpointsProvider,
   ConnectorsCustomProvider,
   DialogflowToolsProvider,
