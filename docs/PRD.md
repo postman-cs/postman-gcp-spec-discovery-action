@@ -54,7 +54,7 @@ The action MUST set all 22 outputs in this order on every successful invocation:
 21. `derived-openapi-evidence-json`
 22. `narrowing-strategy`
 
-Provider types are `api-gateway | cloud-endpoints | apigee | api-hub | app-integration | connectors-custom | apigee-portal | dialogflow-tools | vertex-extensions | ces-toolsets | iac-local`. Source types are `repo-spec | api-gateway-config | cloud-endpoints-config | apigee-proxy | apigee-env-oas | api-hub-spec | app-integration-trigger | connectors-custom-spec | connectors-generated-spec | apigee-portal-doc | vertex-extension-manifest | dialogflow-tool-schema | ces-tool-schema | ces-toolset-schema | iac-embedded | manual-review | discover-many`. Spec formats are `openapi-json | openapi-yaml`. Compatibility outputs 14-16 are empty in v1. Dotenv names use `POSTMAN_GCP_SPEC_*`.
+Provider types are `api-gateway | cloud-endpoints | apigee | api-hub | app-integration | connectors-custom | apigee-portal | vertex-extensions | agent-engines | dialogflow-tools | ces-toolsets | iac-local`. Source types are `repo-spec | api-gateway-config | cloud-endpoints-config | apigee-proxy | apigee-env-oas | api-hub-spec | app-integration-trigger | connectors-custom-spec | connectors-generated-spec | apigee-portal-doc | vertex-extension-manifest | agent-engine-generated-spec | dialogflow-tool-schema | ces-tool-schema | ces-toolset-schema | iac-embedded | manual-review | discover-many`. Spec formats are `openapi-json | openapi-yaml`. Compatibility outputs 14-16 are empty in v1. Dotenv names use `POSTMAN_GCP_SPEC_*`.
 
 ## Requirements
 
@@ -158,7 +158,7 @@ Acceptance:
 
 ### R6 - Resolution, narrowing, modes, UX, and telemetry (P0)
 
-- Provider order is API Gateway, Cloud Endpoints, Apigee, API Hub, Application Integration, Integration Connectors, Apigee Portal, Vertex AI Extensions, Dialogflow CX Tools, IaC local after direct repo-spec precedence.
+- Provider order is API Gateway, Cloud Endpoints, Apigee, API Hub, Application Integration, Integration Connectors, Apigee Portal, Vertex AI Extensions, Vertex AI Agent Engines, Dialogflow CX Tools, CES Toolsets, IaC local after direct repo-spec precedence.
 - Narrowing order is `iac-fingerprint`, `project-correlation`, `label-prefilter`, `naming-heuristic`. It partitions without deleting; cap applies after partition. Only explicit ID or one exact label key `postman-repo` with the canonical repo-label value selects. Canonicalization lowercases the full owner/repo slug, replaces `/` with `--`, replaces every other run outside `[a-z0-9_-]` with `-`, trims leading/trailing separators, and declines label selection when the result is empty or exceeds 63 characters.
 - Equal top confidence, multiple local docs, unsupported selected candidates, or no candidate resolve to sanitized manual review, never arbitrary first-item selection.
 - `discover-many` exports every supported candidate in stable order and records attempted/exported/failed/skipped accurately.
@@ -177,8 +177,8 @@ Acceptance:
 
 - README tables are generated from the contract; docs state exact providers, ADC/WIF setup, IAM permissions, and deferred surfaces without overclaiming.
 - CI is one Node 24 `gate` job with one `npm ci`, one bundle, max two concurrent local checks, read-only dist assertion, and no credentialed live step on pull requests.
-- Live runner uses explicit `GCP_PROJECT_ID=dans-project-491920`, requires `--provision --teardown`, enables `apigateway.googleapis.com`, creates only collision-resistant run-marked API Gateway API/config and Cloud Endpoints service/config resources, validates current compiled CLI, and tears down exact identities in `finally`.
-- Live cases: explicit Gateway config; Gateway discovery; explicit Endpoints config; Endpoints discovery; discover-many; local IaC single; ambiguity. Evidence stores only case name/status/source/provider/format and totals.
+- Live runner uses explicit `GCP_PROJECT_ID=dans-project-491920`, requires `--provision --teardown`, provisions collision-resistant run-marked API Gateway API/config, Cloud Endpoints service/config, and Apigee proxy resources, validates the current compiled CLI, and tears down exact run-scoped identities in `finally`. Apigee teardown verifies remote ownership before deletion and refuses foreign resources.
+- Live cases are exactly `gateway-explicit-api-id`, `gateway-discovery`, `gateway-repo-label`, `gateway-label-conflict`, `endpoints-explicit-api-id`, `endpoints-discovery`, `apigee-discovery`, `discover-many`, `iac-single`, and `ambiguity`. Evidence stores only case name/status/source/provider/format and totals.
 - Release accepts only immutable `v1.0.0` at `origin/main`, runs all gates, publishes npm with provenance, creates GitHub release, then moves only `v1` and `v1.0`. Rolling tags never publish npm.
 
 Acceptance:

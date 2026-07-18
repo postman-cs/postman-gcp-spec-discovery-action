@@ -144,6 +144,21 @@ describe('GCP authenticated REST client', () => {
     expect(urls).toContain('https://europe-west1-dialogflow.googleapis.com/v1/projects/sample-project-123/locations/europe-west1/agents/support/tools?pageSize=1000');
   });
 
+  it('paginates regional Vertex Agent Engine reasoningEngines and maps classMethods', async () => {
+    const engine = 'projects/sample-project-123/locations/us-central1/reasoningEngines/support';
+    const { client, request } = clientWith(async (options) => new URL(options.url).searchParams.get('pageToken')
+      ? { data: { reasoningEngines: [{ name: `${engine}-2`, spec: { classMethods: [{ name: 'second' }] } }] } }
+      : { data: { reasoningEngines: [{ name: engine, displayName: 'Support', spec: { classMethods: [{ name: 'answer' }] } }], nextPageToken: 'next' } });
+    await expect(client.listAgentEngines('sample-project-123', 'us-central1')).resolves.toEqual([
+      { name: engine, displayName: 'Support', classMethods: [{ name: 'answer' }] },
+      { name: `${engine}-2`, displayName: undefined, classMethods: [{ name: 'second' }] }
+    ]);
+    expect(request.mock.calls.map((call) => call[0].url)).toEqual([
+      `https://us-central1-aiplatform.googleapis.com/v1/projects/sample-project-123/locations/us-central1/reasoningEngines?pageSize=1000`,
+      `https://us-central1-aiplatform.googleapis.com/v1/projects/sample-project-123/locations/us-central1/reasoningEngines?pageSize=1000&pageToken=next`
+    ]);
+  });
+
   it('lists CES toolsets and standalone app tools as real resource candidates', async () => {
     const app = 'projects/sample-project-123/locations/global/apps/support';
     const toolset = `${app}/toolsets/payments`;

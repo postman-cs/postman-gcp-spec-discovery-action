@@ -148,6 +148,7 @@ export { AppIntegrationProvider } from './lib/providers/app-integration.js';
 export { ConnectorsCustomProvider, parseGcsSpecLocation } from './lib/providers/connectors-custom.js';
 export { ApigeePortalProvider, parseApigeePortalApidocName } from './lib/providers/apigee-portal.js';
 export { VertexExtensionsProvider, parseVertexExtensionName } from './lib/providers/vertex-extensions.js';
+export { AgentEnginesProvider } from './lib/providers/agent-engines.js';
 export { DialogflowToolsProvider, parseDialogflowToolName } from './lib/providers/dialogflow-tools.js';
 export { CesToolsetsProvider } from './lib/providers/ces-toolsets.js';
 export { IacLocalProvider } from './lib/providers/iac-local.js';

@@ -33,6 +33,7 @@ function sourceTypeFor(providerType: ProviderType): ResolutionResult['sourceType
     case 'vertex-extensions': return 'vertex-extension-manifest';
     case 'dialogflow-tools': return 'dialogflow-tool-schema';
     case 'ces-toolsets': return 'ces-toolset-schema';
+    case 'agent-engines': return 'agent-engine-generated-spec';
     case 'iac-local':
       return 'iac-embedded';
   }

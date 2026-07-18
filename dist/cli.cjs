@@ -45012,6 +45012,14 @@ var GcpSdkClient = class {
   async listVertexExtensions(projectId, location) {
     return this.collectPages(() => resourceUrl(`https://${location}-aiplatform.googleapis.com/`, `projects/${projectId}/locations/${location}/extensions`), "Vertex Extensions list", (body) => ({ items: (body.extensions ?? []).filter((x2) => x2.name).map((x2) => ({ name: x2.name, displayName: x2.displayName, openApiYaml: x2.manifest?.apiSpec?.openApiYaml, openApiGcsUri: x2.manifest?.apiSpec?.openApiGcsUri })), nextPageToken: body.nextPageToken }));
   }
+  async probeAgentEngines(projectId, location) {
+    const url = resourceUrl(`https://${location}-aiplatform.googleapis.com/`, `projects/${projectId}/locations/${location}/reasoningEngines`);
+    url.searchParams.set("pageSize", "1");
+    await this.getJson(url, "Vertex Agent Engines probe");
+  }
+  async listAgentEngines(projectId, location) {
+    return this.collectPages(() => resourceUrl(`https://${location}-aiplatform.googleapis.com/`, `projects/${projectId}/locations/${location}/reasoningEngines`), "Vertex Agent Engines list", (body) => ({ items: (body.reasoningEngines ?? []).filter((x2) => x2.name).map((x2) => ({ name: x2.name, displayName: x2.displayName, classMethods: x2.spec?.classMethods ?? [] })), nextPageToken: body.nextPageToken }));
+  }
   async probeDialogflow(projectId) {
     const url = resourceUrl("https://dialogflow.googleapis.com/", `projects/${projectId}/locations/global/agents`);
     url.searchParams.set("pageSize", "1");
@@ -45809,7 +45817,7 @@ var actionContract = {
       description: "Resolution status: resolved or unresolved."
     },
     "source-type": {
-      description: "Resolved source type: repo-spec, api-gateway-config, cloud-endpoints-config, apigee-proxy, apigee-env-oas, api-hub-spec, app-integration-trigger, connectors-custom-spec, connectors-generated-spec, apigee-portal-doc, vertex-extension-manifest, dialogflow-tool-schema, ces-tool-schema, ces-toolset-schema, iac-embedded, manual-review, or discover-many."
+      description: "Resolved source type: repo-spec, api-gateway-config, cloud-endpoints-config, apigee-proxy, apigee-env-oas, api-hub-spec, app-integration-trigger, connectors-custom-spec, connectors-generated-spec, apigee-portal-doc, vertex-extension-manifest, agent-engine-generated-spec, dialogflow-tool-schema, ces-tool-schema, ces-toolset-schema, iac-embedded, manual-review, or discover-many."
     },
     "mapping-confidence": {
       description: "Numeric confidence score for the selected service candidate."
@@ -45836,7 +45844,7 @@ var actionContract = {
       description: "Ranked ambiguous candidates as JSON when resolution is unresolved with at least two candidates; empty otherwise."
     },
     "provider-type": {
-      description: "Provider that produced the resolved spec: api-gateway, cloud-endpoints, apigee, api-hub, app-integration, connectors-custom, apigee-portal, vertex-extensions, dialogflow-tools, ces-toolsets, or iac-local."
+      description: "Provider that produced the resolved spec: api-gateway, cloud-endpoints, apigee, api-hub, app-integration, connectors-custom, apigee-portal, vertex-extensions, agent-engines, dialogflow-tools, ces-toolsets, or iac-local."
     },
     "spec-format": {
       description: "Format of the resolved spec: openapi-yaml or openapi-json."
@@ -46437,6 +46445,8 @@ function sourceTypeFor(providerType) {
       return "dialogflow-tool-schema";
     case "ces-toolsets":
       return "ces-toolset-schema";
+    case "agent-engines":
+      return "agent-engine-generated-spec";
     case "iac-local":
       return "iac-embedded";
   }
@@ -46521,9 +46531,9 @@ function scoreCandidate(candidate, signals) {
     score += 40;
     evidence.push("Resource tags match service hint");
   }
-  if (candidate.sourceType === "connectors-generated-spec") {
+  if (candidate.sourceType?.endsWith("-generated-spec")) {
     score = Math.max(0, score - 1);
-    evidence.push("Generated connector specification ranks below stored specification sources");
+    evidence.push("Generated specification ranks below stored specification sources");
   }
   return { score, evidence };
 }
@@ -47505,6 +47515,74 @@ var VertexExtensionsProvider = class {
   }
 };
 
+// src/lib/providers/agent-engines.ts
+var AgentEnginesProvider = class {
+  constructor(client, scope) {
+    this.client = client;
+    this.scope = scope;
+  }
+  client;
+  scope;
+  type = "agent-engines";
+  async locations() {
+    return this.scope.location && this.scope.location !== "global" ? [this.scope.location] : this.client.listVertexLocations(this.scope.projectId);
+  }
+  async probe() {
+    try {
+      let failure;
+      for (const location of await this.locations()) {
+        try {
+          await this.client.probeAgentEngines(this.scope.projectId, location);
+          return "available";
+        } catch (error) {
+          failure = error;
+        }
+      }
+      return probeFailureStatus(failure ?? new Error("Vertex AI returned no locations"));
+    } catch (error) {
+      return probeFailureStatus(error);
+    }
+  }
+  async listCandidates() {
+    const engines = [];
+    for (const location of await this.locations()) {
+      try {
+        engines.push(...await this.client.listAgentEngines(this.scope.projectId, location));
+      } catch {
+      }
+    }
+    return engines.filter((engine) => engine.classMethods.length > 0).map((engine) => this.toCandidate(engine));
+  }
+  toCandidate(engine) {
+    const document2 = JSON.stringify(assembleAgentEngineOpenApi(engine));
+    let supported = true;
+    const evidence = ["OpenAPI assembled from Agent Engine classMethods declarations; confidence is lower than stored specification sources"];
+    try {
+      for (const declaration of engine.classMethods) {
+        if (typeof declaration.name !== "string" || declaration.httpMethod !== void 0 && !/^(get|put|post|delete|options|head|patch|trace)$/i.test(String(declaration.httpMethod))) throw new Error("Invalid classMethod declaration");
+      }
+      parseAndValidateOpenApi(document2);
+    } catch {
+      supported = false;
+      evidence.push("Generated spec has no operations or is invalid; manual review");
+    }
+    return { id: engine.name, apiId: engine.name, name: engine.displayName || engine.name.split("/").pop(), providerType: this.type, sourceType: "agent-engine-generated-spec", projectId: this.scope.projectId, tags: {}, supported, evidence, meta: { generatedOpenApi: document2 } };
+  }
+  async exportSpec(candidate) {
+    return { ...decodeUtf8OpenApi(candidate.meta.generatedOpenApi ?? ""), evidence: ["OpenAPI assembled from Agent Engine classMethods declarations"] };
+  }
+};
+function assembleAgentEngineOpenApi(engine) {
+  const paths = {};
+  for (const [index, declaration] of engine.classMethods.entries()) {
+    const method = typeof declaration.name === "string" ? declaration.name : `method-${index + 1}`;
+    const path8 = typeof declaration.path === "string" ? declaration.path : `/${method}`;
+    const verb = typeof declaration.httpMethod === "string" ? declaration.httpMethod.toLowerCase() : "post";
+    paths[path8] = { [verb]: { ...declaration, operationId: typeof declaration.operationId === "string" ? declaration.operationId : method, responses: declaration.responses ?? { "200": { description: "Agent Engine method response" } } } };
+  }
+  return { openapi: "3.0.3", info: { title: engine.displayName || engine.name.split("/").pop(), version: "generated", description: "Generated from Vertex AI Agent Engine classMethods declarations" }, paths };
+}
+
 // src/lib/providers/dialogflow-tools.ts
 var PATTERN4 = /^projects\/([^/]+)\/locations\/([^/]+)\/agents\/([^/]+)\/tools\/([^/]+)$/;
 function parseDialogflowToolName(value) {
@@ -47793,6 +47871,7 @@ function sourceTypeForProvider(provider, candidateSourceType) {
   if (provider === "connectors-custom") return "connectors-custom-spec";
   if (provider === "apigee-portal") return "apigee-portal-doc";
   if (provider === "vertex-extensions") return "vertex-extension-manifest";
+  if (provider === "agent-engines") return "agent-engine-generated-spec";
   if (provider === "dialogflow-tools") return "dialogflow-tool-schema";
   if (provider === "ces-toolsets") return "ces-toolset-schema";
   return "iac-embedded";
@@ -47877,6 +47956,7 @@ function buildProviders(inputs, dependencies, iacScan) {
     new ConnectorsCustomProvider(dependencies.client, { projectId: inputs.projectId, apiId: inputs.apiId }),
     new ApigeePortalProvider(dependencies.client, { projectId: inputs.projectId, apiId: inputs.apiId }),
     new VertexExtensionsProvider(dependencies.client, { projectId: inputs.projectId, location: inputs.location, apiId: inputs.apiId }),
+    new AgentEnginesProvider(dependencies.client, { projectId: inputs.projectId, location: inputs.location, apiId: inputs.apiId }),
     new DialogflowToolsProvider(dependencies.client, { projectId: inputs.projectId, apiId: inputs.apiId }),
     new CesToolsetsProvider(dependencies.client, { projectId: inputs.projectId, apiId: inputs.apiId }),
     new IacLocalProvider(iacScan)

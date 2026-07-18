@@ -27,6 +27,7 @@ export type ProviderType =
   | 'app-integration'
   | 'connectors-custom'
   | 'apigee-portal'
+  | 'agent-engines'
   | 'dialogflow-tools'
   | 'vertex-extensions'
   | 'ces-toolsets'
@@ -42,7 +43,7 @@ export type SourceType =
   | 'app-integration-trigger'
   | 'connectors-custom-spec'
   | 'connectors-generated-spec'
-  | 'apigee-portal-doc' | 'vertex-extension-manifest' | 'dialogflow-tool-schema' | 'ces-tool-schema' | 'ces-toolset-schema'
+  | 'apigee-portal-doc' | 'vertex-extension-manifest' | 'agent-engine-generated-spec' | 'dialogflow-tool-schema' | 'ces-tool-schema' | 'ces-toolset-schema'
   | 'iac-embedded'
   | 'manual-review'
   | 'discover-many';
@@ -173,7 +174,7 @@ export const actionContract: GCPSpecDiscoveryActionContract = {
       description: 'Resolution status: resolved or unresolved.'
     },
     'source-type': {
-      description: 'Resolved source type: repo-spec, api-gateway-config, cloud-endpoints-config, apigee-proxy, apigee-env-oas, api-hub-spec, app-integration-trigger, connectors-custom-spec, connectors-generated-spec, apigee-portal-doc, vertex-extension-manifest, dialogflow-tool-schema, ces-tool-schema, ces-toolset-schema, iac-embedded, manual-review, or discover-many.'
+      description: 'Resolved source type: repo-spec, api-gateway-config, cloud-endpoints-config, apigee-proxy, apigee-env-oas, api-hub-spec, app-integration-trigger, connectors-custom-spec, connectors-generated-spec, apigee-portal-doc, vertex-extension-manifest, agent-engine-generated-spec, dialogflow-tool-schema, ces-tool-schema, ces-toolset-schema, iac-embedded, manual-review, or discover-many.'
     },
     'mapping-confidence': {
       description: 'Numeric confidence score for the selected service candidate.'
@@ -200,7 +201,7 @@ export const actionContract: GCPSpecDiscoveryActionContract = {
       description: 'Ranked ambiguous candidates as JSON when resolution is unresolved with at least two candidates; empty otherwise.'
     },
     'provider-type': {
-      description: 'Provider that produced the resolved spec: api-gateway, cloud-endpoints, apigee, api-hub, app-integration, connectors-custom, apigee-portal, vertex-extensions, dialogflow-tools, ces-toolsets, or iac-local.'
+      description: 'Provider that produced the resolved spec: api-gateway, cloud-endpoints, apigee, api-hub, app-integration, connectors-custom, apigee-portal, vertex-extensions, agent-engines, dialogflow-tools, ces-toolsets, or iac-local.'
     },
     'spec-format': {
       description: 'Format of the resolved spec: openapi-yaml or openapi-json.'

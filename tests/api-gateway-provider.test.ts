@@ -26,6 +26,8 @@ function fakeClient(config = fullConfig()): GcpDiscoveryClient {
     listApiGatewayApis: vi.fn(async () => [{ name: 'projects/sample-project-123/locations/global/apis/payments', displayName: 'payments', labels: {}, state: 'ACTIVE' }]),
     listApiGatewayConfigs: vi.fn(async () => [{ ...config, openapiDocuments: [], grpcServices: [], managedServiceConfigs: [] }]),
     getApiGatewayConfig: vi.fn(async () => config),
+    probeAgentEngines: vi.fn(),
+    listAgentEngines: vi.fn(async () => []),
     probeCloudEndpoints: vi.fn(),
     listManagedServices: vi.fn(async () => []),
     listEndpointConfigs: vi.fn(async () => []),

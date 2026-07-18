@@ -23,6 +23,8 @@ function fakeClient(value = config()): GcpDiscoveryClient {
     listApiGatewayApis: vi.fn(async () => []),
     listApiGatewayConfigs: vi.fn(async () => []),
     getApiGatewayConfig: vi.fn(async () => ({ name: '', labels: {}, openapiDocuments: [], grpcServices: [], managedServiceConfigs: [] })),
+    probeAgentEngines: vi.fn(),
+    listAgentEngines: vi.fn(async () => []),
     probeCloudEndpoints: vi.fn(),
     listManagedServices: vi.fn(async () => [{ serviceName: 'payments.endpoints.sample-project-123.cloud.goog', producerProjectId: 'sample-project-123' }]),
     listEndpointConfigs: vi.fn(async () => [{ id: value.id }, { id: 'older' }]),
