@@ -33,14 +33,16 @@ describe('Vertex AI Agent Engine provider', () => {
   it('emits no candidate when classMethods is empty', async () => {
     await expect(new AgentEnginesProvider(client([]), { projectId: 'p' }).listCandidates()).resolves.toEqual([]);
   });
-  it('maps async and async_stream api_modes to documented operations', async () => {
+  it('maps async and async_stream api_modes to the real query and streamQuery operations', async () => {
     const candidates = await new AgentEnginesProvider(client([
       { name: 'batch', api_mode: 'async' },
       { name: 'batchStream', api_mode: 'async_stream' }
     ]), { projectId: 'p' }).listCandidates();
     expect(candidates[0]).toMatchObject({ supported: true });
     const document = JSON.parse(String(candidates[0]?.meta.generatedOpenApi));
-    expect(Object.keys(document.paths)).toEqual(['/v1/{engine.name}:asyncQuery', '/v1/{engine.name}:asyncStreamQuery']);
+    expect(Object.keys(document.paths)).toEqual(['/v1/{engine.name}:query', '/v1/{engine.name}:streamQuery']);
+    const queryBranches = document.paths['/v1/{engine.name}:query'].post.requestBody.content['application/json'].schema.oneOf;
+    expect(queryBranches.map((branch: { properties: { class_method: { enum: string[] } } }) => branch.properties.class_method.enum[0])).toEqual(['batch']);
   });
   it('marks unsupported api_modes unsupported for manual review', async () => {
     const candidates = await new AgentEnginesProvider(client([

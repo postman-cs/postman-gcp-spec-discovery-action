@@ -47579,9 +47579,9 @@ var AgentEnginesProvider = class {
 };
 var AGENT_ENGINE_MODE_OPERATIONS = {
   "": "query",
+  async: "query",
   stream: "streamQuery",
-  async: "asyncQuery",
-  async_stream: "asyncStreamQuery"
+  async_stream: "streamQuery"
 };
 function unsupportedAgentEngineModes(engine) {
   return [...new Set(
@@ -47593,8 +47593,11 @@ function agentEngineRegion(name) {
 }
 function assembleAgentEngineOpenApi(engine) {
   const paths = {};
-  for (const [mode, suffix] of Object.entries(AGENT_ENGINE_MODE_OPERATIONS)) {
-    const declarations = engine.classMethods.filter((declaration) => (typeof declaration.api_mode === "string" ? declaration.api_mode : "") === mode);
+  for (const suffix of [...new Set(Object.values(AGENT_ENGINE_MODE_OPERATIONS))]) {
+    const declarations = engine.classMethods.filter((declaration) => {
+      const mode = typeof declaration.api_mode === "string" ? declaration.api_mode : "";
+      return AGENT_ENGINE_MODE_OPERATIONS[mode] === suffix;
+    });
     if (declarations.length === 0) continue;
     paths[`/v1/{engine.name}:${suffix}`] = {
       post: {

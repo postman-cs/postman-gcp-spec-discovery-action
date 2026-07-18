@@ -56,9 +56,9 @@ export class AgentEnginesProvider implements SpecProvider {
 
 const AGENT_ENGINE_MODE_OPERATIONS: Record<string, string> = {
   '': 'query',
+  async: 'query',
   stream: 'streamQuery',
-  async: 'asyncQuery',
-  async_stream: 'asyncStreamQuery'
+  async_stream: 'streamQuery'
 };
 
 export function unsupportedAgentEngineModes(engine: AgentEngineSummary): string[] {
@@ -75,8 +75,11 @@ function agentEngineRegion(name: string): string | undefined {
 
 function assembleAgentEngineOpenApi(engine: AgentEngineSummary): Record<string, unknown> {
   const paths: Record<string, unknown> = {};
-  for (const [mode, suffix] of Object.entries(AGENT_ENGINE_MODE_OPERATIONS)) {
-    const declarations = engine.classMethods.filter((declaration) => (typeof declaration.api_mode === 'string' ? declaration.api_mode : '') === mode);
+  for (const suffix of [...new Set(Object.values(AGENT_ENGINE_MODE_OPERATIONS))]) {
+    const declarations = engine.classMethods.filter((declaration) => {
+      const mode = typeof declaration.api_mode === 'string' ? declaration.api_mode : '';
+      return AGENT_ENGINE_MODE_OPERATIONS[mode] === suffix;
+    });
     if (declarations.length === 0) continue;
     paths[`/v1/{engine.name}:${suffix}`] = {
       post: {
