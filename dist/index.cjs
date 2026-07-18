@@ -47451,11 +47451,19 @@ function flattenApiHubAttributes(value) {
   return flattened;
 }
 var GcpSdkClient = class {
+  // Lazy: ADC lookup must not start until the first authenticated request.
+  // Repo-spec and IaC-local resolutions never touch GCP, and an eagerly
+  // started auth.getClient() rejects unhandled on runners without ADC.
   requesterPromise;
+  createRequester;
   options;
   constructor(auth, options, requester) {
-    this.requesterPromise = requester ? Promise.resolve(requester) : auth.getClient();
+    this.createRequester = requester ? () => Promise.resolve(requester) : () => auth.getClient();
     this.options = options;
+  }
+  requester() {
+    this.requesterPromise ??= this.createRequester();
+    return this.requesterPromise;
   }
   async preflightProject(projectId) {
     const url = new URL(`v3/projects/${encodeURIComponent(projectId)}`, "https://cloudresourcemanager.googleapis.com/");
@@ -47891,7 +47899,7 @@ var GcpSdkClient = class {
     };
   }
   async postJson(url, operation, data) {
-    const requester = await this.requesterPromise;
+    const requester = await this.requester();
     for (let attempt = 1; attempt <= this.options.maxAttempts; attempt += 1) {
       try {
         const response = await requester.request({
@@ -47913,7 +47921,7 @@ var GcpSdkClient = class {
     throw new Error(`${operation} exhausted its attempt limit`);
   }
   async getBinary(url, operation) {
-    const requester = await this.requesterPromise;
+    const requester = await this.requester();
     for (let attempt = 1; attempt <= this.options.maxAttempts; attempt += 1) {
       try {
         const response = await requester.request({ url: url.toString(), method: "GET", timeout: this.options.requestTimeoutMs, retry: false, responseType: "arraybuffer" });
@@ -47948,7 +47956,7 @@ var GcpSdkClient = class {
     throw new Error(`${operation} exceeded ${MAX_LIST_PAGES} pages; aborting`);
   }
   async getJson(url, operation) {
-    const requester = await this.requesterPromise;
+    const requester = await this.requester();
     for (let attempt = 1; attempt <= this.options.maxAttempts; attempt += 1) {
       try {
         const response = await requester.request({

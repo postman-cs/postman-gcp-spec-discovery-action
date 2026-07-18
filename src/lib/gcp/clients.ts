@@ -213,7 +213,11 @@ function flattenApiHubAttributes(value: unknown): Record<string, string> {
 }
 
 export class GcpSdkClient implements GcpDiscoveryClient {
-  private readonly requesterPromise: Promise<GcpAuthenticatedRequester>;
+  // Lazy: ADC lookup must not start until the first authenticated request.
+  // Repo-spec and IaC-local resolutions never touch GCP, and an eagerly
+  // started auth.getClient() rejects unhandled on runners without ADC.
+  private requesterPromise: Promise<GcpAuthenticatedRequester> | undefined;
+  private readonly createRequester: () => Promise<GcpAuthenticatedRequester>;
   private readonly options: GcpClientOptions;
 
   public constructor(
@@ -221,10 +225,15 @@ export class GcpSdkClient implements GcpDiscoveryClient {
     options: GcpClientOptions,
     requester?: GcpAuthenticatedRequester
   ) {
-    this.requesterPromise = requester
-      ? Promise.resolve(requester)
-      : auth.getClient() as Promise<GcpAuthenticatedRequester>;
+    this.createRequester = requester
+      ? () => Promise.resolve(requester)
+      : () => auth.getClient() as Promise<GcpAuthenticatedRequester>;
     this.options = options;
+  }
+
+  private requester(): Promise<GcpAuthenticatedRequester> {
+    this.requesterPromise ??= this.createRequester();
+    return this.requesterPromise;
   }
 
   public async preflightProject(projectId: string): Promise<void> {
@@ -666,7 +675,7 @@ export class GcpSdkClient implements GcpDiscoveryClient {
   }
 
   private async postJson<T>(url: URL, operation: string, data: unknown): Promise<T> {
-    const requester = await this.requesterPromise;
+    const requester = await this.requester();
     for (let attempt = 1; attempt <= this.options.maxAttempts; attempt += 1) {
       try {
         const response = await requester.request<T>({
@@ -689,7 +698,7 @@ export class GcpSdkClient implements GcpDiscoveryClient {
   }
 
   private async getBinary(url: URL, operation: string): Promise<Buffer> {
-    const requester = await this.requesterPromise;
+    const requester = await this.requester();
     for (let attempt = 1; attempt <= this.options.maxAttempts; attempt += 1) {
       try {
         const response = await requester.request<ArrayBuffer | Uint8Array | Buffer>({ url: url.toString(), method: 'GET', timeout: this.options.requestTimeoutMs, retry: false, responseType: 'arraybuffer' });
@@ -731,7 +740,7 @@ export class GcpSdkClient implements GcpDiscoveryClient {
   }
 
   private async getJson<T>(url: URL, operation: string): Promise<T> {
-    const requester = await this.requesterPromise;
+    const requester = await this.requester();
     for (let attempt = 1; attempt <= this.options.maxAttempts; attempt += 1) {
       try {
         const response = await requester.request<T>({
