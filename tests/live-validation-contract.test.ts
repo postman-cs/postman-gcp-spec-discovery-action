@@ -928,10 +928,9 @@ describe('GCP live validation contract', () => {
       expect(evidence.gitCommit).toMatch(/^[a-f0-9]{40}$/);
       expect(evidence.distCliSha256).toMatch(/^[a-f0-9]{64}$/);
       expect(evidence.distIndexSha256).toMatch(/^[a-f0-9]{64}$/);
-      // Checked-in current failure receipt is schema-valid but not acceptable success evidence.
-      // Failed validation with clean teardown is valid private failure evidence; it is not final evidence.
-      expect(() => assertAcceptableLiveEvidence(evidence)).toThrow(/failed or pending|failures|teardown|incomplete matrix|missing-fixture/);
-      expect(evidence.totals.failed).toBeGreaterThan(0);
+      expect(assertAcceptableLiveEvidence(evidence)).toEqual({ kind: 'current' });
+      expect(evidence.totals.failed).toBe(0);
+      expect(matrixSlotsMissingCoverage(evidence.results)).toEqual([]);
     }
 
     expect(isHistoricalEvidence(historicalLegacy)).toBe(true);

@@ -1,21 +1,20 @@
 {
   "schemaVersion": 2,
-  "evidenceKind": "historical",
-  "capturedAt": "2026-07-18T00:00:00.000Z",
-  "actionVersion": "legacy-unbound",
-  "gitCommit": "legacy-unbound",
-  "distCliSha256": "legacy-unbound",
-  "distIndexSha256": "legacy-unbound",
+  "evidenceKind": "current",
+  "capturedAt": "2026-07-20T13:24:44.434Z",
+  "actionVersion": "1.0.0",
+  "gitCommit": "ffaec1fdcb63e918cf8181cb21a903c105e4ebf9",
+  "distCliSha256": "2cb3e1e4aebc7ff14c5eec798b8a5b2e9c81921831d9befed763391ff9cedcfe",
+  "distIndexSha256": "802207bbf8e8720ff63371339f1b16b9b0f4d4300e050422c5955b6f073966dc",
   "projectScope": "live-validation-project",
   "totals": {
-    "cases": 10,
-    "passed": 10,
+    "cases": 24,
+    "passed": 14,
     "failed": 0,
-    "substituted": 0
+    "substituted": 10
   },
   "teardown": {
-    "status": "pass",
-    "reasonCode": "legacy-unbound"
+    "status": "pass"
   },
   "results": [
     {
@@ -24,7 +23,7 @@
       "sourceType": "api-gateway-config",
       "specFormat": "openapi-yaml",
       "status": "pass",
-      "validationMode": "legacy-unbound"
+      "validationMode": "exact-bytes"
     },
     {
       "name": "gateway-discovery",
@@ -32,7 +31,7 @@
       "sourceType": "api-gateway-config",
       "specFormat": "openapi-yaml",
       "status": "pass",
-      "validationMode": "legacy-unbound"
+      "validationMode": "exact-bytes"
     },
     {
       "name": "gateway-repo-label",
@@ -40,7 +39,7 @@
       "sourceType": "api-gateway-config",
       "specFormat": "openapi-yaml",
       "status": "pass",
-      "validationMode": "legacy-unbound"
+      "validationMode": "exact-bytes"
     },
     {
       "name": "gateway-label-conflict",
@@ -48,7 +47,7 @@
       "sourceType": "manual-review",
       "specFormat": "",
       "status": "pass",
-      "validationMode": "legacy-unbound"
+      "validationMode": "exact-bytes"
     },
     {
       "name": "endpoints-explicit-api-id",
@@ -56,7 +55,7 @@
       "sourceType": "cloud-endpoints-config",
       "specFormat": "openapi-yaml",
       "status": "pass",
-      "validationMode": "legacy-unbound"
+      "validationMode": "exact-bytes"
     },
     {
       "name": "endpoints-discovery",
@@ -64,7 +63,7 @@
       "sourceType": "cloud-endpoints-config",
       "specFormat": "openapi-yaml",
       "status": "pass",
-      "validationMode": "legacy-unbound"
+      "validationMode": "exact-bytes"
     },
     {
       "name": "apigee-discovery",
@@ -72,7 +71,7 @@
       "sourceType": "apigee-proxy",
       "specFormat": "openapi-yaml",
       "status": "pass",
-      "validationMode": "legacy-unbound"
+      "validationMode": "exact-bytes"
     },
     {
       "name": "discover-many",
@@ -80,7 +79,7 @@
       "sourceType": "",
       "specFormat": "openapi-yaml",
       "status": "pass",
-      "validationMode": "legacy-unbound"
+      "validationMode": "exact-bytes"
     },
     {
       "name": "iac-single",
@@ -88,7 +87,7 @@
       "sourceType": "iac-embedded",
       "specFormat": "openapi-yaml",
       "status": "pass",
-      "validationMode": "legacy-unbound"
+      "validationMode": "exact-bytes"
     },
     {
       "name": "ambiguity",
@@ -96,7 +95,129 @@
       "sourceType": "manual-review",
       "specFormat": "",
       "status": "pass",
-      "validationMode": "legacy-unbound"
+      "validationMode": "exact-bytes"
+    },
+    {
+      "name": "api-gateway",
+      "providerType": "api-gateway",
+      "sourceType": "api-gateway-config",
+      "specFormat": "openapi-yaml",
+      "status": "pass",
+      "validationMode": "exact-bytes"
+    },
+    {
+      "name": "cloud-endpoints",
+      "providerType": "cloud-endpoints",
+      "sourceType": "cloud-endpoints-config",
+      "specFormat": "openapi-yaml",
+      "status": "pass",
+      "validationMode": "exact-bytes"
+    },
+    {
+      "name": "apigee-proxy",
+      "providerType": "apigee",
+      "sourceType": "apigee-proxy",
+      "specFormat": "openapi-yaml",
+      "status": "pass",
+      "validationMode": "exact-bytes"
+    },
+    {
+      "name": "iac-local",
+      "providerType": "iac-local",
+      "sourceType": "iac-embedded",
+      "specFormat": "openapi-yaml",
+      "status": "pass",
+      "validationMode": "exact-bytes"
+    },
+    {
+      "name": "apigee-archive",
+      "providerType": "apigee",
+      "sourceType": "apigee-archive-deployment",
+      "specFormat": "",
+      "status": "substitute",
+      "validationMode": "exact-bytes",
+      "reasonCode": "api-unavailable"
+    },
+    {
+      "name": "api-hub-original",
+      "providerType": "api-hub",
+      "sourceType": "api-hub-spec",
+      "specFormat": "",
+      "status": "substitute",
+      "validationMode": "exact-bytes",
+      "reasonCode": "iam-denied"
+    },
+    {
+      "name": "api-hub-additional",
+      "providerType": "api-hub",
+      "sourceType": "api-hub-boosted-spec",
+      "specFormat": "",
+      "status": "substitute",
+      "validationMode": "exact-bytes",
+      "reasonCode": "iam-denied"
+    },
+    {
+      "name": "apigee-registry",
+      "providerType": "apigee-registry",
+      "sourceType": "apigee-registry-spec",
+      "specFormat": "",
+      "status": "substitute",
+      "validationMode": "exact-bytes",
+      "reasonCode": "registry-unsupported"
+    },
+    {
+      "name": "app-integration",
+      "providerType": "app-integration",
+      "sourceType": "app-integration-trigger",
+      "specFormat": "",
+      "status": "substitute",
+      "validationMode": "semantic-openapi",
+      "reasonCode": "iam-denied"
+    },
+    {
+      "name": "connectors-custom",
+      "providerType": "connectors-custom",
+      "sourceType": "connectors-custom-spec",
+      "specFormat": "",
+      "status": "substitute",
+      "validationMode": "exact-bytes",
+      "reasonCode": "iam-denied"
+    },
+    {
+      "name": "apigee-portal",
+      "providerType": "apigee-portal",
+      "sourceType": "apigee-portal-doc",
+      "specFormat": "",
+      "status": "substitute",
+      "validationMode": "exact-bytes",
+      "reasonCode": "api-unavailable"
+    },
+    {
+      "name": "vertex-extensions",
+      "providerType": "vertex-extensions",
+      "sourceType": "vertex-extension-manifest",
+      "specFormat": "",
+      "status": "substitute",
+      "validationMode": "exact-bytes",
+      "reasonCode": "product-deprecated"
+    },
+    {
+      "name": "dialogflow-tools",
+      "providerType": "dialogflow-tools",
+      "sourceType": "dialogflow-tool-schema",
+      "specFormat": "",
+      "status": "substitute",
+      "validationMode": "exact-bytes",
+      "reasonCode": "iam-denied"
+    },
+    {
+      "name": "ces-toolsets",
+      "providerType": "ces-toolsets",
+      "sourceType": "ces-tool-schema",
+      "specFormat": "",
+      "status": "substitute",
+      "validationMode": "exact-bytes",
+      "reasonCode": "iam-denied"
     }
   ]
 }
