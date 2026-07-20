@@ -50109,8 +50109,18 @@ var ApiGatewayProvider = class {
       const configs = await this.client.listApiGatewayConfigs(api.name);
       for (const summary2 of configs) {
         if (!summary2.name) continue;
-        const full = await this.client.getApiGatewayConfig(summary2.name);
-        candidates.push(this.toCandidate(full, api, { allowInactive: false }));
+        try {
+          const full = await this.client.getApiGatewayConfig(summary2.name);
+          candidates.push(this.toCandidate(full, api, { allowInactive: false }));
+        } catch {
+          const candidate = this.toCandidate(summary2, api, { allowInactive: false });
+          candidates.push({
+            ...candidate,
+            supported: false,
+            authority: "metadata-only",
+            evidence: [...candidate.evidence, "API Gateway FULL source export is unavailable; retained for manual review"]
+          });
+        }
       }
     }
     return candidates;

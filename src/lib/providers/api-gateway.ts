@@ -99,8 +99,18 @@ export class ApiGatewayProvider implements SpecProvider {
       const configs = await this.client.listApiGatewayConfigs(api.name);
       for (const summary of configs) {
         if (!summary.name) continue;
-        const full = await this.client.getApiGatewayConfig(summary.name);
-        candidates.push(this.toCandidate(full, api, { allowInactive: false }));
+        try {
+          const full = await this.client.getApiGatewayConfig(summary.name);
+          candidates.push(this.toCandidate(full, api, { allowInactive: false }));
+        } catch {
+          const candidate = this.toCandidate(summary, api, { allowInactive: false });
+          candidates.push({
+            ...candidate,
+            supported: false,
+            authority: 'metadata-only',
+            evidence: [...candidate.evidence, 'API Gateway FULL source export is unavailable; retained for manual review']
+          });
+        }
       }
     }
     return candidates;

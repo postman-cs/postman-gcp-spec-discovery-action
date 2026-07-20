@@ -76,6 +76,12 @@ export const FAIL_REASON_CODES = Object.freeze([
 
 export const LIVE_PHASES = Object.freeze(['preflight', 'provision', 'validate', 'teardown', 'assemble', 'all']);
 export const LIVE_STATE_SCHEMA_VERSION = 1;
+export const LIVE_REQUIRED_SERVICES = Object.freeze([
+  'cloudresourcemanager.googleapis.com',
+  'apigateway.googleapis.com',
+  'servicemanagement.googleapis.com',
+  'servicecontrol.googleapis.com'
+]);
 export const LIVE_RECEIPT_SCHEMA_VERSION = 1;
 export const DEFAULT_LIVE_RUNS_DIR = 'validation/.live-runs';
 export const DEFAULT_STATE_FILENAME = 'state.json';
@@ -1613,7 +1619,7 @@ export async function provision({ runner, token, env, manifest, onCheckpoint } =
   const checkpoint = async () => {
     if (typeof onCheckpoint === 'function') await onCheckpoint(manifest);
   };
-  gcloud(runner, ['services', 'enable', 'apigateway.googleapis.com', 'servicemanagement.googleapis.com', 'servicecontrol.googleapis.com', '--project', env.projectId]);
+  gcloud(runner, ['services', 'enable', ...LIVE_REQUIRED_SERVICES, '--project', env.projectId]);
   const spec = path.join(repoRoot, 'validation/fixtures/gcp/openapi.yaml');
   const managed = await mkdtemp(path.join(os.tmpdir(), 'gcp-managed-'));
   let endpointsConfigId = '';
@@ -2232,7 +2238,9 @@ export async function runPhaseValidate({
   const provisionedNames = PROVISIONED_CASE_NAMES.filter((name) => requestedSet.has(name));
   const matrixSlots = LIVE_COVERAGE_MATRIX.filter((slot) => requestedSet.has(slot.name));
 
-  let provisionedResults = prior.filter((result) => PROVISIONED_CASE_NAMES.includes(result.name));
+  let provisionedResults = prior.filter((result) => (
+    PROVISIONED_CASE_NAMES.includes(result.name) && result.status !== 'fail'
+  ));
   const needProvisioned = provisionedNames.some((name) => !provisionedResults.some((r) => r.name === name));
   if (needProvisioned) {
     const runCases = deps.runProvisionedCases ?? runProvisionedCases;

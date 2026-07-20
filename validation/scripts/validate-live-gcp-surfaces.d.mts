@@ -3,6 +3,7 @@ export const FIXTURES_ENV: 'GCP_LIVE_FIXTURES_JSON';
 export const LEGACY_UNBOUND: 'legacy-unbound';
 export const EVIDENCE_SCHEMA_VERSION: 2;
 export const LIVE_STATE_SCHEMA_VERSION: 1;
+export const LIVE_REQUIRED_SERVICES: readonly string[];
 export const LIVE_RECEIPT_SCHEMA_VERSION: 1;
 export const DEFAULT_LIVE_RUNS_DIR: 'validation/.live-runs';
 export const DEFAULT_STATE_FILENAME: 'state.json';
