@@ -537,7 +537,7 @@ describe('GCP live validation contract', () => {
     expect(archive).toContain('/environments/');
     expect(archive).toContain('/archiveDeployments');
     expect(archive).not.toMatch(/\/apis(\?|$)/);
-    expect(probeUrlForProvider('api-hub', env)).toContain('/locations/global/apiHubInstances');
+    expect(probeUrlForProvider('api-hub', env)).toContain('/locations/global/apis');
     expect(probeUrlForProvider('connectors-custom', env)).toContain('/locations/global/customConnectors');
   });
 
@@ -553,6 +553,20 @@ describe('GCP live validation contract', () => {
       probeStatus: 'skipped:error',
       reasonCode: 'api-unavailable',
       probeMessage: '[redacted]'
+    });
+  });
+
+  it('classifies an authenticated empty portal collection as unavailable for live fixture validation', async () => {
+    const result = await probeProviderSurface({
+      runner: () => '{"sites":[]}\n200',
+      token: 'token',
+      env: { projectId: 'sample-project', location: 'global', apigeeOrg: 'sample-org', apigeeEnv: 'eval' },
+      providerType: 'apigee-portal'
+    });
+    expect(result).toEqual({
+      probeStatus: 'available',
+      reasonCode: 'api-unavailable',
+      probeMessage: ''
     });
   });
 

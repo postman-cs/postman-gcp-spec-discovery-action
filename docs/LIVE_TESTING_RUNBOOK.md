@@ -101,6 +101,8 @@ Remaining matrix slots require either:
 
 Vertex AI Extensions is the sole explicit exception: Google has deprecated the product and scheduled shutdown for 2026-11-26, so an authenticated available-but-empty probe is recorded as `product-deprecated` rather than requiring creation of a resource that is being retired.
 
+Apigee portal is also non-provisionable through this runner. An authenticated HTTP 200 with an empty `sites` collection is recorded as `api-unavailable`; a non-empty collection still requires an exact portal document fixture.
+
 Fixture selection is provider/source-specific via optional `selectionStrategy`: strict `--api-id` (`strict-api-id`) only for source forms the runtime explicit parser accepts; `--expected-api-ids-json` + service hint (`expected-api-ids`) for parser-less providers (`app-integration`, `connectors-custom`); `api-hub-additional` uses the deterministic `spec#VARIANT` selector so generated content cannot collapse to the stored original. Strategies that can select arbitrary unrelated candidates are rejected.
 
 Apigee archive substitutes authenticate against the environment `archiveDeployments` endpoint (not the generic proxy API). Org/env values are never logged.

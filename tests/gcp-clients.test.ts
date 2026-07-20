@@ -24,6 +24,13 @@ function httpError(status: number): Error {
 }
 
 describe('GCP authenticated REST client', () => {
+  it('probes the Apigee portal sites collection without unsupported pagination', async () => {
+    const { client, request } = clientWith(async () => ({ data: { sites: [] } }));
+    await client.probeApigeePortal('sample-project-123');
+    expect(request).toHaveBeenCalledWith(expect.objectContaining({
+      url: 'https://apigee.googleapis.com/v1/organizations/sample-project-123/sites'
+    }));
+  });
   it('GCP-CLIENT-001: production has one GoogleAuth construction and project preflight uses the explicit project', async () => {
     const source = readFileSync(resolve(import.meta.dirname, '../src/lib/gcp/clients.ts'), 'utf8');
     expect(source.match(/new GoogleAuth\(/g)).toHaveLength(1);
