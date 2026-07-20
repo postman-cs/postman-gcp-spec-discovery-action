@@ -64,11 +64,21 @@ export function parseAndValidateOpenApi(content: string): ValidatedOpenApi {
   return { document, version, isJson };
 }
 
+function isRecognizedHttpOperation(value: unknown): boolean {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const responses = (value as Record<string, unknown>).responses;
+  if (!responses || typeof responses !== 'object' || Array.isArray(responses)) return false;
+  return Object.keys(responses as Record<string, unknown>).length > 0;
+}
+
 function hasRecognizedHttpOperation(paths: Record<string, unknown>): boolean {
   for (const pathItem of Object.values(paths)) {
     if (!pathItem || typeof pathItem !== 'object' || Array.isArray(pathItem)) continue;
-    for (const key of Object.keys(pathItem as Record<string, unknown>)) {
-      if (HTTP_OPERATIONS.has(key.toLowerCase())) return true;
+    const item = pathItem as Record<string, unknown>;
+    for (const key of Object.keys(item)) {
+      if (HTTP_OPERATIONS.has(key.toLowerCase()) && isRecognizedHttpOperation(item[key])) {
+        return true;
+      }
     }
   }
   return false;

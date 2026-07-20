@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, symlink, truncate, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -6,8 +6,19 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { scanGCPIac } from '../src/lib/repo/gcp-iac-scanner.js';
 
+/** Candidate IaC ceiling (16 MiB): one 10 MiB base64 source plus YAML envelope. */
+const MAX_CANDIDATE_IAC_BYTES = 16 * 1024 * 1024;
+/** Referenced raw OpenAPI ceiling (10 MiB). */
+const MAX_REFERENCED_OPENAPI_BYTES = 10 * 1024 * 1024;
+
 function inlineTerraform(name: string): string {
   return `resource "google_endpoints_service" "${name}" {\n  service_name = "${name}.example.com"\n  openapi_config = <<EOF\nswagger: "2.0"\ninfo:\n  title: ${name}\n  version: "1"\npaths:\n  /health:\n    get:\n      responses:\n        "200":\n          description: ok\nEOF\n}\n`;
+}
+
+/** Sparse oversized file via truncate — avoids allocating a huge buffer. */
+async function writeSparseOversize(filePath: string, bytes: number): Promise<void> {
+  await writeFile(filePath, '');
+  await truncate(filePath, bytes);
 }
 
 describe('GCP IaC scan confinement', () => {
@@ -65,6 +76,47 @@ describe('GCP IaC scan confinement', () => {
     );
     const scan = await scanGCPIac(repoRoot, 'discovered-specs');
     expect(scan.candidates).toEqual([]);
+  });
+
+  it('GCP-IAC-003: oversized IaC candidate files are skipped before read and yield no candidates', async () => {
+    await writeFile(path.join(repoRoot, 'ok.tf'), inlineTerraform('ok'));
+    await writeSparseOversize(path.join(repoRoot, 'huge.tf'), MAX_CANDIDATE_IAC_BYTES + 1);
+    const scan = await scanGCPIac(repoRoot, 'discovered-specs');
+    expect(scan.scannedFiles).toEqual(expect.arrayContaining(['huge.tf', 'ok.tf']));
+    expect(scan.candidates.map((candidate) => candidate.name)).toEqual(['ok']);
+  });
+
+  it('GCP-IAC-003: oversized referenced OpenAPI files are skipped before read and yield no candidates', async () => {
+    await writeFile(
+      path.join(repoRoot, 'gateway.tf'),
+      `resource "google_api_gateway_api_config" "gateway" {
+  openapi_documents {
+    document {
+      path = "huge-spec.yaml"
+    }
+  }
+}
+`
+    );
+    await writeFile(
+      path.join(repoRoot, 'bounded.tf'),
+      `resource "google_api_gateway_api_config" "bounded" {
+  openapi_documents {
+    document {
+      path = "ok-spec.yaml"
+    }
+  }
+}
+`
+    );
+    await writeSparseOversize(path.join(repoRoot, 'huge-spec.yaml'), MAX_REFERENCED_OPENAPI_BYTES + 1);
+    await writeFile(
+      path.join(repoRoot, 'ok-spec.yaml'),
+      'swagger: "2.0"\ninfo:\n  title: bounded\n  version: "1"\npaths:\n  /health:\n    get:\n      responses:\n        "200":\n          description: ok\n'
+    );
+    const scan = await scanGCPIac(repoRoot, 'discovered-specs');
+    expect(scan.candidates.map((candidate) => candidate.name)).toEqual(['bounded']);
+    expect(scan.candidates.every((candidate) => candidate.meta?.relativePath !== 'huge-spec.yaml')).toBe(true);
   });
 
   it('GCP-IAC-006: Pulumi YAML aliases, merges, remote URLs, and multi-document files never yield candidates', async () => {

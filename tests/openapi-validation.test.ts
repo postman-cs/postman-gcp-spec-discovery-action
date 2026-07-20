@@ -60,6 +60,39 @@ describe('OpenAPI export validation', () => {
     ).toThrow(/no recognized HTTP operation/i);
   });
 
+  it('GCP-APIM-005: recognized method keys with unusable operation values reject', () => {
+    const base = { openapi: '3.0.3', info: { title: 'p', version: '1' } };
+    expect(() =>
+      parseAndValidateOpenApi(JSON.stringify({ ...base, paths: { '/a': { get: null } } }))
+    ).toThrow(/no recognized HTTP operation/i);
+    expect(() =>
+      parseAndValidateOpenApi(JSON.stringify({ ...base, paths: { '/a': { get: 'not-an-operation' } } }))
+    ).toThrow(/no recognized HTTP operation/i);
+    expect(() =>
+      parseAndValidateOpenApi(JSON.stringify({ ...base, paths: { '/a': { get: [] } } }))
+    ).toThrow(/no recognized HTTP operation/i);
+    expect(() =>
+      parseAndValidateOpenApi(JSON.stringify({ ...base, paths: { '/a': { get: {} } } }))
+    ).toThrow(/no recognized HTTP operation/i);
+    expect(() =>
+      parseAndValidateOpenApi(JSON.stringify({ ...base, paths: { '/a': { get: { summary: 'no responses' } } } }))
+    ).toThrow(/no recognized HTTP operation/i);
+    expect(() =>
+      parseAndValidateOpenApi(JSON.stringify({ ...base, paths: { '/a': { get: { responses: {} } } } }))
+    ).toThrow(/no recognized HTTP operation/i);
+    expect(() =>
+      parseAndValidateOpenApi(JSON.stringify({ ...base, paths: { '/a': { get: { responses: null } } } }))
+    ).toThrow(/no recognized HTTP operation/i);
+    expect(() =>
+      parseAndValidateOpenApi(JSON.stringify({ ...base, paths: { '/a': { get: { responses: [] } } } }))
+    ).toThrow(/no recognized HTTP operation/i);
+
+    const valid = parseAndValidateOpenApi(
+      JSON.stringify({ ...base, paths: { '/a': { get: { responses: { '200': { description: 'ok' } } } } } })
+    );
+    expect(valid.version).toBe('openapi-3.0');
+  });
+
   it('GCP-APIM-005: valid Swagger 2.0 and OpenAPI 3.0/3.1 with one HTTP operation succeed', () => {
     const swagger = parseAndValidateOpenApi(
       JSON.stringify({ swagger: '2.0', info: { title: 'l', version: '1' }, paths: { '/a': GET_OP } })

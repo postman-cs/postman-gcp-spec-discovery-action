@@ -8,7 +8,7 @@ Automatic per-repo selection matches the canonical `postman-repo` label against 
 
 | Capability | Providers | Mechanism |
 | --- | --- | --- |
-| Label-capable (auto-select works) | `api-gateway`, `apigee`, `api-hub`, `connectors-custom` | Resource labels flow into candidate tags (`postman-repo=<owner--repo>` on the API/config, proxy, hub attribute, or connector version) |
+| Label-capable (auto-select works) | `api-gateway`, `apigee`, `api-hub`, `apigee-registry`, `connectors-custom` | Resource labels flow into candidate tags (`postman-repo=<owner--repo>` on the API/config, proxy, hub attribute, Registry spec, or connector version) |
 | Label-capable via IaC | `iac-local` | Repository-committed IaC fingerprinting selects without cloud labels |
 | Label-incapable (never auto-selects by label) | `cloud-endpoints`, `app-integration`, `apigee-portal`, `vertex-extensions`, `dialogflow-tools`, `ces-toolsets` | The GCP surface exposes no usable label; select with `api-id`, `expected-api-ids-json`, or `service-mapping-json` + `expected-service-name` |
 
@@ -65,7 +65,7 @@ Label-incapable providers still participate in discovery and ranking; they simpl
 - Lists global custom Integration Connectors and their versions; each version records the `specLocation` of the OpenAPI document it was built from.
 - Fetches `gs://` spec objects through the authenticated Cloud Storage JSON API; `https://` locations are surfaced as manual review because the action never fetches arbitrary remote URLs.
 - Produces `connectors-custom-spec` candidates.
-- Lists regional connections and, when schema metadata is available, derives an OpenAPI 3.0 document as `connectors-generated-spec`. Evidence explicitly identifies generated contracts, which rank below stored specification sources; connections without schema metadata are skipped fail-soft.
+- Regional connection schema metadata is metadata-only: it is not an OpenAPI source and is not synthesized or probed into candidates.
 
 ## `apigee-portal`
 
