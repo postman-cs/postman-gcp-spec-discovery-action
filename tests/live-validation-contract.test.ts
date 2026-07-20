@@ -13,6 +13,7 @@ import {
   LIVE_STATE_SCHEMA_VERSION,
   MAX_COMMAND_TIMEOUT_MS,
   MIN_COMMAND_TIMEOUT_MS,
+  OFFICIALLY_DEPRECATED_PROVIDER_TYPES,
   PHASE_DURATION_GUIDANCE_MS,
   PROJECT_SCOPE_ALIAS,
   RETAINED_PROVIDER_ORDER,
@@ -50,6 +51,7 @@ import {
   parseFlags,
   parseLiveFixtures,
   parseSlots,
+  probeProviderSurface,
   probeUrlForProvider,
   proveExactNameAbsent,
   provision,
@@ -199,7 +201,7 @@ describe('GCP live validation contract', () => {
     expect(LIVE_COVERAGE_MATRIX.some((slot) => slot.name === 'apigee-archive')).toBe(true);
     expect(LIVE_COVERAGE_MATRIX.some((slot) => slot.name === 'api-hub-original')).toBe(true);
     expect(LIVE_COVERAGE_MATRIX.some((slot) => slot.name === 'api-hub-additional')).toBe(true);
-    expect(LIVE_COVERAGE_MATRIX.find((slot) => slot.name === 'agent-engines')?.validationMode).toBe('manual-derived-blocked');
+    expect(LIVE_COVERAGE_MATRIX.some((slot) => slot.providerType === 'agent-engines')).toBe(false);
     expect(() => assertProviderMatrixAligned(
       LIVE_COVERAGE_MATRIX.filter((slot) => slot.providerType !== 'api-hub'),
       SOURCE_PROVIDER_ORDER as unknown as string[]
@@ -334,6 +336,7 @@ describe('GCP live validation contract', () => {
       probeStatus: 'skipped:error',
       probeMessage: 'SERVICE_DISABLED: integrations.googleapis.com'
     })).toBe('api-unavailable');
+    expect(OFFICIALLY_DEPRECATED_PROVIDER_TYPES).toEqual(['vertex-extensions']);
     expect(classifySubstituteReason({
       providerType: 'vertex-extensions',
       probeStatus: 'skipped:error',
@@ -349,6 +352,17 @@ describe('GCP live validation contract', () => {
       probeStatus: 'skipped:error',
       probeMessage: 'temporary 503'
     })).toBeNull();
+    expect(classifySubstituteReason({
+      providerType: 'apigee',
+      probeSurface: 'apigee-archive',
+      probeStatus: 'skipped:error',
+      probeMessage: 'HTTP 400 {"error":{"status":"FAILED_PRECONDITION"}}'
+    })).toBe('api-unavailable');
+    expect(classifySubstituteReason({
+      providerType: 'apigee-portal',
+      probeStatus: 'skipped:error',
+      probeMessage: 'HTTP 400 {"error":{"status":"FAILED_PRECONDITION"}}'
+    })).toBe('api-unavailable');
     for (const code of SUBSTITUTE_REASON_CODES) {
       expect(['iam-denied', 'api-unavailable', 'product-deprecated', 'registry-unsupported']).toContain(code);
     }
@@ -496,6 +510,23 @@ describe('GCP live validation contract', () => {
     expect(archive).toContain('/environments/');
     expect(archive).toContain('/archiveDeployments');
     expect(archive).not.toMatch(/\/apis(\?|$)/);
+    expect(probeUrlForProvider('api-hub', env)).toContain('/locations/global/apiHubInstances');
+    expect(probeUrlForProvider('connectors-custom', env)).toContain('/locations/global/customConnectors');
+  });
+
+  it('captures authenticated REST error bodies for closed substitute classification', async () => {
+    const result = await probeProviderSurface({
+      runner: () => '{"error":{"status":"FAILED_PRECONDITION"}}\n400',
+      token: 'token',
+      env: { projectId: 'sample-project', location: 'global', apigeeOrg: 'sample-org', apigeeEnv: 'eval' },
+      providerType: 'apigee',
+      probeSurface: 'apigee-archive'
+    });
+    expect(result).toEqual({
+      probeStatus: 'skipped:error',
+      reasonCode: 'api-unavailable',
+      probeMessage: '[redacted]'
+    });
   });
 
   it('extracts valid CLI provider probes from both resolve and discover result shapes without inventing absent providers', () => {
@@ -902,10 +933,10 @@ describe('GCP live validation contract', () => {
       totals: { cases: completeResults.length, passed: completeResults.length, failed: 0, substituted: 0 }
     })).toThrow(/unbound complete/);
     const withMissingFixture = completeResults.map((result) => (
-      result.name === 'agent-engines'
-        ? toEvidenceResult('agent-engines', 'fail', {
-          providerType: 'agent-engines',
-          validationMode: 'manual-derived-blocked',
+      result.name === 'vertex-extensions'
+        ? toEvidenceResult('vertex-extensions', 'fail', {
+          providerType: 'vertex-extensions',
+          validationMode: 'exact-bytes',
           reasonCode: 'missing-fixture'
         })
         : result
@@ -934,10 +965,10 @@ describe('GCP live validation contract', () => {
       totals: { cases: historicalLegacy.results.length + 1, passed: historicalLegacy.results.length, failed: 1, substituted: 0 }
     })).toThrow(/historical receipt must contain only completed passing cases/);
     const withBadSubstitute = completeResults.map((result) => (
-      result.name === 'agent-engines'
-        ? toEvidenceResult('agent-engines', 'substitute', {
-          providerType: 'agent-engines',
-          validationMode: 'manual-derived-blocked',
+      result.name === 'vertex-extensions'
+        ? toEvidenceResult('vertex-extensions', 'substitute', {
+          providerType: 'vertex-extensions',
+          validationMode: 'exact-bytes',
           reasonCode: 'temporary-blip'
         })
         : result
@@ -961,7 +992,7 @@ describe('GCP live validation contract', () => {
     expect(runbook).toContain('clean committed candidate');
     expect(runbook).toContain('selectionStrategy');
     expect(runbook).toContain('archiveDeployments');
-    expect(runbook).toContain('manual-derived-blocked');
+    expect(runbook).toContain('Agent Engines are excluded');
   });
 
   it('records failure receipts with reason codes without leaking fixture env contents', () => {

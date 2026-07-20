@@ -1,6 +1,6 @@
 # Provider contracts
 
-GCP spec discovery probes providers fail-soft in this order: `api-gateway`, `cloud-endpoints`, `apigee`, `api-hub`, `apigee-registry`, `app-integration`, `connectors-custom`, `apigee-portal`, `vertex-extensions`, `agent-engines`, `dialogflow-tools`, `ces-toolsets`, `iac-local`. Authorization failures become `skipped:iam`; other provider failures become `skipped:error`; remaining providers continue.
+GCP spec discovery probes providers fail-soft in this order: `api-gateway`, `cloud-endpoints`, `apigee`, `api-hub`, `apigee-registry`, `app-integration`, `connectors-custom`, `apigee-portal`, `vertex-extensions`, `dialogflow-tools`, `ces-toolsets`, `iac-local`. Authorization failures become `skipped:iam`; other provider failures become `skipped:error`; remaining providers continue.
 
 ## Repository-association capability
 
@@ -10,7 +10,7 @@ Automatic per-repo selection matches the canonical `postman-repo` label against 
 | --- | --- | --- |
 | Label-capable (auto-select works) | `api-gateway`, `apigee`, `api-hub`, `connectors-custom` | Resource labels flow into candidate tags (`postman-repo=<owner--repo>` on the API/config, proxy, hub attribute, or connector version) |
 | Label-capable via IaC | `iac-local` | Repository-committed IaC fingerprinting selects without cloud labels |
-| Label-incapable (never auto-selects by label) | `cloud-endpoints`, `app-integration`, `apigee-portal`, `vertex-extensions`, `agent-engines`, `dialogflow-tools`, `ces-toolsets` | The GCP surface exposes no usable label; select with `api-id`, `expected-api-ids-json`, or `service-mapping-json` + `expected-service-name` |
+| Label-incapable (never auto-selects by label) | `cloud-endpoints`, `app-integration`, `apigee-portal`, `vertex-extensions`, `dialogflow-tools`, `ces-toolsets` | The GCP surface exposes no usable label; select with `api-id`, `expected-api-ids-json`, or `service-mapping-json` + `expected-service-name` |
 
 Label-incapable providers still participate in discovery and ranking; they simply cannot be *authorized* for export by repository association alone. See [repository-association.md](repository-association.md).
 
@@ -82,13 +82,11 @@ Label-incapable providers still participate in discovery and ranking; they simpl
 - Produces `vertex-extension-manifest` candidates whose `api-id` is the full extension resource name.
 - Manifests with neither source, multiple sources, invalid OpenAPI, or invalid storage locations remain unsupported.
 - IAM note: authorization failures probing Vertex AI extensions become `skipped:iam`, and discovery continues.
+- Google has deprecated Vertex AI Extensions and scheduled shutdown for 2026-11-26; the provider remains read-only for existing manifests until removal at shutdown.
 
-## `agent-engines`
+## Excluded: Agent Engines
 
-- Enumerates the same Vertex AI project regions used for extensions and lists `reasoningEngines` in each region.
-- Assembles an OpenAPI 3.0 document from each engine's `spec.classMethods` declarations as `agent-engine-generated-spec`.
-- Empty declarations produce no candidate; operation-less or invalid assembled documents remain unsupported for manual review.
-- Generated Agent Engine specifications carry lower confidence than stored specification sources, and regional probes fail soft.
+Agent Engine `classMethods` are runtime invocation metadata, not stored or Google-generated OpenAPI source. The action does not probe Agent Engines or assemble inferred HTTP contracts from them. Existing internal types remain only to reject local-derived candidates if one is injected by a caller.
 
 ## `dialogflow-tools`
 

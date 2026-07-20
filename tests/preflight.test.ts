@@ -118,7 +118,6 @@ describe('GCP preflight and probes', () => {
         { provider: 'connectors-custom', status: 'available' },
         { provider: 'apigee-portal', status: 'available' },
         { provider: 'vertex-extensions', status: 'available' },
-        { provider: 'agent-engines', status: 'skipped:error' },
         { provider: 'dialogflow-tools', status: 'available' },
         { provider: 'ces-toolsets', status: 'available' },
         { provider: 'iac-local', status: 'available' }

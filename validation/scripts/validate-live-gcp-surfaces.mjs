@@ -36,7 +36,6 @@ export const RETAINED_PROVIDER_ORDER = Object.freeze([
   'connectors-custom',
   'apigee-portal',
   'vertex-extensions',
-  'agent-engines',
   'dialogflow-tools',
   'ces-toolsets',
   'iac-local'
@@ -50,6 +49,7 @@ export const SUBSTITUTE_REASON_CODES = Object.freeze([
   'product-deprecated',
   'registry-unsupported'
 ]);
+export const OFFICIALLY_DEPRECATED_PROVIDER_TYPES = Object.freeze(['vertex-extensions']);
 
 export const FAIL_REASON_CODES = Object.freeze([
   'missing-fixture',
@@ -118,7 +118,6 @@ export const LIVE_COVERAGE_MATRIX = Object.freeze([
   { name: 'connectors-custom', providerType: 'connectors-custom', expectedSourceTypes: ['connectors-custom-spec'], validationMode: 'exact-bytes' },
   { name: 'apigee-portal', providerType: 'apigee-portal', expectedSourceTypes: ['apigee-portal-doc'], validationMode: 'exact-bytes' },
   { name: 'vertex-extensions', providerType: 'vertex-extensions', expectedSourceTypes: ['vertex-extension-manifest'], validationMode: 'exact-bytes' },
-  { name: 'agent-engines', providerType: 'agent-engines', expectedSourceTypes: ['agent-engine-generated-spec'], validationMode: 'manual-derived-blocked' },
   { name: 'dialogflow-tools', providerType: 'dialogflow-tools', expectedSourceTypes: ['dialogflow-tool-schema'], validationMode: 'exact-bytes' },
   { name: 'ces-toolsets', providerType: 'ces-toolsets', expectedSourceTypes: ['ces-tool-schema', 'ces-toolset-schema'], validationMode: 'exact-bytes' },
   { name: 'iac-local', providerType: 'iac-local', expectedSourceTypes: ['iac-embedded'], validationMode: 'exact-bytes', satisfiedBy: ['iac-single'] }
@@ -1186,7 +1185,7 @@ export function assertFixtureResolutionMatch(resolution, fixture, slot) {
  * Map authenticated probe outcomes to closed substitute reason codes.
  * `available` is never a substitute — callers must fail as missing-fixture.
  */
-export function classifySubstituteReason({ providerType, probeStatus, probeMessage }) {
+export function classifySubstituteReason({ providerType, probeSurface, probeStatus, probeMessage }) {
   const status = String(probeStatus ?? '');
   if (status === 'available') return null;
   if (status === 'skipped:iam') return 'iam-denied';
@@ -1214,6 +1213,12 @@ export function classifySubstituteReason({ providerType, probeStatus, probeMessa
   }
   if (status === 'skipped:error' && /not found|404|does not exist/i.test(text) && providerType === 'apigee-registry') {
     return 'registry-unsupported';
+  }
+  if (
+    /FAILED_PRECONDITION/i.test(text)
+    && (probeSurface === 'apigee-archive' || providerType === 'apigee-portal')
+  ) {
+    return 'api-unavailable';
   }
   return null;
 }
@@ -1493,7 +1498,18 @@ function rest(runner, token, method, url, body) {
 
 function restCapture(runner, token, method, url) {
   try {
-    return { ok: true, body: rest(runner, token, method, url) };
+    const raw = String(runner('curl', [
+      '-sS', '-X', method,
+      '-H', `Authorization: Bearer ${token}`,
+      '-H', 'Content-Type: application/json',
+      '--write-out', '\n%{http_code}',
+      url
+    ]));
+    const split = raw.lastIndexOf('\n');
+    const body = split >= 0 ? raw.slice(0, split) : raw;
+    const status = Number(split >= 0 ? raw.slice(split + 1).trim() : 0);
+    if (status >= 200 && status < 300) return { ok: true, body };
+    return { ok: false, message: `HTTP ${status || 'error'} ${body}` };
   } catch (error) {
     return { ok: false, message: error instanceof Error ? error.message : String(error) };
   }
@@ -1685,13 +1701,13 @@ export function probeUrlForProvider(providerType, env, options = {}) {
       }
       return `https://apigee.googleapis.com/v1/organizations/${org}/apis?count=1`;
     case 'api-hub':
-      return `https://apihub.googleapis.com/v1/projects/${projectId}/locations/-/apis?pageSize=1`;
+      return `https://apihub.googleapis.com/v1/projects/${projectId}/locations/global/apiHubInstances?pageSize=1`;
     case 'apigee-registry':
       return `https://apigeeregistry.googleapis.com/v1/projects/${projectId}/locations/-?pageSize=1`;
     case 'app-integration':
       return `https://integrations.googleapis.com/v1/projects/${projectId}/locations/-/integrations?pageSize=1`;
     case 'connectors-custom':
-      return `https://connectors.googleapis.com/v1/projects/${projectId}/locations/-/customConnectors?pageSize=1`;
+      return `https://connectors.googleapis.com/v1/projects/${projectId}/locations/global/customConnectors?pageSize=1`;
     case 'apigee-portal':
       return `https://apigee.googleapis.com/v1/organizations/${org}/sites?pageSize=1`;
     case 'vertex-extensions':
@@ -1718,9 +1734,9 @@ export async function probeProviderSurface({ runner, token, env, providerType, p
     if (!captured.ok) probeMessage = captured.message;
   }
   const probeStatus = probeMessage
-    ? (classifySubstituteReason({ providerType, probeStatus: 'skipped:error', probeMessage }) === 'iam-denied' ? 'skipped:iam' : 'skipped:error')
+    ? (classifySubstituteReason({ providerType, probeSurface, probeStatus: 'skipped:error', probeMessage }) === 'iam-denied' ? 'skipped:iam' : 'skipped:error')
     : 'available';
-  const reasonCode = classifySubstituteReason({ providerType, probeStatus, probeMessage });
+  const reasonCode = classifySubstituteReason({ providerType, probeSurface, probeStatus, probeMessage });
   return { probeStatus, reasonCode, probeMessage: probeMessage ? '[redacted]' : '' };
 }
 
@@ -2085,6 +2101,17 @@ export async function runMatrixCoverage({ runner, token, cliPath, env, fixtures,
 
     if (fixture) {
       results.push(await runFixtureCase({ runner, cliPath, env, slot, fixture, log }));
+      continue;
+    }
+
+    if (OFFICIALLY_DEPRECATED_PROVIDER_TYPES.includes(slot.providerType) && surface.probeStatus === 'available' && cliProbes.has(slot.providerType)) {
+      results.push(toEvidenceResult(slot.name, 'substitute', {
+        providerType: slot.providerType,
+        sourceType: slot.expectedSourceTypes[0] ?? '',
+        specFormat: '',
+        validationMode: slot.validationMode,
+        reasonCode: 'product-deprecated'
+      }));
       continue;
     }
 
