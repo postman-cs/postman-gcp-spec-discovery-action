@@ -19,6 +19,13 @@ import { parseAndValidateOpenApi } from '../spec/validate-openapi.js';
 
 const MAX_SCAN_FILES = 200;
 const MAX_SCAN_DEPTH = 6;
+/** Referenced raw OpenAPI files: matches the source-document 10 MiB ceiling. */
+const MAX_REFERENCED_OPENAPI_BYTES = 10 * 1024 * 1024;
+/**
+ * Candidate IaC files: finite ceiling large enough for one 10 MiB decoded source
+ * as base64 (~13.3 MiB) plus YAML/Terraform envelope.
+ */
+const MAX_CANDIDATE_IAC_BYTES = 16 * 1024 * 1024;
 const SKIP_DIRS = new Set(['.git', 'node_modules', 'dist']);
 const CANDIDATE_EXTENSIONS = new Set(['.tf', '.json', '.yaml', '.yml']);
 const PULUMI_API_CONFIG_TYPES = new Set(['gcp:apigateway:ApiConfig', 'google-native:apigateway/v1:Config']);
@@ -51,7 +58,10 @@ export async function scanGCPIac(repoRoot: string, outputDir: string): Promise<I
 
   for (const relativePath of scannedFiles) {
     const extension = path.extname(relativePath).toLowerCase();
-    const content = await readFile(path.join(resolvedRoot, relativePath), 'utf8').catch(() => undefined);
+    const content = await readUtf8WithinByteCeiling(
+      path.join(resolvedRoot, relativePath),
+      MAX_CANDIDATE_IAC_BYTES
+    );
     if (!content) continue;
     if (extension === '.tf') {
       for (const block of extractTerraformResourceBlocks(content)) {
@@ -91,6 +101,20 @@ export async function scanGCPIac(repoRoot: string, outputDir: string): Promise<I
     },
     scannedFiles
   };
+}
+
+/**
+ * Fail-soft bounded read: skip before read/parse when pre-read size exceeds
+ * `maxBytes`, or when the path is unreadable / not a regular file.
+ */
+async function readUtf8WithinByteCeiling(
+  absolutePath: string,
+  maxBytes: number
+): Promise<string | undefined> {
+  const stat = await lstat(absolutePath).catch(() => undefined);
+  if (!stat || !stat.isFile() || stat.isSymbolicLink()) return undefined;
+  if (stat.size > maxBytes) return undefined;
+  return readFile(absolutePath, 'utf8').catch(() => undefined);
 }
 
 async function collectIacFiles(
@@ -329,7 +353,7 @@ async function addReferencedDocument(
   const absolute = path.join(root, relative);
   const resolved = await realpath(absolute).catch(() => undefined);
   if (!resolved || !(resolved === root || resolved.startsWith(`${root}${path.sep}`))) return;
-  const content = await readFile(resolved, 'utf8').catch(() => undefined);
+  const content = await readUtf8WithinByteCeiling(resolved, MAX_REFERENCED_OPENAPI_BYTES);
   if (!content) return;
   try {
     const parsed = parseAndValidateOpenApi(content);

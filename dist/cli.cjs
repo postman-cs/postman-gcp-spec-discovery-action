@@ -46358,11 +46358,20 @@ function parseAndValidateOpenApi(content) {
   }
   return { document: document2, version, isJson };
 }
+function isRecognizedHttpOperation(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const responses = value.responses;
+  if (!responses || typeof responses !== "object" || Array.isArray(responses)) return false;
+  return Object.keys(responses).length > 0;
+}
 function hasRecognizedHttpOperation(paths) {
   for (const pathItem of Object.values(paths)) {
     if (!pathItem || typeof pathItem !== "object" || Array.isArray(pathItem)) continue;
-    for (const key of Object.keys(pathItem)) {
-      if (HTTP_OPERATIONS.has(key.toLowerCase())) return true;
+    const item = pathItem;
+    for (const key of Object.keys(item)) {
+      if (HTTP_OPERATIONS.has(key.toLowerCase()) && isRecognizedHttpOperation(item[key])) {
+        return true;
+      }
     }
   }
   return false;
@@ -46664,6 +46673,8 @@ function decodeSourceDocument(contents) {
 // src/lib/repo/gcp-iac-scanner.ts
 var MAX_SCAN_FILES = 200;
 var MAX_SCAN_DEPTH = 6;
+var MAX_REFERENCED_OPENAPI_BYTES = 10 * 1024 * 1024;
+var MAX_CANDIDATE_IAC_BYTES = 16 * 1024 * 1024;
 var SKIP_DIRS3 = /* @__PURE__ */ new Set([".git", "node_modules", "dist"]);
 var CANDIDATE_EXTENSIONS = /* @__PURE__ */ new Set([".tf", ".json", ".yaml", ".yml"]);
 var PULUMI_API_CONFIG_TYPES = /* @__PURE__ */ new Set(["gcp:apigateway:ApiConfig", "google-native:apigateway/v1:Config"]);
@@ -46675,7 +46686,10 @@ async function scanGCPIac(repoRoot, outputDir) {
   const fingerprint = { resourceIds: [], serviceNames: [], projectIds: [], evidence: [] };
   for (const relativePath of scannedFiles) {
     const extension = import_node_path7.default.extname(relativePath).toLowerCase();
-    const content = await (0, import_promises4.readFile)(import_node_path7.default.join(resolvedRoot, relativePath), "utf8").catch(() => void 0);
+    const content = await readUtf8WithinByteCeiling(
+      import_node_path7.default.join(resolvedRoot, relativePath),
+      MAX_CANDIDATE_IAC_BYTES
+    );
     if (!content) continue;
     if (extension === ".tf") {
       for (const block of extractTerraformResourceBlocks(content)) {
@@ -46714,6 +46728,12 @@ async function scanGCPIac(repoRoot, outputDir) {
     },
     scannedFiles
   };
+}
+async function readUtf8WithinByteCeiling(absolutePath, maxBytes) {
+  const stat4 = await (0, import_promises4.lstat)(absolutePath).catch(() => void 0);
+  if (!stat4 || !stat4.isFile() || stat4.isSymbolicLink()) return void 0;
+  if (stat4.size > maxBytes) return void 0;
+  return (0, import_promises4.readFile)(absolutePath, "utf8").catch(() => void 0);
 }
 async function collectIacFiles(root, current, outputRoot, depth = 0, count = { value: 0 }) {
   if (depth > MAX_SCAN_DEPTH || count.value >= MAX_SCAN_FILES) return [];
@@ -46910,7 +46930,7 @@ async function addReferencedDocument(root, terraformPath, block, reference, cand
   const absolute = import_node_path7.default.join(root, relative);
   const resolved = await (0, import_promises4.realpath)(absolute).catch(() => void 0);
   if (!resolved || !(resolved === root || resolved.startsWith(`${root}${import_node_path7.default.sep}`))) return;
-  const content = await (0, import_promises4.readFile)(resolved, "utf8").catch(() => void 0);
+  const content = await readUtf8WithinByteCeiling(resolved, MAX_REFERENCED_OPENAPI_BYTES);
   if (!content) return;
   try {
     const parsed = parseAndValidateOpenApi(content);

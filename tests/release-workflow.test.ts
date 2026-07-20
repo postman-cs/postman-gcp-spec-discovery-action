@@ -31,10 +31,30 @@ describe('release workflow publishing contract', () => {
     expect(releaseWorkflow).toContain('advance-rolling-aliases:');
     expect(releaseWorkflow).toContain('for ALIAS in "$MAJOR" "$MINOR"; do');
     expect(releaseWorkflow).toContain("if: ${{ needs.release.outputs.npm_publish == 'true' }}");
-    // Release gates run before any publish.
-    for (const gate of ['npm test', 'npm run typecheck', 'npm run verify:dist']) {
+    // Release gates run before any publish (lint + README table drift included).
+    for (const gate of [
+      'npm test',
+      'npm run typecheck',
+      'npm run lint',
+      'node scripts/render-action-tables.mjs --check',
+      'npm run verify:dist',
+    ]) {
       expect(releaseWorkflow).toContain(gate);
     }
     expect(releaseWorkflow).toContain('actionlint');
+    // Preserve gate ordering: test -> typecheck -> lint -> docs check -> verify:dist -> actionlint.
+    const gateBlock = releaseWorkflow.slice(
+      releaseWorkflow.indexOf('- run: npm test'),
+      releaseWorkflow.indexOf('Verify release tag matches package version')
+    );
+    expect(gateBlock.indexOf('npm test')).toBeLessThan(gateBlock.indexOf('npm run typecheck'));
+    expect(gateBlock.indexOf('npm run typecheck')).toBeLessThan(gateBlock.indexOf('npm run lint'));
+    expect(gateBlock.indexOf('npm run lint')).toBeLessThan(
+      gateBlock.indexOf('node scripts/render-action-tables.mjs --check')
+    );
+    expect(gateBlock.indexOf('node scripts/render-action-tables.mjs --check')).toBeLessThan(
+      gateBlock.indexOf('npm run verify:dist')
+    );
+    expect(gateBlock.indexOf('npm run verify:dist')).toBeLessThan(gateBlock.indexOf('actionlint'));
   });
 });

@@ -32,6 +32,8 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
       - run: npm test
       - run: npm run typecheck
+      - run: npm run lint
+      - run: node scripts/render-action-tables.mjs --check
       - run: npm run verify:dist
       - name: Install actionlint
         run: go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.11

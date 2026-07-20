@@ -18,4 +18,26 @@ describe('README action tables', () => {
     }
     expect(readme).toContain('manual review');
   });
+
+  it('GCP-DOCS-002: README lists both CES source types for ces-toolsets', () => {
+    const readme = readFileSync(resolve(repoRoot, 'README.md'), 'utf8');
+    const providersSection = readme.slice(readme.indexOf('## Supported providers'));
+    expect(providersSection).toContain('`ces-tool-schema`');
+    expect(providersSection).toContain('`ces-toolset-schema`');
+    expect(providersSection).toMatch(/standalone/i);
+    expect(providersSection).toMatch(/toolset-scoped/i);
+  });
+
+  it('GCP-DOCS-003: providers.md states connector schema metadata is not synthesized', () => {
+    const providers = readFileSync(resolve(repoRoot, 'docs/providers.md'), 'utf8');
+    expect(providers).not.toContain('connectors-generated-spec');
+    expect(providers).toMatch(/metadata-only/i);
+    expect(providers).toMatch(/not (?:an OpenAPI source|synthesized)/i);
+    expect(providers).toMatch(/apigee-registry/);
+    const capabilityRow = providers
+      .split('\n')
+      .find((line) => line.includes('Label-capable (auto-select works)'));
+    expect(capabilityRow).toBeDefined();
+    expect(capabilityRow).toContain('`apigee-registry`');
+  });
 });
