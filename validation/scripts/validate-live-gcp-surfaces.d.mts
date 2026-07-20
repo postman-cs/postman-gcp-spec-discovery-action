@@ -2,12 +2,25 @@ export const PROJECT_SCOPE_ALIAS: 'live-validation-project';
 export const FIXTURES_ENV: 'GCP_LIVE_FIXTURES_JSON';
 export const LEGACY_UNBOUND: 'legacy-unbound';
 export const EVIDENCE_SCHEMA_VERSION: 2;
+export const LIVE_STATE_SCHEMA_VERSION: 1;
+export const LIVE_RECEIPT_SCHEMA_VERSION: 1;
+export const DEFAULT_LIVE_RUNS_DIR: 'validation/.live-runs';
+export const DEFAULT_STATE_FILENAME: 'state.json';
+export const DEFAULT_COMMAND_TIMEOUT_MS: number;
+export const DEFAULT_PHASE_TIMEOUT_MS: number;
+export const MIN_COMMAND_TIMEOUT_MS: number;
+export const MAX_COMMAND_TIMEOUT_MS: number;
+export const MIN_PHASE_TIMEOUT_MS: number;
+export const MAX_PHASE_TIMEOUT_MS: number;
+export const TRACKED_EVIDENCE_RELATIVE: 'validation/evidence/live-gcp-surfaces.json';
 
 export const RETAINED_PROVIDER_ORDER: readonly string[];
 export const VALIDATION_MODES: readonly string[];
 export const SUBSTITUTE_REASON_CODES: readonly string[];
 export const FAIL_REASON_CODES: readonly string[];
 export const FIXTURE_SELECTION_STRATEGIES: readonly string[];
+export const LIVE_PHASES: readonly string[];
+export const PHASE_DURATION_GUIDANCE_MS: Readonly<Record<string, number>>;
 
 export interface LiveCoverageSlot {
   name: string;
@@ -19,7 +32,20 @@ export interface LiveCoverageSlot {
 
 export const LIVE_COVERAGE_MATRIX: readonly LiveCoverageSlot[];
 
-export interface LiveFlags { provision: boolean; teardown: boolean }
+export type LivePhase = 'preflight' | 'provision' | 'validate' | 'teardown' | 'assemble' | 'all';
+
+export interface LiveFlags {
+  phase: LivePhase | string;
+  provision: boolean;
+  teardown: boolean;
+  slots: string[] | null;
+  statePath: string | null;
+  receiptPath: string | null;
+  phaseReceipts: string[];
+  commandTimeoutMs: number;
+  phaseTimeoutMs: number;
+}
+
 export interface LiveEnv { projectId: string; location: string; apigeeOrg: string; apigeeEnv: string }
 export type ManifestResourceKey = 'gateway' | 'endpoints' | 'apigee';
 
@@ -103,7 +129,79 @@ export interface LiveFixture {
   serviceHint?: string;
 }
 
+export interface PhaseDeadline {
+  startedAt: number;
+  deadlineAt: number;
+  phaseTimeoutMs: number;
+  remainingMs(at?: number): number;
+  elapsedMs(at?: number): number;
+  assertNotExpired(at?: number): void;
+}
+
+export interface LiveState {
+  schemaVersion: number;
+  createdAt: string;
+  updatedAt: string;
+  binding: Pick<DistBinding, 'actionVersion' | 'gitCommit' | 'distCliSha256' | 'distIndexSha256'> | null;
+  env: LiveEnv | null;
+  manifest: LiveManifest | null;
+  endpointsConfigId: string;
+  completedSlots: EvidenceResult[];
+  phaseStatus: Record<string, string>;
+}
+
+export interface PhaseReceipt {
+  schemaVersion: number;
+  phase: string;
+  group: string;
+  elapsedMs: number;
+  binding: Pick<DistBinding, 'actionVersion' | 'gitCommit' | 'distCliSha256' | 'distIndexSha256'>;
+  status: 'pass' | 'fail' | string;
+  failureClass?: string;
+  teardown?: TeardownResult;
+  results?: EvidenceResult[];
+  totals?: EvidenceTotals;
+  completedSlotNames?: string[];
+}
+
 export function parseFlags(argv: string[]): LiveFlags;
+export function parseSlots(raw: unknown): string[] | null;
+export function clampTimeoutMs(value: unknown, options: {
+  min: number;
+  max: number;
+  fallback: number;
+  flagName: string;
+}): number;
+export function createPhaseDeadline(phaseTimeoutMs: number, now?: number): PhaseDeadline;
+export function resolveCommandTimeoutMs(commandTimeoutMs: number, deadline?: PhaseDeadline | null, now?: number): number;
+export function createTimedRunner(
+  baseRunner: (command: string, args: string[], options?: Record<string, unknown>) => unknown,
+  options: { commandTimeoutMs: number; deadline: PhaseDeadline }
+): (command: string, args: string[], options?: Record<string, unknown>) => unknown;
+export function defaultRunner(command: string, args: string[], options?: Record<string, unknown>): unknown;
+export function defaultLiveRunsRoot(root?: string): string;
+export function resolveStatePath(options?: { root?: string; statePath?: string | null }): string;
+export function resolveReceiptPath(options?: { root?: string; phase?: string; receiptPath?: string | null }): string;
+export function writeAtomicJson(filePath: string, value: unknown, options?: { mode?: number }): Promise<string>;
+export function createEmptyLiveState(options?: {
+  binding?: Partial<DistBinding>;
+  env?: LiveEnv;
+  manifest?: LiveManifest;
+}): LiveState;
+export function assertLiveStateSchema(state: unknown): LiveState;
+export function loadLiveState(statePath: string): Promise<LiveState>;
+export function saveLiveState(statePath: string, state: LiveState): Promise<LiveState>;
+export function sanitizePhaseReceipt(receipt: Partial<PhaseReceipt> & { phase: string; status: string }): PhaseReceipt;
+export function writePhaseReceipt(receiptPath: string, receipt: Partial<PhaseReceipt> & { phase: string; status: string }): Promise<PhaseReceipt>;
+export function loadPhaseReceipt(receiptPath: string, root?: string): PhaseReceipt;
+export function classifyPhaseFailure(error: unknown): string;
+export function mergeCompletedSlots(prior?: EvidenceResult[], next?: EvidenceResult[]): EvidenceResult[];
+export function assertValidateSlotsAllowed(requestedSlots: string[] | null | undefined, matrix?: readonly LiveCoverageSlot[]): string[];
+export function assembleFromPhaseReceipts(options: {
+  receipts: PhaseReceipt[];
+  binding: Pick<DistBinding, 'actionVersion' | 'gitCommit' | 'distCliSha256' | 'distIndexSha256'>;
+  matrix?: readonly LiveCoverageSlot[];
+}): Evidence;
 export function requiredEnv(env: Record<string, string | undefined>): LiveEnv;
 export function verifyRemoteGatewayOwnership(manifest: LiveManifest, described: { labels?: Record<string, string> } | undefined): boolean;
 export function verifyRemoteEndpointsOwnership(manifest: LiveManifest, serviceName: string | undefined): boolean;
@@ -122,6 +220,7 @@ export function provision(options: {
   token: string;
   env: LiveEnv;
   manifest: LiveManifest;
+  onCheckpoint?: (manifest: LiveManifest) => unknown | Promise<unknown>;
 }): Promise<{ endpointsConfigId: string }>;
 export function assertProviderMatrixAligned(matrix?: readonly LiveCoverageSlot[], retained?: readonly string[]): boolean;
 export function confinePathWithinRoot(rootPath: string, targetPath: string, fieldName?: string): string;
@@ -203,8 +302,58 @@ export function teardown(options: {
   manifest: LiveManifest;
   log: (message: string) => void;
 }): Promise<TeardownResult>;
+export function runPhasePreflight(options: {
+  runner: (command: string, args: string[], options?: Record<string, unknown>) => unknown;
+  env: LiveEnv;
+  binding: DistBinding | Pick<DistBinding, 'actionVersion' | 'gitCommit' | 'distCliSha256' | 'distIndexSha256'>;
+  statePath: string;
+  receiptPath: string;
+  deadline: PhaseDeadline;
+  log: (message: string) => void;
+}): Promise<{ state: LiveState; receipt: PhaseReceipt; token: string }>;
+export function runPhaseProvision(options: {
+  runner: (command: string, args: string[], options?: Record<string, unknown>) => unknown;
+  token: string;
+  env: LiveEnv;
+  state: LiveState;
+  statePath: string;
+  receiptPath: string;
+  deadline: PhaseDeadline;
+  deps?: Record<string, unknown>;
+  log: (message: string) => void;
+}): Promise<{ state: LiveState; receipt: PhaseReceipt; endpointsConfigId: string }>;
+export function runPhaseValidate(options: {
+  runner: (command: string, args: string[], options?: Record<string, unknown>) => unknown;
+  token: string;
+  cliPath: string;
+  env: LiveEnv;
+  state: LiveState;
+  statePath: string;
+  receiptPath: string;
+  slots?: string[] | null;
+  fixtures?: LiveFixture[];
+  deadline: PhaseDeadline;
+  deps?: Record<string, unknown>;
+  log: (message: string) => void;
+}): Promise<{ state: LiveState; receipt: PhaseReceipt; results: EvidenceResult[] }>;
+export function runPhaseTeardown(options: {
+  runner: (command: string, args: string[], options?: Record<string, unknown>) => unknown;
+  env: LiveEnv;
+  state: LiveState;
+  statePath: string;
+  receiptPath: string;
+  deadline: PhaseDeadline;
+  deps?: Record<string, unknown>;
+  log: (message: string) => void;
+}): Promise<{ state: LiveState; receipt: PhaseReceipt; teardownResult: TeardownResult }>;
+export function runPhaseAssemble(options: {
+  binding: Pick<DistBinding, 'actionVersion' | 'gitCommit' | 'distCliSha256' | 'distIndexSha256'>;
+  receiptPaths: string[];
+  root?: string;
+  promote?: boolean;
+}): Promise<Evidence>;
 export function runLiveValidation(options?: {
   argv?: string[];
   env?: Record<string, string | undefined>;
   deps?: Record<string, unknown>;
-}): Promise<Evidence>;
+}): Promise<Evidence | { phase: string; state?: LiveState; receipt?: PhaseReceipt; results?: EvidenceResult[]; teardown?: TeardownResult }>;

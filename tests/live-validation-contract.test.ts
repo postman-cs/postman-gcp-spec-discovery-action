@@ -1,48 +1,77 @@
 import { createHash } from 'node:crypto';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { RETAINED_PROVIDER_ORDER as SOURCE_PROVIDER_ORDER } from '../src/contracts.js';
 import {
+  DEFAULT_COMMAND_TIMEOUT_MS,
+  DEFAULT_PHASE_TIMEOUT_MS,
   LIVE_COVERAGE_MATRIX,
+  LIVE_PHASES,
+  LIVE_STATE_SCHEMA_VERSION,
+  MAX_COMMAND_TIMEOUT_MS,
+  MIN_COMMAND_TIMEOUT_MS,
+  PHASE_DURATION_GUIDANCE_MS,
   PROJECT_SCOPE_ALIAS,
   RETAINED_PROVIDER_ORDER,
   SUBSTITUTE_REASON_CODES,
+  assembleFromPhaseReceipts,
   assertAcceptableLiveEvidence,
   assertFixtureResolutionMatch,
+  assertLiveStateSchema,
   assertManualDerivedBlocked,
   assertProviderMatrixAligned,
+  assertValidateSlotsAllowed,
   buildEvidence,
   buildFixtureCliArgs,
+  classifyPhaseFailure,
   classifyProbeError,
   classifySubstituteReason,
   compareExactBytes,
   compareSemanticOpenApi,
   computeDistBinding,
   confinePathWithinRoot,
+  createEmptyLiveState,
   createEmptyResourceStates,
+  createPhaseDeadline,
+  createTimedRunner,
   deriveFixtureSelectionStrategy,
   extractCliProbeStatuses,
   isHistoricalEvidence,
   isResourceNotFoundError,
+  loadLiveState,
   markResourceAttempted,
   markResourceCreated,
   matrixSlotsMissingCoverage,
+  mergeCompletedSlots,
   normalizeFixtureResourceId,
   parseFlags,
   parseLiveFixtures,
+  parseSlots,
   probeUrlForProvider,
   proveExactNameAbsent,
   provision,
   requiredEnv,
+  resolveCommandTimeoutMs,
   resolveFixtureSelectionStrategy,
+  resolveReceiptPath,
+  resolveStatePath,
+  runLiveValidation,
+  runPhaseAssemble,
+  runPhasePreflight,
+  runPhaseProvision,
+  runPhaseTeardown,
+  runPhaseValidate,
+  saveLiveState,
   sha256Hex,
   teardown,
   toEvidenceResult,
   verifyRemoteApigeeOwnership,
   verifyRemoteEndpointsOwnership,
-  verifyRemoteGatewayOwnership
+  verifyRemoteGatewayOwnership,
+  writeAtomicJson,
+  writePhaseReceipt
 } from '../validation/scripts/validate-live-gcp-surfaces.mjs';
 
 const root = process.cwd();
@@ -70,8 +99,53 @@ describe('GCP live validation contract', () => {
       apigeeOrg: 'sample-project',
       apigeeEnv: 'test-env'
     });
-    expect(parseFlags([])).toEqual({ provision: false, teardown: false });
-    expect(parseFlags(['--provision', '--teardown'])).toEqual({ provision: true, teardown: true });
+    expect(parseFlags([])).toMatchObject({
+      phase: 'all',
+      provision: false,
+      teardown: false,
+      slots: null,
+      commandTimeoutMs: DEFAULT_COMMAND_TIMEOUT_MS,
+      phaseTimeoutMs: DEFAULT_PHASE_TIMEOUT_MS
+    });
+    expect(parseFlags(['--provision', '--teardown'])).toMatchObject({
+      phase: 'all',
+      provision: true,
+      teardown: true
+    });
+  });
+
+  it('parses phase-addressable CLI flags and rejects invalid phases/slots/timeouts', () => {
+    expect(LIVE_PHASES).toEqual(['preflight', 'provision', 'validate', 'teardown', 'assemble', 'all']);
+    expect(parseFlags(['--phase', 'validate', '--slots', 'api-gateway,iac-local'])).toMatchObject({
+      phase: 'validate',
+      slots: ['api-gateway', 'iac-local']
+    });
+    expect(parseSlots('gateway-explicit-api-id,api-hub-original')).toEqual([
+      'gateway-explicit-api-id',
+      'api-hub-original'
+    ]);
+    expect(() => parseFlags(['--phase', 'nope'])).toThrow(/--phase must be one of/);
+    expect(() => parseFlags(['--slots', 'not-a-slot'])).toThrow(/slot-not-allowed/);
+    expect(() => parseFlags(['--command-timeout-ms', '1'])).toThrow(/--command-timeout-ms/);
+    expect(() => parseFlags(['--command-timeout-ms', String(MAX_COMMAND_TIMEOUT_MS + 1)])).toThrow(/--command-timeout-ms/);
+    expect(() => parseFlags(['--phase-timeout-ms', String(MIN_COMMAND_TIMEOUT_MS)])).toThrow(/--phase-timeout-ms/);
+    expect(() => parseFlags([
+      '--command-timeout-ms', String(DEFAULT_COMMAND_TIMEOUT_MS),
+      '--phase-timeout-ms', String(DEFAULT_COMMAND_TIMEOUT_MS - 1)
+    ])).toThrow(/phase-timeout-ms must be >=/);
+    expect(parseFlags([
+      '--phase', 'assemble',
+      '--phase-receipt', 'a.json',
+      '--phase-receipt', 'b.json',
+      '--state-path', 'validation/.live-runs/state.json',
+      '--receipt-path', 'validation/.live-runs/out.json'
+    ])).toMatchObject({
+      phase: 'assemble',
+      phaseReceipts: ['a.json', 'b.json'],
+      statePath: 'validation/.live-runs/state.json',
+      receiptPath: 'validation/.live-runs/out.json'
+    });
+    expect(PHASE_DURATION_GUIDANCE_MS.preflight).toBeLessThan(PHASE_DURATION_GUIDANCE_MS.provision);
   });
 
   it('keeps live matrix aligned with runtime retained provider order', () => {
@@ -743,9 +817,9 @@ describe('GCP live validation contract', () => {
       expect(evidence.distCliSha256).toMatch(/^[a-f0-9]{64}$/);
       expect(evidence.distIndexSha256).toMatch(/^[a-f0-9]{64}$/);
       // Checked-in current failure receipt is schema-valid but not acceptable success evidence.
+      // Failed validation with clean teardown is valid private failure evidence; it is not final evidence.
       expect(() => assertAcceptableLiveEvidence(evidence)).toThrow(/failed or pending|failures|teardown|incomplete matrix|missing-fixture/);
       expect(evidence.totals.failed).toBeGreaterThan(0);
-      expect(evidence.teardown.status).not.toBe('pass');
     }
 
     expect(isHistoricalEvidence(historicalLegacy)).toBe(true);
@@ -860,15 +934,431 @@ describe('GCP live validation contract', () => {
       results: [failed],
       binding: {
         actionVersion: '1.0.0',
-        gitCommit: 'g'.repeat(40),
-        distCliSha256: 'a'.repeat(64),
-        distIndexSha256: 'b'.repeat(64)
+        gitCommit: 'a'.repeat(40),
+        distCliSha256: 'b'.repeat(64),
+        distIndexSha256: 'c'.repeat(64)
       },
       teardown: { status: 'pass' }
     });
     expect(evidence.totals.failed).toBe(1);
     expect(evidence.results[0]?.reasonCode).toBe('missing-fixture');
+    expect(evidence.teardown.status).toBe('pass');
+    expect(() => assertAcceptableLiveEvidence(evidence)).toThrow(/failures|failed or pending|incomplete matrix|missing-fixture/);
     expect(JSON.stringify(evidence)).not.toContain('GCP_LIVE_FIXTURES_JSON');
     expect(JSON.stringify(evidence)).not.toContain('resourceId');
+  });
+
+  it('confines live state paths, rejects symlinks/schema mismatch, and saves atomically mode-0600', async () => {
+    const root = tempDir('gcp-live-state-');
+    mkdirSync(join(root, 'validation/.live-runs'), { recursive: true });
+    const statePath = resolveStatePath({ root });
+    expect(statePath.startsWith(join(root, 'validation/.live-runs'))).toBe(true);
+    expect(() => resolveStatePath({ root, statePath: '../outside.json' })).toThrow(/must stay within repo root|traversal|within/);
+    expect(() => resolveStatePath({ root, statePath: 'validation/evidence/state.json' })).toThrow(/live-runs|within/);
+    expect(() => resolveReceiptPath({ root, phase: 'validate', receiptPath: 'validation/evidence/validate.json' })).toThrow(/live-runs|within/);
+    const link = join(root, 'validation/.live-runs/link-state.json');
+    const target = join(root, 'validation/.live-runs/target.json');
+    writeFileSync(target, '{}\n');
+    symlinkSync(target, link);
+    expect(() => resolveStatePath({ root, statePath: link })).toThrow(/symlink/);
+
+    const binding = {
+      actionVersion: '1.0.0',
+      gitCommit: 'a'.repeat(40),
+      distCliSha256: 'b'.repeat(64),
+      distIndexSha256: 'c'.repeat(64)
+    };
+    const state = createEmptyLiveState({
+      binding,
+      env: { projectId: 'sample-project', location: 'global', apigeeOrg: 'sample-project', apigeeEnv: 'test-env' },
+      manifest: {
+        runId: 'abcd',
+        runMarker: 'postman-live-abcd',
+        gatewayName: 'postman-live-abcd',
+        gatewayConfigName: 'postman-live-config-abcd',
+        endpointsService: 'postman-live-abcd.endpoints.sample-project.cloud.goog',
+        proxyName: 'postman-live-abcd',
+        resources: createEmptyResourceStates()
+      }
+    });
+    expect(state.schemaVersion).toBe(LIVE_STATE_SCHEMA_VERSION);
+    await saveLiveState(statePath, state);
+    expect(lstatSync(statePath).mode & 0o777).toBe(0o600);
+    const loaded = await loadLiveState(statePath);
+    expect(loaded.manifest?.runId).toBe('abcd');
+    expect(() => assertLiveStateSchema({ schemaVersion: 999, manifest: {} })).toThrow(/schemaVersion/);
+    expect(() => assertLiveStateSchema({
+      ...state,
+      manifest: { ...state.manifest, runMarker: 'foreign-marker' }
+    })).toThrow(/ownership binding/);
+    await expect(loadLiveState(join(root, 'validation/.live-runs/missing.json'))).rejects.toThrow(/missing|state-invalid/);
+  });
+
+  it('rejects phase bypasses and stale bindings before a remote phase can run', async () => {
+    const root = tempDir('gcp-live-order-');
+    mkdirSync(join(root, 'validation/.live-runs'), { recursive: true });
+    const binding = { actionVersion: '1.0.0', gitCommit: 'a'.repeat(40), distCliSha256: 'b'.repeat(64), distIndexSha256: 'c'.repeat(64), cliPath: 'unused', indexPath: 'unused' };
+    const env = { projectId: 'p', location: 'global', apigeeOrg: 'p', apigeeEnv: 'test-env' };
+    const statePath = resolveStatePath({ root });
+    const state = createEmptyLiveState({ binding, env, manifest: baseManifest() });
+    await saveLiveState(statePath, state);
+    await expect(runPhaseValidate({
+      runner: () => { throw new Error('must not run'); }, token: 't', cliPath: 'unused', env, state, statePath,
+      receiptPath: resolveReceiptPath({ root, phase: 'validate' }), slots: ['api-gateway'], fixtures: [],
+      deadline: createPhaseDeadline(DEFAULT_PHASE_TIMEOUT_MS), deps: {}, log: () => undefined
+    })).rejects.toThrow(/requires successful provision/);
+    await expect(runLiveValidation({
+      argv: ['--phase', 'validate'], env: { GCP_PROJECT_ID: 'p' },
+      deps: { root, binding: { ...binding, gitCommit: 'd'.repeat(40) }, runner: () => { throw new Error('must not run'); }, log: () => undefined }
+    })).rejects.toThrow(/binding-mismatch/);
+    await expect(runLiveValidation({
+      argv: ['--phase', 'provision'], env: { GCP_PROJECT_ID: 'p' },
+      deps: { root, binding, runner: () => { throw new Error('must not run'); }, log: () => undefined }
+    })).rejects.toThrow(/requires --provision/);
+  });
+
+  it('propagates command and phase timeouts through the timed runner', () => {
+    const deadline = createPhaseDeadline(50, 1_000);
+    expect(resolveCommandTimeoutMs(30, deadline, 1_025)).toBe(25);
+    expect(() => resolveCommandTimeoutMs(30, deadline, 1_060)).toThrow(/phase-timeout/);
+    expect(() => deadline.assertNotExpired(1_060)).toThrow(/phase-timeout/);
+    const timed = createTimedRunner((_command, _args, options) => {
+      expect(options?.timeout).toBe(20);
+      const error = new Error('spawn ETIMEDOUT');
+      (error as { code?: string }).code = 'ETIMEDOUT';
+      throw error;
+    }, { commandTimeoutMs: 20, deadline: createPhaseDeadline(1_000) });
+    expect(() => timed('gcloud', ['version'])).toThrow(/command-timeout/);
+    expect(classifyPhaseFailure({ reasonCode: 'phase-timeout' })).toBe('phase-timeout');
+    expect(classifyPhaseFailure({ reasonCode: 'command-timeout' })).toBe('command-timeout');
+  });
+
+  it('runs preflight without GCP resource writes and checkpoints provision/validate/teardown/assemble', async () => {
+    const root = tempDir('gcp-live-phases-');
+    mkdirSync(join(root, 'validation/.live-runs'), { recursive: true });
+    mkdirSync(join(root, 'validation/evidence'), { recursive: true });
+    const tracked = join(root, 'validation/evidence/live-gcp-surfaces.json');
+    writeFileSync(tracked, JSON.stringify({ marker: 'untouched' }));
+    const statePath = resolveStatePath({ root });
+    const binding = {
+      actionVersion: '1.0.0',
+      gitCommit: 'd'.repeat(40),
+      distCliSha256: 'e'.repeat(64),
+      distIndexSha256: 'f'.repeat(64),
+      cliPath: join(root, 'dist/cli.cjs'),
+      indexPath: join(root, 'dist/index.cjs')
+    };
+    const env = { projectId: 'sample-project', location: 'global', apigeeOrg: 'sample-project', apigeeEnv: 'test-env' };
+    const commands: string[] = [];
+    const runner = (command: string, args: string[]) => {
+      commands.push([command, ...args].join(' '));
+      if (args[0] === 'projects' && args[1] === 'describe') return 'sample-project\n';
+      if (args[0] === 'auth') return 'token\n';
+      if (args.includes('apis') && args.includes('create')) return '';
+      if (args.includes('api-configs') && args.includes('create')) return '';
+      if (args.includes('services') && args.includes('deploy')) return '';
+      if (args.includes('configs') && args.includes('list')) return 'cfg-1\n';
+      if (args[0] === 'services' && args[1] === 'enable') return '';
+      if (command === 'zip') return '';
+      if (command === 'curl' && args.includes('-X') && args.includes('POST')) return '{}';
+      if (command === 'curl' && args.includes('-X') && args.includes('GET')) {
+        const err = new Error('NOT_FOUND');
+        throw err;
+      }
+      if (args.includes('describe')) {
+        const err = new Error('NOT_FOUND');
+        throw err;
+      }
+      if (args.includes('delete')) return '';
+      return '';
+    };
+
+    const preflightReceipt = resolveReceiptPath({ root, phase: 'preflight' });
+    const preflight = await runPhasePreflight({
+      runner,
+      env,
+      binding,
+      statePath,
+      receiptPath: preflightReceipt,
+      deadline: createPhaseDeadline(DEFAULT_PHASE_TIMEOUT_MS),
+      log: () => undefined
+    });
+    expect(preflight.receipt.status).toBe('pass');
+    expect(commands.some((line) => /apis create|services deploy|action=import/.test(line))).toBe(false);
+    expect(commands.some((line) => line.includes('projects describe sample-project'))).toBe(true);
+
+    let checkpoints = 0;
+    const provisionReceipt = resolveReceiptPath({ root, phase: 'provision' });
+    const provisioned = await runPhaseProvision({
+      runner,
+      token: 'token',
+      env,
+      state: preflight.state,
+      statePath,
+      receiptPath: provisionReceipt,
+      deadline: createPhaseDeadline(DEFAULT_PHASE_TIMEOUT_MS),
+      deps: {
+        provision: async ({ manifest, onCheckpoint }: {
+          manifest: { resources?: Record<string, { attempted: boolean; created: boolean }> };
+          onCheckpoint?: (manifest: unknown) => Promise<void> | void;
+        }) => {
+          markResourceAttempted(manifest as never, 'gateway');
+          await onCheckpoint?.(manifest);
+          checkpoints += 1;
+          markResourceCreated(manifest as never, 'gateway');
+          await onCheckpoint?.(manifest);
+          checkpoints += 1;
+          return { endpointsConfigId: 'cfg-1' };
+        }
+      },
+      log: () => undefined
+    });
+    expect(checkpoints).toBeGreaterThanOrEqual(2);
+    expect(provisioned.state.phaseStatus.provision).toBe('pass');
+    const mid = await loadLiveState(statePath);
+    expect(mid.manifest?.resources?.gateway.created).toBe(true);
+
+    const validateReceipt = resolveReceiptPath({ root, phase: 'validate' });
+    await expect(runPhaseValidate({
+      runner,
+      token: 'token',
+      cliPath: binding.cliPath,
+      env,
+      state: provisioned.state,
+      statePath,
+      receiptPath: validateReceipt,
+      slots: ['not-allowed-slot'],
+      fixtures: [],
+      deadline: createPhaseDeadline(DEFAULT_PHASE_TIMEOUT_MS),
+      deps: {},
+      log: () => undefined
+    })).rejects.toThrow(/slot-not-allowed/);
+
+    const prior = [toEvidenceResult('gateway-explicit-api-id', 'pass', {
+      providerType: 'api-gateway',
+      sourceType: 'api-gateway-config',
+      validationMode: 'exact-bytes'
+    })];
+    await saveLiveState(statePath, { ...provisioned.state, completedSlots: prior });
+    const validated = await runPhaseValidate({
+      runner,
+      token: 'token',
+      cliPath: binding.cliPath,
+      env,
+      state: { ...provisioned.state, completedSlots: prior },
+      statePath,
+      receiptPath: validateReceipt,
+      slots: ['gateway-explicit-api-id'],
+      fixtures: [],
+      deadline: createPhaseDeadline(DEFAULT_PHASE_TIMEOUT_MS),
+      deps: {
+        runProvisionedCases: async () => {
+          throw new Error('should carry forward completed slots without re-running');
+        }
+      },
+      log: () => undefined
+    });
+    expect(validated.results).toEqual(prior);
+    expect(mergeCompletedSlots(prior, [
+      toEvidenceResult('iac-single', 'pass', { providerType: 'iac-local', sourceType: 'iac-embedded', validationMode: 'exact-bytes' })
+    ]).map((result) => result.name)).toEqual(['gateway-explicit-api-id', 'iac-single']);
+
+    await expect(runPhaseValidate({
+      runner,
+      token: 'token',
+      cliPath: binding.cliPath,
+      env,
+      state: validated.state,
+      statePath,
+      receiptPath: validateReceipt,
+      slots: ['api-hub-original'],
+      fixtures: [],
+      deadline: createPhaseDeadline(DEFAULT_PHASE_TIMEOUT_MS),
+      deps: {
+        runMatrixCoverage: async () => [
+          toEvidenceResult('api-hub-original', 'fail', {
+            providerType: 'api-hub',
+            validationMode: 'exact-bytes',
+            reasonCode: 'missing-fixture'
+          }),
+          toEvidenceResult('api-hub-additional', 'pass', {
+            providerType: 'api-hub',
+            validationMode: 'exact-bytes'
+          })
+        ]
+      },
+      log: () => undefined
+    })).rejects.toThrow(/fail-fast|missing-fixture/);
+    const afterFail = await loadLiveState(statePath);
+    expect(afterFail.completedSlots.some((result) => result.name === 'gateway-explicit-api-id')).toBe(true);
+    expect(afterFail.completedSlots.some((result) => result.name === 'api-hub-additional')).toBe(false);
+
+    const teardownReceipt = resolveReceiptPath({ root, phase: 'teardown' });
+    const torn1 = await runPhaseTeardown({
+      runner,
+      env,
+      state: afterFail,
+      statePath,
+      receiptPath: teardownReceipt,
+      deadline: createPhaseDeadline(DEFAULT_PHASE_TIMEOUT_MS),
+      deps: {
+        teardown: async () => ({ status: 'pass' })
+      },
+      log: () => undefined
+    });
+    expect(torn1.receipt.status).toBe('pass');
+    const torn2 = await runPhaseTeardown({
+      runner,
+      env,
+      state: torn1.state,
+      statePath,
+      receiptPath: teardownReceipt,
+      deadline: createPhaseDeadline(DEFAULT_PHASE_TIMEOUT_MS),
+      deps: {
+        teardown: async () => ({ status: 'pass' })
+      },
+      log: () => undefined
+    });
+    expect(torn2.receipt.status).toBe('pass');
+    expect(JSON.parse(readFileSync(tracked, 'utf8')).marker).toBe('untouched');
+
+    const completeResults = [
+      ...[
+        'gateway-explicit-api-id',
+        'gateway-discovery',
+        'gateway-repo-label',
+        'gateway-label-conflict',
+        'endpoints-explicit-api-id',
+        'endpoints-discovery',
+        'apigee-discovery',
+        'discover-many',
+        'iac-single',
+        'ambiguity'
+      ].map((name) => toEvidenceResult(name, 'pass', { validationMode: 'exact-bytes' })),
+      ...LIVE_COVERAGE_MATRIX
+        .filter((slot) => !slot.satisfiedBy?.length)
+        .map((slot) => toEvidenceResult(slot.name, 'substitute', {
+          providerType: slot.providerType,
+          sourceType: slot.expectedSourceTypes[0],
+          validationMode: slot.validationMode,
+          reasonCode: 'iam-denied'
+        }))
+    ];
+    const receiptBinding = {
+      actionVersion: binding.actionVersion,
+      gitCommit: binding.gitCommit,
+      distCliSha256: binding.distCliSha256,
+      distIndexSha256: binding.distIndexSha256
+    };
+    const receipts = {
+      preflight: join(root, 'validation/.live-runs/preflight-receipt.json'),
+      provision: join(root, 'validation/.live-runs/provision-receipt.json'),
+      validate: join(root, 'validation/.live-runs/validate-full.json'),
+      teardown: join(root, 'validation/.live-runs/teardown-clean.json')
+    };
+    await writePhaseReceipt(receipts.preflight, { phase: 'preflight', binding: receiptBinding, status: 'pass', elapsedMs: 1 });
+    await writePhaseReceipt(receipts.provision, { phase: 'provision', binding: receiptBinding, status: 'pass', elapsedMs: 1 });
+    await writePhaseReceipt(receipts.validate, {
+      phase: 'validate',
+      binding: receiptBinding,
+      status: 'pass',
+      elapsedMs: 1,
+      results: completeResults
+    });
+    await writePhaseReceipt(receipts.teardown, {
+      phase: 'teardown',
+      binding: receiptBinding,
+      status: 'pass',
+      elapsedMs: 1,
+      teardown: { status: 'pass' }
+    });
+    expect(() => assembleFromPhaseReceipts({
+      receipts: [
+        JSON.parse(readFileSync(receipts.preflight, 'utf8')),
+        JSON.parse(readFileSync(receipts.provision, 'utf8')),
+        JSON.parse(readFileSync(receipts.validate, 'utf8')),
+        JSON.parse(readFileSync(receipts.teardown, 'utf8')),
+        JSON.parse(readFileSync(receipts.teardown, 'utf8'))
+      ],
+      binding: receiptBinding
+    })).toThrow(/duplicate phase/);
+    expect(() => assembleFromPhaseReceipts({
+      receipts: [
+        JSON.parse(readFileSync(receipts.preflight, 'utf8')),
+        JSON.parse(readFileSync(receipts.provision, 'utf8')),
+        {
+          ...JSON.parse(readFileSync(receipts.validate, 'utf8')),
+          results: completeResults.slice(1)
+        },
+        JSON.parse(readFileSync(receipts.teardown, 'utf8'))
+      ],
+      binding: receiptBinding
+    })).toThrow(/exactly once|assemble-incomplete/);
+    expect(() => assembleFromPhaseReceipts({
+      receipts: [
+        JSON.parse(readFileSync(receipts.preflight, 'utf8')),
+        JSON.parse(readFileSync(receipts.provision, 'utf8')),
+        JSON.parse(readFileSync(receipts.validate, 'utf8')),
+        {
+          ...JSON.parse(readFileSync(receipts.teardown, 'utf8')),
+          binding: { ...receiptBinding, gitCommit: '0'.repeat(40) }
+        }
+      ],
+      binding: receiptBinding
+    })).toThrow(/binding-mismatch/);
+    expect(() => assembleFromPhaseReceipts({
+      receipts: [
+        JSON.parse(readFileSync(receipts.preflight, 'utf8')),
+        JSON.parse(readFileSync(receipts.provision, 'utf8')),
+        JSON.parse(readFileSync(receipts.validate, 'utf8')),
+        {
+          ...JSON.parse(readFileSync(receipts.teardown, 'utf8')),
+          teardown: { status: 'fail', reasonCode: 'teardown-failed' },
+          status: 'fail'
+        }
+      ],
+      binding: receiptBinding
+    })).toThrow(/assemble-incomplete|did not pass|teardown/);
+
+    const promoted = await runPhaseAssemble({
+      binding: receiptBinding,
+      receiptPaths: [receipts.preflight, receipts.provision, receipts.validate, receipts.teardown],
+      root,
+      promote: true
+    });
+    expect(assertAcceptableLiveEvidence(promoted)).toEqual({ kind: 'current' });
+    expect(JSON.parse(readFileSync(tracked, 'utf8')).evidenceKind).toBe('current');
+
+    await expect(runLiveValidation({
+      argv: ['--phase', 'all'],
+      env: { GCP_PROJECT_ID: 'sample-project' },
+      deps: { root, runner, binding, log: () => undefined }
+    })).rejects.toThrow(/--provision --teardown/);
+    expect(assertValidateSlotsAllowed(['api-gateway'])).toEqual(['api-gateway']);
+  });
+
+  it('keeps tracked evidence untouched when a phase fails after clean teardown', async () => {
+    const root = tempDir('gcp-live-fail-clean-');
+    mkdirSync(join(root, 'validation/.live-runs/failed-runs'), { recursive: true });
+    mkdirSync(join(root, 'validation/evidence'), { recursive: true });
+    const tracked = join(root, 'validation/evidence/live-gcp-surfaces.json');
+    const before = { schemaVersion: 2, evidenceKind: 'historical', marker: 'stable' };
+    writeFileSync(tracked, `${JSON.stringify(before)}\n`);
+    const failed = buildEvidence({
+      results: [toEvidenceResult('runner', 'fail', { reasonCode: 'cli-failed', validationMode: '' })],
+      binding: {
+        actionVersion: '1.0.0',
+        gitCommit: 'a'.repeat(40),
+        distCliSha256: 'b'.repeat(64),
+        distIndexSha256: 'c'.repeat(64)
+      },
+      teardown: { status: 'pass' }
+    });
+    expect(failed.teardown.status).toBe('pass');
+    expect(failed.totals.failed).toBe(1);
+    expect(() => assertAcceptableLiveEvidence(failed)).toThrow(/failures|failed or pending|incomplete matrix/);
+    await writeAtomicJson(join(root, 'validation/.live-runs/failed-runs/private-failed.json'), failed, { mode: 0o600 });
+    expect(JSON.parse(readFileSync(tracked, 'utf8')).marker).toBe('stable');
+    expect(existsSync(join(root, 'validation/.live-runs/failed-runs/private-failed.json'))).toBe(true);
   });
 });
