@@ -4,3 +4,4 @@
 *.zip
 deployment-output*
 live-resource-manifest*
+.live-runs/

@@ -6,6 +6,7 @@ validation/evidence/*.local.json
 validation/evidence/*.local.md
 validation/tmp/
 validation/.cache/
+validation/.live-runs/
 
 # Build and TypeScript artifacts
 *.tsbuildinfo
