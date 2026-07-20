@@ -21,15 +21,20 @@ import {
   compareSemanticOpenApi,
   computeDistBinding,
   confinePathWithinRoot,
+  createEmptyResourceStates,
   deriveFixtureSelectionStrategy,
   extractCliProbeStatuses,
   isHistoricalEvidence,
   isResourceNotFoundError,
+  markResourceAttempted,
+  markResourceCreated,
   matrixSlotsMissingCoverage,
   normalizeFixtureResourceId,
   parseFlags,
   parseLiveFixtures,
   probeUrlForProvider,
+  proveExactNameAbsent,
+  provision,
   requiredEnv,
   resolveFixtureSelectionStrategy,
   sha256Hex,
@@ -392,6 +397,21 @@ describe('GCP live validation contract', () => {
     expect(extractCliProbeStatuses({ providerProbes: [{ provider: 'not-a-provider', status: 'available' }] }).size).toBe(0);
   });
 
+  function baseManifest(overrides: Record<string, unknown> = {}) {
+    return {
+      runId: '1234',
+      runMarker: 'postman-live-1234',
+      gatewayName: 'postman-live-1234',
+      gatewayConfigName: 'postman-live-config-1234',
+      endpointsService: 'postman-live-1234.endpoints.p.cloud.goog',
+      proxyName: 'postman-live-1234',
+      repoLabel: 'postman-live--1234',
+      conflictLabel: 'postman-conflict--1234',
+      resources: createEmptyResourceStates(),
+      ...overrides
+    };
+  }
+
   it('continues Endpoints and Apigee teardown when Gateway is absent and records sanitized teardown', async () => {
     const calls: string[] = [];
     const runner = (command: string, args: string[]) => {
@@ -404,14 +424,13 @@ describe('GCP live validation contract', () => {
       if (command === 'curl' && args.includes('DELETE')) return '';
       return '';
     };
-    const manifest = {
-      runId: '1234',
-      runMarker: 'postman-1234',
-      gatewayName: 'postman-live-1234',
-      gatewayConfigName: 'postman-live-config-1234',
-      endpointsService: 'postman-live-1234.endpoints.p.cloud.goog',
-      proxyName: 'postman-live-1234'
-    };
+    const manifest = baseManifest({
+      resources: {
+        gateway: { attempted: true, created: true },
+        endpoints: { attempted: true, created: true },
+        apigee: { attempted: true, created: true }
+      }
+    });
     const result = await teardown({
       runner,
       env: { projectId: 'p', location: 'global', apigeeOrg: 'p', apigeeEnv: 'test-env' },
@@ -428,6 +447,231 @@ describe('GCP live validation contract', () => {
     expect(() => verifyRemoteApigeeOwnership(manifest, { name: 'foreign' })).toThrow('REFUSING');
   });
 
+  it('tracks attempted/created state through each provisioning stage and fails without marking later surfaces', async () => {
+    const stages: string[] = [];
+    const manifest = baseManifest();
+    const runner = (command: string, args: string[]) => {
+      const joined = `${command} ${args.join(' ')}`;
+      stages.push(joined);
+      if (command === 'gcloud' && args[0] === 'services' && args[1] === 'enable') return '';
+      if (args.includes('apis') && args.includes('create') && args.includes(manifest.gatewayName) && !args.includes('api-configs')) {
+        return '';
+      }
+      if (args.includes('api-configs') && args.includes('create')) return '';
+      if (args.includes('services') && args.includes('deploy')) {
+        throw new Error('403 permission denied on endpoints deploy');
+      }
+      if (command === 'zip') return '';
+      return '';
+    };
+    await expect(provision({
+      runner,
+      token: 'token',
+      env: { projectId: 'p', location: 'global', apigeeOrg: 'p', apigeeEnv: 'test-env' },
+      manifest
+    })).rejects.toThrow(/permission denied/);
+    expect(manifest.resources?.gateway).toEqual({ attempted: true, created: true });
+    expect(manifest.resources?.endpoints).toEqual({ attempted: true, created: false });
+    expect(manifest.resources?.apigee).toEqual({ attempted: false, created: false });
+    expect(stages.some((call) => call.includes('endpoints services deploy'))).toBe(true);
+    expect(stages.some((call) => call.includes('apigee.googleapis.com'))).toBe(false);
+  });
+
+  it('marks gateway attempted but not created when Gateway create fails before any resource exists', async () => {
+    const manifest = baseManifest();
+    const runner = (command: string, args: string[]) => {
+      if (command === 'gcloud' && args[0] === 'services' && args[1] === 'enable') return '';
+      if (args.includes('apis') && args.includes('create') && !args.includes('api-configs')) {
+        throw new Error('403 permission denied creating gateway api');
+      }
+      return '';
+    };
+    await expect(provision({
+      runner,
+      token: 'token',
+      env: { projectId: 'p', location: 'global', apigeeOrg: 'p', apigeeEnv: 'test-env' },
+      manifest
+    })).rejects.toThrow(/permission denied/);
+    expect(manifest.resources?.gateway).toEqual({ attempted: true, created: false });
+    expect(manifest.resources?.endpoints).toEqual({ attempted: false, created: false });
+    expect(manifest.resources?.apigee).toEqual({ attempted: false, created: false });
+  });
+
+  it('marks Apigee attempted but not created when proxy import fails after Gateway and Endpoints succeed', async () => {
+    const manifest = baseManifest();
+    const runner = (command: string, args: string[]) => {
+      if (command === 'gcloud' && args[0] === 'services' && args[1] === 'enable') return '';
+      if (args.includes('apis') && args.includes('create')) return '';
+      if (args.includes('api-configs') && args.includes('create')) return '';
+      if (args.includes('services') && args.includes('deploy')) return '';
+      if (args.includes('configs') && args.includes('list')) return '20260720';
+      if (command === 'zip') return '';
+      if (command === 'curl' && args.some((arg) => String(arg).includes('apigee.googleapis.com'))) {
+        throw new Error('403 permission denied importing apigee proxy');
+      }
+      return '';
+    };
+    await expect(provision({
+      runner,
+      token: 'token',
+      env: { projectId: 'p', location: 'global', apigeeOrg: 'p', apigeeEnv: 'test-env' },
+      manifest
+    })).rejects.toThrow(/permission denied/);
+    expect(manifest.resources?.gateway).toEqual({ attempted: true, created: true });
+    expect(manifest.resources?.endpoints).toEqual({ attempted: true, created: true });
+    expect(manifest.resources?.apigee).toEqual({ attempted: true, created: false });
+  });
+
+  it('tears down cleanly after Gateway permission failure when exact Gateway absence is proven and unattempted Apigee is unavailable', async () => {
+    const calls: string[] = [];
+    const runner = (command: string, args: string[]) => {
+      calls.push(`${command} ${args.join(' ')}`);
+      if (command === 'gcloud' && args[0] === 'auth') return 'token';
+      if (args.includes('describe') && args.includes('api-gateway')) throw new Error('404 NOT_FOUND');
+      if (command === 'curl') throw new Error('503 Apigee unavailable');
+      return '';
+    };
+    const manifest = baseManifest({
+      resources: {
+        gateway: { attempted: true, created: false },
+        endpoints: { attempted: false, created: false },
+        apigee: { attempted: false, created: false }
+      }
+    });
+    const result = await teardown({
+      runner,
+      env: { projectId: 'p', location: 'global', apigeeOrg: 'p', apigeeEnv: 'test-env' },
+      manifest,
+      log: () => {}
+    });
+    expect(result).toEqual({ status: 'pass' });
+    expect(calls.some((call) => call.includes('api-gateway apis describe'))).toBe(true);
+    expect(calls.some((call) => call.includes('endpoints'))).toBe(false);
+    expect(calls.some((call) => call.includes('apigee.googleapis.com'))).toBe(false);
+    expect(calls.some((call) => call.includes('delete'))).toBe(false);
+  });
+
+  it('fails teardown for attempted-but-unprovable resources instead of claiming clean', async () => {
+    const runner = (command: string, args: string[]) => {
+      if (command === 'gcloud' && args[0] === 'auth') return 'token';
+      if (args.includes('describe') && args.includes('api-gateway')) throw new Error('403 permission denied');
+      return '';
+    };
+    const manifest = baseManifest({
+      resources: {
+        gateway: { attempted: true, created: false },
+        endpoints: { attempted: false, created: false },
+        apigee: { attempted: false, created: false }
+      }
+    });
+    await expect(teardown({
+      runner,
+      env: { projectId: 'p', location: 'global', apigeeOrg: 'p', apigeeEnv: 'test-env' },
+      manifest,
+      log: () => {}
+    })).rejects.toThrow(/absence-unprovable|iam-denied/);
+    expect(() => proveExactNameAbsent(() => { throw new Error('403 permission denied'); })).toThrow(/absence-unprovable|iam-denied/);
+    expect(proveExactNameAbsent(() => { throw new Error('404 not found'); })).toBe(true);
+  });
+
+  it('refuses attempted-unconfirmed residue and never deletes it', async () => {
+    const calls: string[] = [];
+    const runner = (command: string, args: string[]) => {
+      calls.push(`${command} ${args.join(' ')}`);
+      if (command === 'gcloud' && args[0] === 'auth') return 'token';
+      if (args.includes('api-gateway') && args.includes('describe')) {
+        return JSON.stringify({ labels: { 'postman-run-marker': 'postman-live-1234' } });
+      }
+      return '';
+    };
+    const manifest = baseManifest({
+      resources: {
+        gateway: { attempted: true, created: false },
+        endpoints: { attempted: false, created: false },
+        apigee: { attempted: false, created: false }
+      }
+    });
+    await expect(teardown({
+      runner,
+      env: { projectId: 'p', location: 'global', apigeeOrg: 'p', apigeeEnv: 'test-env' },
+      manifest,
+      log: () => {}
+    })).rejects.toThrow(/residue-detected/);
+    expect(calls.some((call) => call.includes(' delete '))).toBe(false);
+  });
+
+  it('refuses foreign markers before deleting confirmed resources', async () => {
+    const calls: string[] = [];
+    const runner = (command: string, args: string[]) => {
+      calls.push(`${command} ${args.join(' ')}`);
+      if (command === 'gcloud' && args[0] === 'auth') return 'token';
+      if (args.includes('api-gateway') && args.includes('describe')) {
+        return JSON.stringify({ labels: { 'postman-run-marker': 'foreign' } });
+      }
+      return '';
+    };
+    const manifest = baseManifest({
+      resources: {
+        gateway: { attempted: true, created: true },
+        endpoints: { attempted: false, created: false },
+        apigee: { attempted: false, created: false }
+      }
+    });
+    await expect(teardown({
+      runner,
+      env: { projectId: 'p', location: 'global', apigeeOrg: 'p', apigeeEnv: 'test-env' },
+      manifest,
+      log: () => {}
+    })).rejects.toThrow(/REFUSING/);
+    expect(calls.some((call) => call.includes(' delete '))).toBe(false);
+  });
+
+  it('deletes only confirmed-created resources after ownership verification and proves post-delete absence', async () => {
+    const calls: string[] = [];
+    let gatewayPresent = true;
+    const runner = (command: string, args: string[]) => {
+      calls.push(`${command} ${args.join(' ')}`);
+      if (command === 'gcloud' && args[0] === 'auth') return 'token';
+      if (args.includes('api-gateway') && args.includes('apis') && args.includes('describe')) {
+        if (!gatewayPresent) throw new Error('404 NOT_FOUND');
+        return JSON.stringify({ labels: { 'postman-run-marker': 'postman-live-1234' } });
+      }
+      if (args.includes('api-gateway') && args.includes('delete')) {
+        gatewayPresent = false;
+        return '';
+      }
+      if (command === 'curl') throw new Error('503 Apigee unavailable');
+      return '';
+    };
+    const manifest = baseManifest({
+      resources: {
+        gateway: { attempted: true, created: true },
+        endpoints: { attempted: false, created: false },
+        apigee: { attempted: false, created: false }
+      }
+    });
+    const result = await teardown({
+      runner,
+      env: { projectId: 'p', location: 'global', apigeeOrg: 'p', apigeeEnv: 'test-env' },
+      manifest,
+      log: () => {}
+    });
+    expect(result).toEqual({ status: 'pass' });
+    expect(calls.some((call) => call.includes('api-gateway apis delete'))).toBe(true);
+    expect(calls.some((call) => call.includes('endpoints'))).toBe(false);
+    expect(calls.some((call) => call.includes('apigee.googleapis.com'))).toBe(false);
+    const deletesAfterFirstTeardown = calls.filter((call) => call.includes(' delete ')).length;
+    await expect(teardown({
+      runner,
+      env: { projectId: 'p', location: 'global', apigeeOrg: 'p', apigeeEnv: 'test-env' },
+      manifest,
+      log: () => {}
+    })).resolves.toEqual({ status: 'pass' });
+    expect(calls.filter((call) => call.includes(' delete '))).toHaveLength(deletesAfterFirstTeardown);
+    expect(markResourceAttempted(manifest, 'endpoints').attempted).toBe(true);
+    expect(markResourceCreated(manifest, 'endpoints')).toEqual({ attempted: true, created: true });
+  });
+
   it('classifies GCP probe and absence errors', () => {
     expect(classifyProbeError('403 permission denied')).toBe('fatal');
     expect(classifyProbeError('400 invalid argument')).toBe('fatal');
@@ -442,30 +686,71 @@ describe('GCP live validation contract', () => {
     const raw = readFileSync(join(root, 'validation/evidence/live-gcp-surfaces.json'), 'utf8');
     const evidence = JSON.parse(raw);
     expect(evidence.schemaVersion).toBe(2);
-    expect(isHistoricalEvidence(evidence)).toBe(true);
-    expect(evidence.evidenceKind).toBe('historical');
-    expect(evidence.actionVersion).toBe('legacy-unbound');
-    expect(evidence.distCliSha256).toBe('legacy-unbound');
-    expect(evidence.distIndexSha256).toBe('legacy-unbound');
-    expect(evidence.gitCommit).toBe('legacy-unbound');
     expect(evidence.projectScope).toBe(PROJECT_SCOPE_ALIAS);
-    expect(assertAcceptableLiveEvidence(evidence)).toEqual({ kind: 'historical' });
-    expect(evidence.results).toHaveLength(10);
     expect(evidence.totals.passed + evidence.totals.failed + evidence.totals.substituted).toBe(evidence.totals.cases);
-    expect(evidence.results.map((result: { name: string }) => result.name)).toEqual([
-      'gateway-explicit-api-id',
-      'gateway-discovery',
-      'gateway-repo-label',
-      'gateway-label-conflict',
-      'endpoints-explicit-api-id',
-      'endpoints-discovery',
-      'apigee-discovery',
-      'discover-many',
-      'iac-single',
-      'ambiguity'
-    ]);
-    expect(matrixSlotsMissingCoverage(evidence.results).length).toBeGreaterThan(0);
     expect(raw).not.toMatch(/https?:\/\/|Bearer |projectNumber|specBody|ya29\./i);
+
+    const historicalLegacy = {
+      schemaVersion: 2,
+      evidenceKind: 'historical',
+      capturedAt: '2026-07-18T00:00:00.000Z',
+      actionVersion: 'legacy-unbound',
+      gitCommit: 'legacy-unbound',
+      distCliSha256: 'legacy-unbound',
+      distIndexSha256: 'legacy-unbound',
+      projectScope: PROJECT_SCOPE_ALIAS,
+      totals: { cases: 10, passed: 10, failed: 0, substituted: 0 },
+      teardown: { status: 'pass' },
+      results: [
+        'gateway-explicit-api-id',
+        'gateway-discovery',
+        'gateway-repo-label',
+        'gateway-label-conflict',
+        'endpoints-explicit-api-id',
+        'endpoints-discovery',
+        'apigee-discovery',
+        'discover-many',
+        'iac-single',
+        'ambiguity'
+      ].map((name) => toEvidenceResult(name, 'pass', { validationMode: 'legacy-unbound' }))
+    };
+
+    if (isHistoricalEvidence(evidence)) {
+      expect(evidence.evidenceKind).toBe('historical');
+      expect(evidence.actionVersion).toBe('legacy-unbound');
+      expect(evidence.distCliSha256).toBe('legacy-unbound');
+      expect(evidence.distIndexSha256).toBe('legacy-unbound');
+      expect(evidence.gitCommit).toBe('legacy-unbound');
+      expect(assertAcceptableLiveEvidence(evidence)).toEqual({ kind: 'historical' });
+      expect(evidence.results).toHaveLength(10);
+      expect(evidence.results.map((result: { name: string }) => result.name)).toEqual([
+        'gateway-explicit-api-id',
+        'gateway-discovery',
+        'gateway-repo-label',
+        'gateway-label-conflict',
+        'endpoints-explicit-api-id',
+        'endpoints-discovery',
+        'apigee-discovery',
+        'discover-many',
+        'iac-single',
+        'ambiguity'
+      ]);
+      expect(matrixSlotsMissingCoverage(evidence.results).length).toBeGreaterThan(0);
+    } else {
+      expect(evidence.evidenceKind).toBe('current');
+      expect(evidence.actionVersion).not.toBe('legacy-unbound');
+      expect(evidence.gitCommit).toMatch(/^[a-f0-9]{40}$/);
+      expect(evidence.distCliSha256).toMatch(/^[a-f0-9]{64}$/);
+      expect(evidence.distIndexSha256).toMatch(/^[a-f0-9]{64}$/);
+      // Checked-in current failure receipt is schema-valid but not acceptable success evidence.
+      expect(() => assertAcceptableLiveEvidence(evidence)).toThrow(/failed or pending|failures|teardown|incomplete matrix|missing-fixture/);
+      expect(evidence.totals.failed).toBeGreaterThan(0);
+      expect(evidence.teardown.status).not.toBe('pass');
+    }
+
+    expect(isHistoricalEvidence(historicalLegacy)).toBe(true);
+    expect(assertAcceptableLiveEvidence(historicalLegacy)).toEqual({ kind: 'historical' });
+    expect(matrixSlotsMissingCoverage(historicalLegacy.results).length).toBeGreaterThan(0);
 
     const completeResults = LIVE_COVERAGE_MATRIX.map((slot) => toEvidenceResult(slot.name, 'pass', {
       providerType: slot.providerType,
@@ -490,7 +775,15 @@ describe('GCP live validation contract', () => {
       evidenceKind: 'historical'
     })).toThrow(/hybrid|historical/);
     expect(() => assertAcceptableLiveEvidence({
-      ...evidence,
+      ...current,
+      evidenceKind: undefined
+    })).toThrow(/must declare evidenceKind current/);
+    expect(() => assertAcceptableLiveEvidence({
+      ...historicalLegacy,
+      actionVersion: '1.2.3'
+    })).toThrow(/exact legacy-unbound bindings/);
+    expect(() => assertAcceptableLiveEvidence({
+      ...historicalLegacy,
       results: completeResults,
       totals: { cases: completeResults.length, passed: completeResults.length, failed: 0, substituted: 0 }
     })).toThrow(/unbound complete/);
@@ -522,9 +815,9 @@ describe('GCP live validation contract', () => {
       totals: { cases: completeResults.length, passed: completeResults.length - 1, failed: 0, substituted: 0 }
     })).toThrow(/totals/);
     expect(() => assertAcceptableLiveEvidence({
-      ...evidence,
-      results: [...evidence.results, toEvidenceResult('extra', 'fail', {})],
-      totals: { cases: evidence.results.length + 1, passed: evidence.results.length, failed: 1, substituted: 0 }
+      ...historicalLegacy,
+      results: [...historicalLegacy.results, toEvidenceResult('extra', 'fail', {})],
+      totals: { cases: historicalLegacy.results.length + 1, passed: historicalLegacy.results.length, failed: 1, substituted: 0 }
     })).toThrow(/historical receipt must contain only completed passing cases/);
     const withBadSubstitute = completeResults.map((result) => (
       result.name === 'agent-engines'

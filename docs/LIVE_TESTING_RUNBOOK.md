@@ -55,12 +55,12 @@ Agent Engines completion/substitute must pair an authenticated probe (available 
 
 Schema v2 includes ISO `capturedAt`, `actionVersion`, `gitCommit`, `distCliSha256`, `distIndexSha256`, constant `projectScope` alias, totals, sanitized teardown status, and per-case `{name, providerType, sourceType, specFormat, status, validationMode, reasonCode?}`. No resource IDs, names, URLs, bodies, tokens, queries, or raw remote errors.
 
-Receipt acceptance is dual-mode: historical migration may keep the ten prior passes with `legacy-unbound` digests (explicitly incomplete); a current complete receipt requires bound git/dist/action fields, full matrix coverage, zero failures, justified substitutes only, and clean teardown. Fake hybrids, unbound complete claims, and current receipts with failed/missing-fixture/pending teardown are rejected.
+Receipt acceptance is dual-mode: historical migration must declare `historical` and use `legacy-unbound` for all four binding fields, preserving the ten prior passes as explicitly incomplete; a current complete receipt must declare `current`, use bound git/dist/action fields, have full matrix coverage, zero failures, justified substitutes only, and clean teardown. Fake hybrids, partial/unbound bindings, unbound complete claims, and current receipts with failed/missing-fixture/pending teardown are rejected.
 
 ## Safety rules
 
 - `--provision` and `--teardown` are both required.
-- Receipt binding is computed before credentials or provisioning, so failure receipts retain the current action version, commit, and dist digests. Teardown runs in `finally`, deletes only exact current-run Gateway/Endpoints/Apigee proxy names after ownership checks, proves no residue, and records `pending` until that proof completes.
+- Receipt binding is computed before credentials or provisioning, so failure receipts retain the current action version, commit, and dist digests. Teardown runs in `finally`: unattempted surfaces are not probed; attempted-but-unconfirmed surfaces must prove exact-name absence and are never deleted; confirmed resources must prove the current-run marker/name before deletion and exact-name absence afterward. Repeated teardown is safe because an already-absent confirmed resource is accepted as absent.
 - Shared Apigee organization, environment, environment group, and instance resources are never deleted.
 - Do not use a production project or broaden cleanup beyond the current run.
 - Never log `GCP_LIVE_FIXTURES_JSON` or credential material.
