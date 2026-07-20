@@ -1,11 +1,11 @@
 {
   "schemaVersion": 2,
   "evidenceKind": "current",
-  "capturedAt": "2026-07-20T13:24:44.434Z",
+  "capturedAt": "2026-07-20T14:19:00.916Z",
   "actionVersion": "1.0.0",
-  "gitCommit": "ffaec1fdcb63e918cf8181cb21a903c105e4ebf9",
-  "distCliSha256": "2cb3e1e4aebc7ff14c5eec798b8a5b2e9c81921831d9befed763391ff9cedcfe",
-  "distIndexSha256": "802207bbf8e8720ff63371339f1b16b9b0f4d4300e050422c5955b6f073966dc",
+  "gitCommit": "e44a35df0e2252b14a4b3f9f6a21f078c887959d",
+  "distCliSha256": "48d89b97f3af4b726239e652df49cb8feac2009e64692aad6aecca9815d1684b",
+  "distIndexSha256": "ccbefdffe5bbf0136ca0faccb2a041d5c92ac730cf5e59b796b2ac0ccf34572b",
   "projectScope": "live-validation-project",
   "totals": {
     "cases": 24,
@@ -122,14 +122,6 @@
       "validationMode": "exact-bytes"
     },
     {
-      "name": "iac-local",
-      "providerType": "iac-local",
-      "sourceType": "iac-embedded",
-      "specFormat": "openapi-yaml",
-      "status": "pass",
-      "validationMode": "exact-bytes"
-    },
-    {
       "name": "apigee-archive",
       "providerType": "apigee",
       "sourceType": "apigee-archive-deployment",
@@ -218,6 +210,14 @@
       "status": "substitute",
       "validationMode": "exact-bytes",
       "reasonCode": "iam-denied"
+    },
+    {
+      "name": "iac-local",
+      "providerType": "iac-local",
+      "sourceType": "iac-embedded",
+      "specFormat": "openapi-yaml",
+      "status": "pass",
+      "validationMode": "exact-bytes"
     }
   ]
 }
