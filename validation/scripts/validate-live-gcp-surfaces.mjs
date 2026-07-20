@@ -2011,13 +2011,28 @@ async function collectCliProbeStatuses({ runner, cliPath, env }) {
   }
 }
 
-async function runMatrixCoverage({ runner, token, cliPath, env, fixtures, provisionedResults, log }) {
+export async function runMatrixCoverage({ runner, token, cliPath, env, fixtures, provisionedResults, slots = LIVE_COVERAGE_MATRIX, log }) {
   const results = [];
-  const cliProbes = await collectCliProbeStatuses({ runner, cliPath, env });
+  const unsatisfied = slots.filter((slot) => !(slot.satisfiedBy ?? []).some((name) => (
+    provisionedResults.some((result) => result.name === name && result.status === 'pass')
+  )));
+  const cliProbes = unsatisfied.length
+    ? await collectCliProbeStatuses({ runner, cliPath, env })
+    : new Map();
 
-  for (const slot of LIVE_COVERAGE_MATRIX) {
-    const satisfied = (slot.satisfiedBy ?? []).some((name) => provisionedResults.some((result) => result.name === name && result.status === 'pass'));
-    if (satisfied) continue;
+  for (const slot of slots) {
+    const satisfiedBy = (slot.satisfiedBy ?? [])
+      .map((name) => provisionedResults.find((result) => result.name === name && result.status === 'pass'))
+      .find(Boolean);
+    if (satisfiedBy) {
+      results.push(toEvidenceResult(slot.name, 'pass', {
+        providerType: slot.providerType,
+        sourceType: satisfiedBy.sourceType || slot.expectedSourceTypes[0] || '',
+        specFormat: satisfiedBy.specFormat || '',
+        validationMode: slot.validationMode
+      }));
+      continue;
+    }
 
     const fixture = fixtureForSlot(slot, fixtures);
     const surface = await probeProviderSurface({
@@ -2314,6 +2329,7 @@ export async function runPhaseValidate({
       env,
       fixtures,
       provisionedResults,
+      slots: matrixSlots,
       log
     });
     for (const result of coverage) {
