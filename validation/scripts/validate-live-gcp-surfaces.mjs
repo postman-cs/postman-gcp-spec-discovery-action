@@ -1701,7 +1701,7 @@ export function probeUrlForProvider(providerType, env, options = {}) {
       }
       return `https://apigee.googleapis.com/v1/organizations/${org}/apis?count=1`;
     case 'api-hub':
-      return `https://apihub.googleapis.com/v1/projects/${projectId}/locations/global/apiHubInstances?pageSize=1`;
+      return `https://apihub.googleapis.com/v1/projects/${projectId}/locations/global/apis?pageSize=1`;
     case 'apigee-registry':
       return `https://apigeeregistry.googleapis.com/v1/projects/${projectId}/locations/-?pageSize=1`;
     case 'app-integration':
@@ -1709,7 +1709,7 @@ export function probeUrlForProvider(providerType, env, options = {}) {
     case 'connectors-custom':
       return `https://connectors.googleapis.com/v1/projects/${projectId}/locations/global/customConnectors?pageSize=1`;
     case 'apigee-portal':
-      return `https://apigee.googleapis.com/v1/organizations/${org}/sites?pageSize=1`;
+      return `https://apigee.googleapis.com/v1/organizations/${org}/sites`;
     case 'vertex-extensions':
       return `https://us-central1-aiplatform.googleapis.com/v1beta1/projects/${projectId}/locations/us-central1/extensions?pageSize=1`;
     case 'agent-engines':
@@ -1729,14 +1729,22 @@ export async function probeProviderSurface({ runner, token, env, providerType, p
   }
   const url = probeUrlForProvider(providerType, env, { probeSurface: probeSurface ?? providerType });
   let probeMessage = '';
+  let availableReason = null;
   if (url) {
     const captured = restCapture(runner, token, 'GET', url);
     if (!captured.ok) probeMessage = captured.message;
+    else if (OFFICIALLY_DEPRECATED_PROVIDER_TYPES.includes(providerType)) availableReason = 'product-deprecated';
+    else if (providerType === 'apigee-portal') {
+      try {
+        const body = JSON.parse(String(captured.body ?? '{}'));
+        if (Array.isArray(body.sites) && body.sites.length === 0) availableReason = 'api-unavailable';
+      } catch { /* A malformed successful response remains inconclusive. */ }
+    }
   }
   const probeStatus = probeMessage
     ? (classifySubstituteReason({ providerType, probeSurface, probeStatus: 'skipped:error', probeMessage }) === 'iam-denied' ? 'skipped:iam' : 'skipped:error')
     : 'available';
-  const reasonCode = classifySubstituteReason({ providerType, probeSurface, probeStatus, probeMessage });
+  const reasonCode = availableReason ?? classifySubstituteReason({ providerType, probeSurface, probeStatus, probeMessage });
   return { probeStatus, reasonCode, probeMessage: probeMessage ? '[redacted]' : '' };
 }
 
@@ -2104,13 +2112,13 @@ export async function runMatrixCoverage({ runner, token, cliPath, env, fixtures,
       continue;
     }
 
-    if (OFFICIALLY_DEPRECATED_PROVIDER_TYPES.includes(slot.providerType) && surface.probeStatus === 'available' && cliProbes.has(slot.providerType)) {
+    if (surface.reasonCode && SUBSTITUTE_REASON_CODES.includes(surface.reasonCode) && cliProbes.has(slot.providerType)) {
       results.push(toEvidenceResult(slot.name, 'substitute', {
         providerType: slot.providerType,
         sourceType: slot.expectedSourceTypes[0] ?? '',
         specFormat: '',
         validationMode: slot.validationMode,
-        reasonCode: 'product-deprecated'
+        reasonCode: surface.reasonCode
       }));
       continue;
     }

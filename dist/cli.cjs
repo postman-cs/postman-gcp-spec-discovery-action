@@ -45165,9 +45165,7 @@ var GcpSdkClient = class {
     return this.getBoundedBinary(url, "Apigee Registry spec contents");
   }
   async probeApigeePortal(org) {
-    const url = resourceUrl("https://apigee.googleapis.com/", `organizations/${org}/sites`);
-    url.searchParams.set("pageSize", "1");
-    await this.getJson(url, "Apigee portal probe");
+    await this.getJson(resourceUrl("https://apigee.googleapis.com/", `organizations/${org}/sites`), "Apigee portal probe");
   }
   async listApigeePortalSites(org) {
     return this.collectPages(() => resourceUrl("https://apigee.googleapis.com/", `organizations/${org}/sites`), "Apigee portal site list", (body) => ({ items: (body.sites ?? []).map((x2) => ({ id: x2.id ?? x2.name?.split("/").pop() ?? "", name: x2.name })).filter((x2) => x2.id), nextPageToken: body.nextPageToken }));
