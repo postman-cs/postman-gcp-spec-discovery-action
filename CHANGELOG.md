@@ -1,5 +1,15 @@
 # Changelog
 
+## v1.0.1
+
+Coverage closure and correctness hardening, live-proven against real GCP surfaces (24/24 coverage slots, clean teardown).
+
+- Correct provider wire contracts: Vertex AI Extensions on `v1beta1`, Dialogflow CX tools on `v3`, Integration Connectors custom connector versions via GET; removed the unsupported Apigee environment `resourcefiles/oas` path.
+- Add remaining authoritative sources: fail-soft legacy Apigee Registry enumeration with `specs.getContents`, Apigee archive deployments, API Hub additional-content specs, and Pulumi YAML IaC discovery.
+- Enforce source authority classes: only stored-authoritative and Google-generated candidates are eligible for automatic resolution; Agent Engines removed from retained discovery.
+- Harden inputs: GCS metadata-first generation-pinned reads with size/content-type enforcement, bounded IaC reads (16 MiB IaC / 10 MiB referenced spec), stricter OpenAPI operation validation requiring nonempty responses.
+- CI/release gates enforce docs render check and actionlint; provider docs realigned with runtime.
+
 ## v1.0.0
 
 Initial release.
