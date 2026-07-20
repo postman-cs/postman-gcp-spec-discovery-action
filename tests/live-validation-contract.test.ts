@@ -133,6 +133,33 @@ describe('GCP live validation contract', () => {
       })
     ]);
   });
+
+  it('reuses binding-scoped provider probes for deprecated provider substitutes', async () => {
+    const slot = LIVE_COVERAGE_MATRIX.find((item) => item.name === 'vertex-extensions')!;
+    let commands = 0;
+    const results = await runMatrixCoverage({
+      runner: () => {
+        commands += 1;
+        return '{}\n200';
+      },
+      token: 'token',
+      cliPath: 'dist/cli.cjs',
+      env: { projectId: 'sample-project', location: 'global', apigeeOrg: 'sample-project', apigeeEnv: 'test-env' },
+      fixtures: [],
+      provisionedResults: [],
+      slots: [slot],
+      cliProbes: new Map([['vertex-extensions', 'available']]),
+      log: () => undefined
+    });
+    expect(commands).toBe(1);
+    expect(results).toEqual([
+      expect.objectContaining({
+        name: 'vertex-extensions',
+        status: 'substitute',
+        reasonCode: 'product-deprecated'
+      })
+    ]);
+  });
   it('requires project and both destructive lifecycle flags', () => {
     expect(() => requiredEnv({})).toThrow(/GCP_PROJECT_ID is required/);
     expect(requiredEnv({ GCP_PROJECT_ID: 'sample-project' })).toEqual({

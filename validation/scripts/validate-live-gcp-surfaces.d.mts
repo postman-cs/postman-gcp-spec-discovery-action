@@ -149,6 +149,7 @@ export interface LiveState {
   manifest: LiveManifest | null;
   endpointsConfigId: string;
   completedSlots: EvidenceResult[];
+  providerProbes?: Record<string, string>;
   phaseStatus: Record<string, string>;
 }
 
@@ -206,6 +207,7 @@ export function runMatrixCoverage(options: {
   fixtures: LiveFixture[];
   provisionedResults: EvidenceResult[];
   slots?: readonly LiveCoverageSlot[];
+  cliProbes?: Map<string, string>;
   log: (message: string) => void;
 }): Promise<EvidenceResult[]>;
 export function assertValidateSlotsAllowed(requestedSlots: string[] | null | undefined, matrix?: readonly LiveCoverageSlot[]): string[];
