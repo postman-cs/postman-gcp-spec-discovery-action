@@ -77,7 +77,7 @@ Failed validation with teardown `pass` is valid private failure evidence; it is 
 
 ## Coverage matrix
 
-The runner derives required surfaces from the retained provider order (api-gateway, cloud-endpoints, apigee proxy + archive, api-hub original + additional, apigee-registry, app-integration, connectors-custom, apigee-portal, vertex-extensions, agent-engines, dialogflow-tools, ces-toolsets, iac-local). Tests fail if the matrix and runtime provider order drift.
+The runner derives required surfaces from the retained provider order (api-gateway, cloud-endpoints, apigee proxy + archive, api-hub original + additional, apigee-registry, app-integration, connectors-custom, apigee-portal, vertex-extensions, dialogflow-tools, ces-toolsets, iac-local). Tests fail if the matrix and runtime provider order drift. Agent Engines are excluded because runtime class methods are not OpenAPI source.
 
 Provisioned run-scoped cases (always executed in a full validate):
 
@@ -94,16 +94,17 @@ Provisioned run-scoped cases (always executed in a full validate):
 
 Remaining matrix slots require either:
 
-- a fixture in `GCP_LIVE_FIXTURES_JSON` validated through current `dist/cli.cjs` (`exact-bytes`, `semantic-openapi`, or `manual-derived-blocked` for agent-engines), or
+- a fixture in `GCP_LIVE_FIXTURES_JSON` validated through current `dist/cli.cjs` (`exact-bytes` or `semantic-openapi`), or
 - an authenticated compiled-CLI probe for that exact provider plus a REST probe that proves a closed substitute reason: `iam-denied`, `api-unavailable`, `product-deprecated`, or `registry-unsupported`. An absent provider probe is inconclusive; names and catch-all errors never imply deprecation.
 
 `available` with no fixture is **not** completion — the case fails as `missing-fixture`.
 
-Fixture selection is provider/source-specific via optional `selectionStrategy`: strict `--api-id` (`strict-api-id`) only for source forms the runtime explicit parser accepts; `--expected-api-ids-json` + service hint (`expected-api-ids`) for parser-less providers (`app-integration`, `connectors-custom`, `agent-engines`); `api-hub-additional` uses the deterministic `spec#VARIANT` selector so generated content cannot collapse to the stored original. Strategies that can select arbitrary unrelated candidates are rejected.
+Vertex AI Extensions is the sole explicit exception: Google has deprecated the product and scheduled shutdown for 2026-11-26, so an authenticated available-but-empty probe is recorded as `product-deprecated` rather than requiring creation of a resource that is being retired.
+
+Fixture selection is provider/source-specific via optional `selectionStrategy`: strict `--api-id` (`strict-api-id`) only for source forms the runtime explicit parser accepts; `--expected-api-ids-json` + service hint (`expected-api-ids`) for parser-less providers (`app-integration`, `connectors-custom`); `api-hub-additional` uses the deterministic `spec#VARIANT` selector so generated content cannot collapse to the stored original. Strategies that can select arbitrary unrelated candidates are rejected.
 
 Apigee archive substitutes authenticate against the environment `archiveDeployments` endpoint (not the generic proxy API). Org/env values are never logged.
 
-Agent Engines completion/substitute must pair an authenticated probe (available or closed-reason unavailability) with a compiled-CLI `manual-derived-blocked` proof that local-derived authority cannot resolve/export. Availability alone cannot pass.
 
 ## Receipt
 

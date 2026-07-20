@@ -18,6 +18,7 @@ export const TRACKED_EVIDENCE_RELATIVE: 'validation/evidence/live-gcp-surfaces.j
 export const RETAINED_PROVIDER_ORDER: readonly string[];
 export const VALIDATION_MODES: readonly string[];
 export const SUBSTITUTE_REASON_CODES: readonly string[];
+export const OFFICIALLY_DEPRECATED_PROVIDER_TYPES: readonly string[];
 export const FAIL_REASON_CODES: readonly string[];
 export const FIXTURE_SELECTION_STRATEGIES: readonly string[];
 export const LIVE_PHASES: readonly string[];
@@ -265,6 +266,7 @@ export function assertFixtureResolutionMatch(
 ): boolean;
 export function classifySubstituteReason(input: {
   providerType: string;
+  probeSurface?: string;
   probeStatus: string | undefined;
   probeMessage?: string;
 }): string | null;

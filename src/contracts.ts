@@ -45,7 +45,6 @@ export const RETAINED_PROVIDER_ORDER = [
   'connectors-custom',
   'apigee-portal',
   'vertex-extensions',
-  'agent-engines',
   'dialogflow-tools',
   'ces-toolsets',
   'iac-local'
@@ -244,7 +243,7 @@ export const actionContract: GCPSpecDiscoveryActionContract = {
       description: 'Resolution status: resolved or unresolved.'
     },
     'source-type': {
-      description: 'Resolved source type: repo-spec, api-gateway-config, cloud-endpoints-config, apigee-proxy, apigee-archive-deployment, api-hub-spec, api-hub-boosted-spec, api-hub-gateway-openapi-spec, apigee-registry-spec, app-integration-trigger, connectors-custom-spec, apigee-portal-doc, vertex-extension-manifest, agent-engine-generated-spec, dialogflow-tool-schema, ces-tool-schema, ces-toolset-schema, iac-embedded, manual-review, or discover-many.'
+      description: 'Resolved source type: repo-spec, api-gateway-config, cloud-endpoints-config, apigee-proxy, apigee-archive-deployment, api-hub-spec, api-hub-boosted-spec, api-hub-gateway-openapi-spec, apigee-registry-spec, app-integration-trigger, connectors-custom-spec, apigee-portal-doc, vertex-extension-manifest, dialogflow-tool-schema, ces-tool-schema, ces-toolset-schema, iac-embedded, manual-review, or discover-many.'
     },
     'mapping-confidence': {
       description: 'Numeric confidence score for the selected service candidate.'
@@ -253,7 +252,7 @@ export const actionContract: GCPSpecDiscoveryActionContract = {
       description: 'Path to the resolved or generated specification when available.'
     },
     'api-id': {
-      description: 'Full resource name of the exported cloud source (API Gateway config, Cloud Endpoints config, Apigee proxy revision, Apigee archive deployment, API Hub spec, legacy Apigee Registry spec, Apigee portal apidoc, Vertex extension, Agent Engine, Dialogflow tool, or CES tool/toolset); empty for repo, generated, or IaC-local resolutions.'
+      description: 'Full resource name of the exported cloud source (API Gateway config, Cloud Endpoints config, Apigee proxy revision, Apigee archive deployment, API Hub spec, legacy Apigee Registry spec, Apigee portal apidoc, Vertex extension, Dialogflow tool, or CES tool/toolset); empty for repo, generated, or IaC-local resolutions.'
     },
     'service-name': {
       description: 'Resolved service name.'
@@ -271,7 +270,7 @@ export const actionContract: GCPSpecDiscoveryActionContract = {
       description: 'Ranked ambiguous candidates as JSON when resolution is unresolved with at least two candidates; empty otherwise.'
     },
     'provider-type': {
-      description: 'Provider that produced the resolved spec: api-gateway, cloud-endpoints, apigee, api-hub, apigee-registry, app-integration, connectors-custom, apigee-portal, vertex-extensions, agent-engines, dialogflow-tools, ces-toolsets, or iac-local.'
+      description: 'Provider that produced the resolved spec: api-gateway, cloud-endpoints, apigee, api-hub, apigee-registry, app-integration, connectors-custom, apigee-portal, vertex-extensions, dialogflow-tools, ces-toolsets, or iac-local.'
     },
     'spec-format': {
       description: 'Format of the resolved spec: openapi-yaml or openapi-json.'

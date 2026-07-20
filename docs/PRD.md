@@ -57,7 +57,7 @@ The action MUST set all 22 outputs in this order on every successful invocation:
 21. `derived-openapi-evidence-json`
 22. `narrowing-strategy`
 
-Provider types are `api-gateway | cloud-endpoints | apigee | api-hub | apigee-registry | app-integration | connectors-custom | apigee-portal | vertex-extensions | agent-engines | dialogflow-tools | ces-toolsets | iac-local`. Source types are declared by `src/contracts.ts`; unsupported Config Connector `APIConfig` is deliberately excluded because the official inventory has no OpenAPI content field. Spec formats are `openapi-json | openapi-yaml`. Compatibility outputs 14-16 are empty in v1. Dotenv names use `POSTMAN_GCP_SPEC_*`.
+Provider types are `api-gateway | cloud-endpoints | apigee | api-hub | apigee-registry | app-integration | connectors-custom | apigee-portal | vertex-extensions | dialogflow-tools | ces-toolsets | iac-local`. Source types are declared by `src/contracts.ts`; unsupported Config Connector `APIConfig` is deliberately excluded because the official inventory has no OpenAPI content field. Agent Engine class methods are excluded because they are runtime metadata, not OpenAPI source. Spec formats are `openapi-json | openapi-yaml`. Compatibility outputs 14-16 are empty in v1. Dotenv names use `POSTMAN_GCP_SPEC_*`.
 
 ## Requirements
 
@@ -161,7 +161,7 @@ Acceptance:
 
 ### R6 - Resolution, narrowing, modes, UX, and telemetry (P0)
 
-- Provider order is API Gateway, Cloud Endpoints, Apigee, API Hub, Application Integration, Integration Connectors, Apigee Portal, Vertex AI Extensions, Vertex AI Agent Engines, Dialogflow CX Tools, CES Toolsets, IaC local after direct repo-spec precedence.
+- Provider order is API Gateway, Cloud Endpoints, Apigee, API Hub, Application Integration, Integration Connectors, Apigee Portal, Vertex AI Extensions, Dialogflow CX Tools, CES Toolsets, IaC local after direct repo-spec precedence. Agent Engines are excluded because class methods do not constitute an OpenAPI source.
 - Narrowing order is `iac-fingerprint`, `project-correlation`, `label-prefilter`, `naming-heuristic`. It partitions without deleting; cap applies after partition. Only explicit ID or one exact label key `postman-repo` with the canonical repo-label value selects. Canonicalization lowercases the full owner/repo slug, replaces `/` with `--`, replaces every other run outside `[a-z0-9_-]` with `-`, trims leading/trailing separators, and declines label selection when the result is empty or exceeds 63 characters.
 - Equal top confidence, multiple local docs, unsupported selected candidates, or no candidate resolve to sanitized manual review, never arbitrary first-item selection.
 - `discover-many` exports every supported candidate in stable order and records attempted/exported/failed/skipped accurately.

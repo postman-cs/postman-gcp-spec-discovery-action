@@ -46182,7 +46182,7 @@ var actionContract = {
       description: "Resolution status: resolved or unresolved."
     },
     "source-type": {
-      description: "Resolved source type: repo-spec, api-gateway-config, cloud-endpoints-config, apigee-proxy, apigee-archive-deployment, api-hub-spec, api-hub-boosted-spec, api-hub-gateway-openapi-spec, apigee-registry-spec, app-integration-trigger, connectors-custom-spec, apigee-portal-doc, vertex-extension-manifest, agent-engine-generated-spec, dialogflow-tool-schema, ces-tool-schema, ces-toolset-schema, iac-embedded, manual-review, or discover-many."
+      description: "Resolved source type: repo-spec, api-gateway-config, cloud-endpoints-config, apigee-proxy, apigee-archive-deployment, api-hub-spec, api-hub-boosted-spec, api-hub-gateway-openapi-spec, apigee-registry-spec, app-integration-trigger, connectors-custom-spec, apigee-portal-doc, vertex-extension-manifest, dialogflow-tool-schema, ces-tool-schema, ces-toolset-schema, iac-embedded, manual-review, or discover-many."
     },
     "mapping-confidence": {
       description: "Numeric confidence score for the selected service candidate."
@@ -46191,7 +46191,7 @@ var actionContract = {
       description: "Path to the resolved or generated specification when available."
     },
     "api-id": {
-      description: "Full resource name of the exported cloud source (API Gateway config, Cloud Endpoints config, Apigee proxy revision, Apigee archive deployment, API Hub spec, legacy Apigee Registry spec, Apigee portal apidoc, Vertex extension, Agent Engine, Dialogflow tool, or CES tool/toolset); empty for repo, generated, or IaC-local resolutions."
+      description: "Full resource name of the exported cloud source (API Gateway config, Cloud Endpoints config, Apigee proxy revision, Apigee archive deployment, API Hub spec, legacy Apigee Registry spec, Apigee portal apidoc, Vertex extension, Dialogflow tool, or CES tool/toolset); empty for repo, generated, or IaC-local resolutions."
     },
     "service-name": {
       description: "Resolved service name."
@@ -46209,7 +46209,7 @@ var actionContract = {
       description: "Ranked ambiguous candidates as JSON when resolution is unresolved with at least two candidates; empty otherwise."
     },
     "provider-type": {
-      description: "Provider that produced the resolved spec: api-gateway, cloud-endpoints, apigee, api-hub, apigee-registry, app-integration, connectors-custom, apigee-portal, vertex-extensions, agent-engines, dialogflow-tools, ces-toolsets, or iac-local."
+      description: "Provider that produced the resolved spec: api-gateway, cloud-endpoints, apigee, api-hub, apigee-registry, app-integration, connectors-custom, apigee-portal, vertex-extensions, dialogflow-tools, ces-toolsets, or iac-local."
     },
     "spec-format": {
       description: "Format of the resolved spec: openapi-yaml or openapi-json."
@@ -48732,145 +48732,6 @@ var VertexExtensionsProvider = class {
   }
 };
 
-// src/lib/providers/agent-engines.ts
-var AgentEnginesProvider = class {
-  constructor(client, scope) {
-    this.client = client;
-    this.scope = scope;
-  }
-  client;
-  scope;
-  type = "agent-engines";
-  async locations() {
-    return this.scope.location && this.scope.location !== "global" ? [this.scope.location] : this.client.listVertexLocations(this.scope.projectId);
-  }
-  async probe() {
-    try {
-      let failure;
-      for (const location of await this.locations()) {
-        try {
-          await this.client.probeAgentEngines(this.scope.projectId, location);
-          return "available";
-        } catch (error) {
-          failure = error;
-        }
-      }
-      return probeFailureStatus(failure ?? new Error("Vertex AI returned no locations"));
-    } catch (error) {
-      return probeFailureStatus(error);
-    }
-  }
-  async listCandidates() {
-    const engines = [];
-    for (const location of await this.locations()) {
-      try {
-        engines.push(...await this.client.listAgentEngines(this.scope.projectId, location));
-      } catch {
-      }
-    }
-    return engines.filter((engine) => engine.classMethods.length > 0).map((engine) => this.toCandidate(engine));
-  }
-  toCandidate(engine) {
-    const document2 = JSON.stringify(assembleAgentEngineOpenApi(engine));
-    const evidence = [
-      "OpenAPI assembled from Agent Engine classMethods declarations; local-derived and manual-review only",
-      "Authority local-derived cannot auto-resolve or auto-export"
-    ];
-    try {
-      for (const declaration of engine.classMethods) {
-        if (typeof declaration.name !== "string") throw new Error("Invalid classMethod declaration");
-      }
-      const unsupportedModes = unsupportedAgentEngineModes(engine);
-      if (unsupportedModes.length > 0) {
-        evidence.push(`Unsupported Agent Engine api_mode(s) ${unsupportedModes.join(", ")}; manual review`);
-      }
-      parseAndValidateOpenApi(document2);
-    } catch {
-      evidence.push("Generated spec has no operations or is invalid; manual review");
-    }
-    return withAuthority({
-      id: engine.name,
-      apiId: engine.name,
-      name: engine.displayName || engine.name.split("/").pop(),
-      providerType: this.type,
-      sourceType: "agent-engine-generated-spec",
-      authority: "local-derived",
-      projectId: this.scope.projectId,
-      tags: {},
-      supported: false,
-      evidence,
-      meta: { generatedOpenApi: document2 }
-    });
-  }
-  async exportSpec(candidate) {
-    return { ...decodeUtf8OpenApi(candidate.meta.generatedOpenApi ?? ""), evidence: ["OpenAPI assembled from Agent Engine classMethods declarations"] };
-  }
-};
-var AGENT_ENGINE_MODE_OPERATIONS = {
-  "": "query",
-  async: "query",
-  stream: "streamQuery",
-  async_stream: "streamQuery"
-};
-function unsupportedAgentEngineModes(engine) {
-  return [...new Set(
-    engine.classMethods.map((declaration) => typeof declaration.api_mode === "string" ? declaration.api_mode : "").filter((mode) => !(mode in AGENT_ENGINE_MODE_OPERATIONS))
-  )];
-}
-function agentEngineRegion(name) {
-  return /^projects\/[^/]+\/locations\/([^/]+)\//.exec(name)?.[1];
-}
-function assembleAgentEngineOpenApi(engine) {
-  const paths = {};
-  for (const suffix of [...new Set(Object.values(AGENT_ENGINE_MODE_OPERATIONS))]) {
-    const declarations = engine.classMethods.filter((declaration) => {
-      const mode = typeof declaration.api_mode === "string" ? declaration.api_mode : "";
-      return AGENT_ENGINE_MODE_OPERATIONS[mode] === suffix;
-    });
-    if (declarations.length === 0) continue;
-    paths[`/v1/{engine.name}:${suffix}`] = {
-      post: {
-        operationId: suffix,
-        description: declarations.map((declaration) => typeof declaration.description === "string" ? declaration.description : void 0).filter(Boolean).join("\n\n") || void 0,
-        parameters: [{ name: "engine.name", in: "path", required: true, schema: { type: "string" } }],
-        requestBody: {
-          required: true,
-          content: {
-            "application/json": {
-              schema: {
-                oneOf: declarations.map((declaration) => ({
-                  type: "object",
-                  required: ["class_method", "input"],
-                  properties: {
-                    class_method: { type: "string", enum: [declaration.name] },
-                    input: parameterSchema(declaration)
-                  }
-                }))
-              }
-            }
-          }
-        },
-        responses: { "200": { description: "Agent Engine method response" } }
-      }
-    };
-  }
-  const region = agentEngineRegion(engine.name);
-  return {
-    openapi: "3.0.3",
-    info: { title: engine.displayName || engine.name.split("/").pop(), version: "generated", description: "Generated from Vertex AI Agent Engine classMethods declarations" },
-    ...region ? { servers: [{ url: `https://${region}-aiplatform.googleapis.com` }] } : {},
-    paths
-  };
-}
-function parameterSchema(declaration) {
-  if (isRecord(declaration.parameters)) return declaration.parameters;
-  if (isRecord(declaration.properties)) return { type: "object", properties: declaration.properties };
-  return { type: "object", additionalProperties: true };
-}
-function isRecord(value) {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
 // src/lib/providers/ces-toolsets.ts
 var PATTERN4 = /^projects\/([^/]+)\/locations\/global\/apps\/[^/]+\/(?:tools\/[^/]+|toolsets\/[^/]+(?:\/tools\/[^/]+)?)$/;
 var CesToolsetsProvider = class {
@@ -49239,7 +49100,6 @@ function buildProviders(inputs, dependencies, iacScan) {
     new ConnectorsCustomProvider(dependencies.client, { projectId: inputs.projectId, apiId: inputs.apiId }),
     new ApigeePortalProvider(dependencies.client, { projectId: inputs.projectId, apiId: inputs.apiId }),
     new VertexExtensionsProvider(dependencies.client, { projectId: inputs.projectId, location: inputs.location, apiId: inputs.apiId }),
-    new AgentEnginesProvider(dependencies.client, { projectId: inputs.projectId, location: inputs.location, apiId: inputs.apiId }),
     new DialogflowToolsProvider(dependencies.client, { projectId: inputs.projectId, apiId: inputs.apiId }),
     new CesToolsetsProvider(dependencies.client, { projectId: inputs.projectId, apiId: inputs.apiId }),
     new IacLocalProvider(iacScan)
