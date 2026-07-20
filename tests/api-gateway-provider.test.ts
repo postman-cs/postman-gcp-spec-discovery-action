@@ -180,4 +180,36 @@ describe('API Gateway provider', () => {
       await expect(provider.exportSpec(candidate)).rejects.toThrow();
     }
   });
+
+  it('GCP-GATEWAY-008: one broken FULL export does not hide healthy configs during automatic discovery', async () => {
+    const client = fakeClient();
+    const healthy = fullConfig();
+    const broken = fullConfig({ name: 'projects/sample-project-123/locations/global/apis/payments/configs/broken' });
+    client.listApiGatewayConfigs = vi.fn(async () => [
+      { ...broken, openapiDocuments: [], grpcServices: [], managedServiceConfigs: [] },
+      { ...healthy, openapiDocuments: [], grpcServices: [], managedServiceConfigs: [] }
+    ]);
+    client.getApiGatewayConfig = vi.fn(async (name) => {
+      if (name === broken.name) throw new Error('FAILED_PRECONDITION');
+      return healthy;
+    });
+
+    const candidates = await new ApiGatewayProvider(client, {
+      projectId: 'sample-project-123',
+      location: 'global'
+    }).listCandidates();
+
+    expect(candidates).toHaveLength(2);
+    expect(candidates[0]).toMatchObject({
+      id: broken.name,
+      supported: false,
+      authority: 'metadata-only'
+    });
+    expect(candidates[0]?.evidence).toContain('API Gateway FULL source export is unavailable; retained for manual review');
+    expect(candidates[1]).toMatchObject({
+      id: healthy.name,
+      supported: true,
+      authority: 'stored-authoritative'
+    });
+  });
 });

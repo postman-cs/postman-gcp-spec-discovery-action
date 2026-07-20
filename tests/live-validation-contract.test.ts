@@ -9,6 +9,7 @@ import {
   DEFAULT_PHASE_TIMEOUT_MS,
   LIVE_COVERAGE_MATRIX,
   LIVE_PHASES,
+  LIVE_REQUIRED_SERVICES,
   LIVE_STATE_SCHEMA_VERSION,
   MAX_COMMAND_TIMEOUT_MS,
   MIN_COMMAND_TIMEOUT_MS,
@@ -91,6 +92,14 @@ function tempDir(prefix: string): string {
 }
 
 describe('GCP live validation contract', () => {
+  it('enables every API required by the compiled CLI preflight and core fixtures', () => {
+    expect(LIVE_REQUIRED_SERVICES).toEqual([
+      'cloudresourcemanager.googleapis.com',
+      'apigateway.googleapis.com',
+      'servicemanagement.googleapis.com',
+      'servicecontrol.googleapis.com'
+    ]);
+  });
   it('requires project and both destructive lifecycle flags', () => {
     expect(() => requiredEnv({})).toThrow(/GCP_PROJECT_ID is required/);
     expect(requiredEnv({ GCP_PROJECT_ID: 'sample-project' })).toEqual({
@@ -1162,6 +1171,39 @@ describe('GCP live validation contract', () => {
     expect(mergeCompletedSlots(prior, [
       toEvidenceResult('iac-single', 'pass', { providerType: 'iac-local', sourceType: 'iac-embedded', validationMode: 'exact-bytes' })
     ]).map((result) => result.name)).toEqual(['gateway-explicit-api-id', 'iac-single']);
+
+    const failedPrior = [toEvidenceResult('gateway-explicit-api-id', 'fail', {
+      providerType: 'api-gateway',
+      validationMode: 'exact-bytes',
+      reasonCode: 'cli-failed'
+    })];
+    await saveLiveState(statePath, { ...provisioned.state, completedSlots: failedPrior });
+    let retryRuns = 0;
+    const retried = await runPhaseValidate({
+      runner,
+      token: 'token',
+      cliPath: binding.cliPath,
+      env,
+      state: { ...provisioned.state, completedSlots: failedPrior },
+      statePath,
+      receiptPath: validateReceipt,
+      slots: ['gateway-explicit-api-id'],
+      fixtures: [],
+      deadline: createPhaseDeadline(DEFAULT_PHASE_TIMEOUT_MS),
+      deps: {
+        runProvisionedCases: async () => {
+          retryRuns += 1;
+          return [toEvidenceResult('gateway-explicit-api-id', 'pass', {
+            providerType: 'api-gateway',
+            sourceType: 'api-gateway-config',
+            validationMode: 'exact-bytes'
+          })];
+        }
+      },
+      log: () => undefined
+    });
+    expect(retryRuns).toBe(1);
+    expect(retried.results).toEqual([expect.objectContaining({ name: 'gateway-explicit-api-id', status: 'pass' })]);
 
     await expect(runPhaseValidate({
       runner,
