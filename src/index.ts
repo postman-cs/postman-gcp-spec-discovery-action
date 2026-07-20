@@ -142,8 +142,9 @@ export { scanGCPIac, type IacScanResult, type IacFingerprint } from './lib/repo/
 export { findExistingRepoSpecTyped, type RepoSpecMatch } from './lib/repo/specs.js';
 export { ApiGatewayProvider, parseApiGatewayConfigName } from './lib/providers/api-gateway.js';
 export { CloudEndpointsProvider, parseEndpointConfigName } from './lib/providers/cloud-endpoints.js';
-export { ApigeeProvider, parseApigeeRevisionName } from './lib/providers/apigee.js';
-export { ApiHubProvider, parseApiHubSpecName } from './lib/providers/api-hub.js';
+export { ApigeeProvider, parseApigeeArchiveDeploymentName, parseApigeeRevisionName } from './lib/providers/apigee.js';
+export { ApiHubProvider, parseApiHubAdditionalSpecName, parseApiHubSpecName } from './lib/providers/api-hub.js';
+export { ApigeeRegistryProvider, parseApigeeRegistrySpecName } from './lib/providers/apigee-registry.js';
 export { AppIntegrationProvider } from './lib/providers/app-integration.js';
 export { ConnectorsCustomProvider, parseGcsSpecLocation } from './lib/providers/connectors-custom.js';
 export { ApigeePortalProvider, parseApigeePortalApidocName } from './lib/providers/apigee-portal.js';

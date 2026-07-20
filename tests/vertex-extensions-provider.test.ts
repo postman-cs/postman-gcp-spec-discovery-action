@@ -14,7 +14,11 @@ describe('Vertex extensions provider', () => {
   it('exports an inline manifest OpenAPI document', async () => {
     const provider = new VertexExtensionsProvider(client(), { projectId: 'sample-project-123' });
     const candidate = (await provider.listCandidates())[0]!;
-    expect(candidate).toMatchObject({ supported: true, providerType: 'vertex-extensions' });
+    expect(candidate).toMatchObject({
+      supported: true,
+      providerType: 'vertex-extensions',
+      authority: 'stored-authoritative'
+    });
     await expect(provider.exportSpec(candidate)).resolves.toMatchObject({ content: OAS, format: 'openapi-yaml' });
   });
 

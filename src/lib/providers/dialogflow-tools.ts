@@ -1,8 +1,8 @@
-import type { ProviderProbeStatus } from '../../contracts.js';
+import type { ProviderProbeStatus, SourceAuthority } from '../../contracts.js';
 import type { DialogflowToolSummary, GcpDiscoveryClient } from '../gcp/clients.js';
 import { decodeUtf8OpenApi } from './source-document.js';
 import { probeFailureStatus } from './probe.js';
-import type { SpecCandidate, SpecExportResult, SpecProvider } from './types.js';
+import { withAuthority, type SpecCandidate, type SpecExportResult, type SpecProvider } from './types.js';
 
 const PATTERN = /^projects\/([^/]+)\/locations\/([^/]+)\/agents\/([^/]+)\/tools\/([^/]+)$/;
 export function parseDialogflowToolName(value: string) {
@@ -26,8 +26,23 @@ export class DialogflowToolsProvider implements SpecProvider {
     return tools.map((tool) => {
       const schema = tool.textSchema?.trim();
       let supported = Boolean(schema);
-      if (schema) try { decodeUtf8OpenApi(schema); } catch { supported = false; }
-      return { id: tool.name, apiId: tool.name, name: tool.displayName || tool.name.split('/').pop()!, providerType: this.type, projectId: this.scope.projectId, tags: {}, supported, evidence: [schema ? 'Dialogflow tool stores an OpenAPI text schema' : 'Dialogflow tool has no OpenAPI text schema; only OPEN_API_TOOL tools are exportable'], meta: { textSchema: schema ?? '' } };
+      let authority: SourceAuthority = schema ? 'stored-authoritative' : 'metadata-only';
+      if (schema) {
+        try { decodeUtf8OpenApi(schema); } catch { supported = false; authority = 'metadata-only'; }
+      }
+      return withAuthority({
+        id: tool.name,
+        apiId: tool.name,
+        name: tool.displayName || tool.name.split('/').pop()!,
+        providerType: this.type,
+        sourceType: 'dialogflow-tool-schema',
+        authority,
+        projectId: this.scope.projectId,
+        tags: {},
+        supported,
+        evidence: [schema ? 'Dialogflow tool stores an OpenAPI text schema' : 'Dialogflow tool has no OpenAPI text schema; only OPEN_API_TOOL tools are exportable'],
+        meta: { textSchema: schema ?? '' }
+      });
     });
   }
   public async exportSpec(candidate: SpecCandidate): Promise<SpecExportResult> {

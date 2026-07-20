@@ -1,4 +1,5 @@
 import type { ProviderType, ResolutionResult, SpecFormat } from '../../contracts.js';
+import { isResolvableAuthority } from '../../contracts.js';
 import type { RankedServiceCandidate } from './service-resolver.js';
 
 export interface SourceSelectionInput {
@@ -12,7 +13,13 @@ export interface SourceSelectionInput {
 const MINIMUM_RESOLVED_CONFIDENCE = 40;
 
 function isResolvedCandidate(candidate: RankedServiceCandidate | undefined): candidate is RankedServiceCandidate {
-  return Boolean(candidate && !candidate.ambiguous && candidate.supported && candidate.confidence >= MINIMUM_RESOLVED_CONFIDENCE);
+  return Boolean(
+    candidate &&
+      !candidate.ambiguous &&
+      candidate.supported &&
+      isResolvableAuthority(candidate.authority) &&
+      candidate.confidence >= MINIMUM_RESOLVED_CONFIDENCE
+  );
 }
 
 function sourceTypeFor(providerType: ProviderType): ResolutionResult['sourceType'] {
@@ -25,15 +32,22 @@ function sourceTypeFor(providerType: ProviderType): ResolutionResult['sourceType
       return 'apigee-proxy';
     case 'api-hub':
       return 'api-hub-spec';
+    case 'apigee-registry':
+      return 'apigee-registry-spec';
     case 'app-integration':
       return 'app-integration-trigger';
     case 'connectors-custom':
       return 'connectors-custom-spec';
-    case 'apigee-portal': return 'apigee-portal-doc';
-    case 'vertex-extensions': return 'vertex-extension-manifest';
-    case 'dialogflow-tools': return 'dialogflow-tool-schema';
-    case 'ces-toolsets': return 'ces-toolset-schema';
-    case 'agent-engines': return 'agent-engine-generated-spec';
+    case 'apigee-portal':
+      return 'apigee-portal-doc';
+    case 'vertex-extensions':
+      return 'vertex-extension-manifest';
+    case 'dialogflow-tools':
+      return 'dialogflow-tool-schema';
+    case 'ces-toolsets':
+      return 'ces-toolset-schema';
+    case 'agent-engines':
+      return 'agent-engine-generated-spec';
     case 'iac-local':
       return 'iac-embedded';
   }
@@ -47,7 +61,7 @@ function manualReviewEvidence(input: SourceSelectionInput): string[] {
 /**
  * Choose the winning source for resolve-one:
  *  1. an existing repository spec always wins;
- *  2. otherwise an unambiguous, supported candidate at or above the minimum confidence;
+ *  2. otherwise an unambiguous, supported, resolvable-authority candidate at or above the minimum confidence;
  *  3. otherwise manual review with the best observed confidence.
  */
 export function chooseSource(input: SourceSelectionInput): ResolutionResult {
@@ -59,6 +73,7 @@ export function chooseSource(input: SourceSelectionInput): ResolutionResult {
       sourceType: 'repo-spec',
       serviceName: input.candidate?.serviceName ?? input.fallbackServiceName ?? 'unknown-service',
       confidence: input.candidate ? Math.max(80, bestObservedConfidence) : 70,
+      authority: 'stored-authoritative',
       specPath: input.existingSpecPath,
       ...(input.candidate?.apiId ? { apiId: input.candidate.apiId } : {}),
       specFormat: input.existingSpecFormat,
@@ -76,6 +91,7 @@ export function chooseSource(input: SourceSelectionInput): ResolutionResult {
       sourceType: resolved.sourceType ?? sourceTypeFor(resolved.providerType),
       serviceName: resolved.serviceName,
       confidence: resolved.confidence,
+      authority: resolved.authority,
       ...(resolved.apiId ? { apiId: resolved.apiId } : {}),
       providerType: resolved.providerType,
       evidence: resolved.evidence
@@ -87,6 +103,7 @@ export function chooseSource(input: SourceSelectionInput): ResolutionResult {
     sourceType: 'manual-review',
     serviceName: input.fallbackServiceName ?? 'unknown-service',
     confidence: bestObservedConfidence,
+    ...(input.candidate ? { authority: input.candidate.authority } : {}),
     ...(input.candidate?.apiId ? { apiId: input.candidate.apiId } : {}),
     evidence: manualReviewEvidence(input)
   };

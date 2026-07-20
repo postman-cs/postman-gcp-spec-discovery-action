@@ -3,7 +3,7 @@ import type { AgentEngineSummary, GcpDiscoveryClient } from '../gcp/clients.js';
 import { parseAndValidateOpenApi } from '../spec/validate-openapi.js';
 import { decodeUtf8OpenApi } from './source-document.js';
 import { probeFailureStatus } from './probe.js';
-import type { SpecCandidate, SpecExportResult, SpecProvider } from './types.js';
+import { withAuthority, type SpecCandidate, type SpecExportResult, type SpecProvider } from './types.js';
 
 export class AgentEnginesProvider implements SpecProvider {
   public readonly type = 'agent-engines' as const;
@@ -33,20 +33,34 @@ export class AgentEnginesProvider implements SpecProvider {
 
   private toCandidate(engine: AgentEngineSummary): SpecCandidate {
     const document = JSON.stringify(assembleAgentEngineOpenApi(engine));
-    let supported = true;
-    const evidence = ['OpenAPI assembled from Agent Engine classMethods declarations; confidence is lower than stored specification sources'];
+    const evidence = [
+      'OpenAPI assembled from Agent Engine classMethods declarations; local-derived and manual-review only',
+      'Authority local-derived cannot auto-resolve or auto-export'
+    ];
     try {
       for (const declaration of engine.classMethods) {
         if (typeof declaration.name !== 'string') throw new Error('Invalid classMethod declaration');
       }
       const unsupportedModes = unsupportedAgentEngineModes(engine);
       if (unsupportedModes.length > 0) {
-        supported = false;
         evidence.push(`Unsupported Agent Engine api_mode(s) ${unsupportedModes.join(', ')}; manual review`);
       }
       parseAndValidateOpenApi(document);
-    } catch { supported = false; evidence.push('Generated spec has no operations or is invalid; manual review'); }
-    return { id: engine.name, apiId: engine.name, name: engine.displayName || engine.name.split('/').pop()!, providerType: this.type, sourceType: 'agent-engine-generated-spec', projectId: this.scope.projectId, tags: {}, supported, evidence, meta: { generatedOpenApi: document } };
+    } catch { evidence.push('Generated spec has no operations or is invalid; manual review'); }
+    // Local-derived: always unsupported for automatic resolution/export.
+    return withAuthority({
+      id: engine.name,
+      apiId: engine.name,
+      name: engine.displayName || engine.name.split('/').pop()!,
+      providerType: this.type,
+      sourceType: 'agent-engine-generated-spec',
+      authority: 'local-derived',
+      projectId: this.scope.projectId,
+      tags: {},
+      supported: false,
+      evidence,
+      meta: { generatedOpenApi: document }
+    });
   }
 
   public async exportSpec(candidate: SpecCandidate): Promise<SpecExportResult> {

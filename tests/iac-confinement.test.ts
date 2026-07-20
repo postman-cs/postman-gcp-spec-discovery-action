@@ -49,4 +49,109 @@ describe('GCP IaC scan confinement', () => {
       await rm(outside, { recursive: true, force: true });
     }
   });
+
+  it('GCP-IAC-003: gateway document paths outside the repo root are rejected', async () => {
+    await writeFile(
+      path.join(repoRoot, 'escape.tf'),
+      `resource "google_api_gateway_api_config" "escape" {
+  openapi_documents {
+    document {
+      path = "../outside.yaml"
+      contents = filebase64("../outside.yaml")
+    }
+  }
+}
+`
+    );
+    const scan = await scanGCPIac(repoRoot, 'discovered-specs');
+    expect(scan.candidates).toEqual([]);
+  });
+
+  it('GCP-IAC-006: Pulumi YAML aliases, merges, remote URLs, and multi-document files never yield candidates', async () => {
+    const contents = Buffer.from(
+      'openapi: 3.0.3\ninfo:\n  title: Payments\n  version: "1"\npaths:\n  /items:\n    get:\n      responses:\n        "200":\n          description: ok\n',
+      'utf8'
+    ).toString('base64');
+    await writeFile(
+      path.join(repoRoot, 'Pulumi.alias.yaml'),
+      [
+        'name: alias-stack',
+        'runtime: yaml',
+        `x-anchor: &doc ${contents}`,
+        'resources:',
+        '  viaAlias:',
+        '    type: gcp:apigateway:ApiConfig',
+        '    properties:',
+        '      openapiDocuments:',
+        '        - document:',
+        '            path: gateway-contract.yaml',
+        '            contents: *doc',
+        ''
+      ].join('\n')
+    );
+    await writeFile(
+      path.join(repoRoot, 'Pulumi.merge.yaml'),
+      [
+        'name: merge-stack',
+        'runtime: yaml',
+        'definitions:',
+        '  shared: &shared',
+        '    path: gateway-contract.yaml',
+        `    contents: ${contents}`,
+        'resources:',
+        '  merged:',
+        '    type: gcp:apigateway:ApiConfig',
+        '    properties:',
+        '      openapiDocuments:',
+        '        - document:',
+        '            <<: *shared',
+        ''
+      ].join('\n')
+    );
+    await writeFile(
+      path.join(repoRoot, 'Pulumi.remote.yaml'),
+      [
+        'name: remote-stack',
+        'runtime: yaml',
+        'resources:',
+        '  remote:',
+        '    type: gcp:apigateway:ApiConfig',
+        '    properties:',
+        '      openapiDocuments:',
+        '        - document:',
+        '            path: https://example.com/openapi.yaml',
+        '            contents: https://example.com/openapi.yaml',
+        ''
+      ].join('\n')
+    );
+    await writeFile(
+      path.join(repoRoot, 'Pulumi.multidoc.yaml'),
+      [
+        'name: multi-doc-stack',
+        'runtime: yaml',
+        'resources:',
+        '  first:',
+        '    type: gcp:apigateway:ApiConfig',
+        '    properties:',
+        '      openapiDocuments:',
+        '        - document:',
+        '            path: first.yaml',
+        `            contents: ${contents}`,
+        '---',
+        'name: other',
+        'runtime: yaml',
+        'resources:',
+        '  second:',
+        '    type: gcp:apigateway:ApiConfig',
+        '    properties:',
+        '      openapiDocuments:',
+        '        - document:',
+        '            path: second.yaml',
+        `            contents: ${contents}`,
+        ''
+      ].join('\n')
+    );
+    const scan = await scanGCPIac(repoRoot, 'discovered-specs');
+    expect(scan.candidates).toEqual([]);
+  });
 });

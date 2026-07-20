@@ -20,7 +20,12 @@ describe('Apigee portal provider', () => {
   it('lists and exports OAS documentation', async () => {
     const provider = new ApigeePortalProvider(client(), { projectId: 'sample-project-123' });
     const candidate = (await provider.listCandidates())[0]!;
-    expect(candidate).toMatchObject({ id: ID, supported: true, providerType: 'apigee-portal' });
+    expect(candidate).toMatchObject({
+      id: ID,
+      supported: true,
+      providerType: 'apigee-portal',
+      authority: 'stored-authoritative'
+    });
     await expect(provider.exportSpec(candidate)).resolves.toMatchObject({ content: OAS, format: 'openapi-yaml' });
   });
 

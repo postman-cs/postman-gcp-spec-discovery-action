@@ -101,47 +101,70 @@ describe('GCP authenticated REST client', () => {
     expect(request.mock.calls[0]?.[0].url).toContain('/organizations/sample-project-123/apis/proxy%20name/revisions');
     expect(request.mock.calls[1]?.[0]).toMatchObject({ responseType: 'arraybuffer' });
   });
-  it('uses encoded Apigee environment OAS wire calls', async () => {
-    const { client, request } = clientWith(async (options) => options.responseType === 'arraybuffer'
-      ? { data: Buffer.from('openapi: 3.0.3') }
-      : options.url.includes('/resourcefiles') ? { data: { resourceFile: [{ name: 'payments spec.yaml' }] } } : { data: ['test env'] });
+  it('lists Apigee environments without resourcefiles/oas calls', async () => {
+    const { client, request } = clientWith(async () => ({ data: ['test env'] }));
     await expect(client.listApigeeEnvironments('sample-project-123')).resolves.toEqual(['test env']);
-    await expect(client.listApigeeEnvironmentOasFiles('sample-project-123', 'test env')).resolves.toEqual(['payments spec.yaml']);
-    await client.getApigeeEnvironmentOasFile('sample-project-123', 'test env', 'payments spec.yaml');
     expect(request.mock.calls.map((call) => call[0].url)).toEqual([
-      'https://apigee.googleapis.com/v1/organizations/sample-project-123/environments',
-      'https://apigee.googleapis.com/v1/organizations/sample-project-123/environments/test%20env/resourcefiles?type=oas',
-      'https://apigee.googleapis.com/v1/organizations/sample-project-123/environments/test%20env/resourcefiles/oas/payments%20spec.yaml'
+      'https://apigee.googleapis.com/v1/organizations/sample-project-123/environments'
     ]);
+    expect(request.mock.calls.map((call) => call[0].url).join('\n')).not.toMatch(/resourcefiles|type=oas/);
+    expect(client).not.toHaveProperty('listApigeeEnvironmentOasFiles');
+    expect(client).not.toHaveProperty('getApigeeEnvironmentOasFile');
   });
 
-  it('lists connector connections and posts schema metadata retrieval', async () => {
+  it('GETs connector schema metadata singleton without a request body', async () => {
     const connection = 'projects/sample-project-123/locations/us-central1/connections/salesforce';
     const { client, request } = clientWith(async (options) => {
       if (options.url.includes('/locations?')) return { data: { locations: [{ locationId: 'us-central1' }] } };
       if (options.url.includes('/connections?')) return { data: { connections: [{ name: connection }] } };
-      return { data: { entities: { Account: { fields: [] } } } };
+      return {
+        data: {
+          name: `${connection}/connectionSchemaMetadata`,
+          entities: ['Account', 'Contact'],
+          actions: ['ExecuteQuery'],
+          state: 'UPDATED',
+          updateTime: '2026-07-01T00:00:00Z',
+          refreshTime: '2026-07-01T00:00:01Z'
+        }
+      };
     });
     await expect(client.listConnectorConnections('sample-project-123')).resolves.toEqual([{ name: connection }]);
-    await expect(client.getConnectorSchemaMetadata(connection)).resolves.toMatchObject({ entities: { Account: {} } });
+    await expect(client.getConnectorSchemaMetadata(connection)).resolves.toEqual({
+      name: `${connection}/connectionSchemaMetadata`,
+      entities: ['Account', 'Contact'],
+      actions: ['ExecuteQuery'],
+      state: 'UPDATED',
+      updateTime: '2026-07-01T00:00:00Z',
+      refreshTime: '2026-07-01T00:00:01Z'
+    });
     expect(request.mock.calls.map((call) => call[0])).toEqual(expect.arrayContaining([
-      expect.objectContaining({ url: `https://connectors.googleapis.com/v1/${connection}:getConnectionSchemaMetadata`, method: 'POST', data: {} })
+      expect.objectContaining({
+        url: `https://connectors.googleapis.com/v1/${connection}/connectionSchemaMetadata`,
+        method: 'GET'
+      })
     ]));
+    expect(request.mock.calls.map((call) => call[0].url).join('\n')).not.toContain(':getConnectionSchemaMetadata');
+    expect(request.mock.calls.some((call) => call[0].method === 'POST' && call[0].url.includes('connectionSchemaMetadata'))).toBe(false);
   });
 
-  it('regionalizes Vertex Extensions and Dialogflow agents and tools', async () => {
+  it('uses Vertex Extensions v1beta1 and Dialogflow CX v3 on global/regional hosts', async () => {
     const { client, request } = clientWith(async (options) => {
-      if (options.url.endsWith('/locations?pageSize=200')) return { data: { locations: [{ locationId: 'global' }, { locationId: 'europe-west1' }] } };
+      if (options.url.includes('/locations?pageSize=200')) return { data: { locations: [{ locationId: 'global' }, { locationId: 'europe-west1' }] } };
       return { data: {} };
     });
+    await client.probeVertexExtensions('sample-project-123', 'europe-west1');
     await client.listVertexExtensions('sample-project-123', 'europe-west1');
     await client.listDialogflowAgents('sample-project-123');
     await client.listDialogflowTools('projects/sample-project-123/locations/europe-west1/agents/support');
     const urls = request.mock.calls.map((call) => call[0].url);
-    expect(urls).toContain('https://europe-west1-aiplatform.googleapis.com/v1/projects/sample-project-123/locations/europe-west1/extensions?pageSize=1000');
-    expect(urls).toContain('https://dialogflow.googleapis.com/v1/projects/sample-project-123/locations/global/agents?pageSize=1000');
-    expect(urls).toContain('https://europe-west1-dialogflow.googleapis.com/v1/projects/sample-project-123/locations/europe-west1/agents?pageSize=1000');
-    expect(urls).toContain('https://europe-west1-dialogflow.googleapis.com/v1/projects/sample-project-123/locations/europe-west1/agents/support/tools?pageSize=1000');
+    expect(urls).toContain('https://europe-west1-aiplatform.googleapis.com/v1beta1/projects/sample-project-123/locations/europe-west1/extensions?pageSize=1');
+    expect(urls).toContain('https://europe-west1-aiplatform.googleapis.com/v1beta1/projects/sample-project-123/locations/europe-west1/extensions?pageSize=1000');
+    expect(urls).toContain('https://dialogflow.googleapis.com/v3/projects/sample-project-123/locations?pageSize=200');
+    expect(urls).toContain('https://dialogflow.googleapis.com/v3/projects/sample-project-123/locations/global/agents?pageSize=1000');
+    expect(urls).toContain('https://europe-west1-dialogflow.googleapis.com/v3/projects/sample-project-123/locations/europe-west1/agents?pageSize=1000');
+    expect(urls).toContain('https://europe-west1-dialogflow.googleapis.com/v3/projects/sample-project-123/locations/europe-west1/agents/support/tools?pageSize=1000');
+    expect(urls.join('\n')).not.toMatch(/aiplatform\.googleapis\.com\/v1\/.*\/extensions/);
+    expect(urls.join('\n')).not.toMatch(/dialogflow\.googleapis\.com\/v1\//);
   });
 
   it('paginates regional Vertex Agent Engine reasoningEngines and maps classMethods', async () => {
@@ -199,11 +222,138 @@ describe('GCP authenticated REST client', () => {
     });
     await client.listDialogflowAgents('sample-project-123');
     expect(request.mock.calls.map((call) => call[0].url)).toEqual(expect.arrayContaining([
-      'https://dialogflow.googleapis.com/v1/projects/sample-project-123/locations?pageSize=200',
-      'https://dialogflow.googleapis.com/v1/projects/sample-project-123/locations?pageSize=200&pageToken=locations-2',
-      'https://dialogflow.googleapis.com/v1/projects/sample-project-123/locations/global/agents?pageSize=1000',
-      'https://europe-west1-dialogflow.googleapis.com/v1/projects/sample-project-123/locations/europe-west1/agents?pageSize=1000'
+      'https://dialogflow.googleapis.com/v3/projects/sample-project-123/locations?pageSize=200',
+      'https://dialogflow.googleapis.com/v3/projects/sample-project-123/locations?pageSize=200&pageToken=locations-2',
+      'https://dialogflow.googleapis.com/v3/projects/sample-project-123/locations/global/agents?pageSize=1000',
+      'https://europe-west1-dialogflow.googleapis.com/v3/projects/sample-project-123/locations/europe-west1/agents?pageSize=1000'
     ]));
+  });
+
+  it('paginates every ACTIVE Application Integration version and preserves each trigger group', async () => {
+    const integration = 'projects/sample-project-123/locations/us-central1/integrations/orders-api';
+    const { client, request } = clientWith(async (options) => {
+      const url = new URL(options.url);
+      if (url.pathname.endsWith('/locations')) return { data: { locations: [{ locationId: 'us-central1' }] } };
+      if (url.pathname.endsWith('/integrations')) return { data: { integrations: [{ name: integration, updateTime: '2026-07-01T00:00:00Z' }] } };
+      if (url.pathname.endsWith('/versions')) {
+        expect(url.searchParams.get('filter')).toBe('state=ACTIVE');
+        expect(url.searchParams.get('pageSize')).toBe('1000');
+        expect(url.searchParams.get('pageSize')).not.toBe('1');
+        const token = url.searchParams.get('pageToken');
+        return token
+          ? {
+            data: {
+              integrationVersions: [{
+                name: `${integration}/versions/0002`,
+                updateTime: '2026-07-03T00:00:00Z',
+                triggerConfigs: [{ triggerId: 'api_trigger/orders-api_API_2' }, { triggerId: 'schedule/ignored' }]
+              }]
+            }
+          }
+          : {
+            data: {
+              integrationVersions: [{
+                name: `${integration}/versions/0001`,
+                updateTime: '2026-07-02T00:00:00Z',
+                triggerConfigs: [{ triggerId: 'api_trigger/orders-api_API_1' }]
+              }],
+              nextPageToken: 'versions-2'
+            }
+          };
+      }
+      return { data: {} };
+    });
+
+    await expect(client.listAppIntegrationApiTriggers('sample-project-123')).resolves.toEqual([
+      {
+        integrationResource: integration,
+        location: 'us-central1',
+        triggerIds: ['api_trigger/orders-api_API_1'],
+        updateTime: '2026-07-02T00:00:00Z',
+        versionName: `${integration}/versions/0001`
+      },
+      {
+        integrationResource: integration,
+        location: 'us-central1',
+        triggerIds: ['api_trigger/orders-api_API_2'],
+        updateTime: '2026-07-03T00:00:00Z',
+        versionName: `${integration}/versions/0002`
+      }
+    ]);
+
+    const versionCalls = request.mock.calls
+      .map((call) => new URL(call[0].url))
+      .filter((url) => url.pathname.endsWith('/versions'));
+    expect(versionCalls).toHaveLength(2);
+    expect(versionCalls[0]).toMatchObject({
+      origin: 'https://integrations.googleapis.com',
+      pathname: `/v1/${integration}/versions`
+    });
+    expect(Object.fromEntries(versionCalls[0]!.searchParams)).toEqual({
+      filter: 'state=ACTIVE',
+      pageSize: '1000'
+    });
+    expect(Object.fromEntries(versionCalls[1]!.searchParams)).toEqual({
+      filter: 'state=ACTIVE',
+      pageSize: '1000',
+      pageToken: 'versions-2'
+    });
+    expect(request).toHaveBeenCalledTimes(4);
+  });
+
+  it('pins GCS media downloads to metadata generation and verifies CRC32C', async () => {
+    const { createHash } = await import('node:crypto');
+    const body = Buffer.from('openapi: 3.0.3\ninfo:\n  title: GCS\n  version: "1"\npaths: {}\n');
+    const polynomial = 0x82f63b78;
+    const table = new Uint32Array(256);
+    for (let index = 0; index < 256; index += 1) {
+      let crc = index;
+      for (let bit = 0; bit < 8; bit += 1) crc = (crc & 1) === 1 ? polynomial ^ (crc >>> 1) : crc >>> 1;
+      table[index] = crc >>> 0;
+    }
+    let crc = 0xffffffff;
+    for (let index = 0; index < body.byteLength; index += 1) crc = table[(crc ^ body[index]!) & 0xff]! ^ (crc >>> 8);
+    const crc32c = Buffer.alloc(4);
+    crc32c.writeUInt32BE((crc ^ 0xffffffff) >>> 0);
+    const { client, request } = clientWith(async (options) => {
+      const url = new URL(options.url);
+      expect(url.pathname).toBe('/storage/v1/b/spec-bucket/o/path%2Fwith%20spaces%2Fopenapi.yaml');
+      expect(options.url).not.toContain('/b/spec-bucket/o?');
+      if (options.responseType === 'arraybuffer') {
+        expect(url.searchParams.get('alt')).toBe('media');
+        expect(url.searchParams.get('generation')).toBe('42');
+        return { data: body };
+      }
+      expect(url.searchParams.get('alt')).toBeNull();
+      return {
+        data: {
+          generation: '42',
+          size: String(body.byteLength),
+          contentType: 'application/yaml',
+          crc32c: crc32c.toString('base64'),
+          md5Hash: createHash('md5').update(body).digest('base64')
+        }
+      };
+    });
+    await expect(client.getStorageObjectText('spec-bucket', 'path/with spaces/openapi.yaml')).resolves.toBe(body.toString('utf8'));
+    expect(request).toHaveBeenCalledTimes(2);
+  });
+
+  it('fails closed on GCS checksum mismatch, missing checksums, and oversized objects', async () => {
+    const oversize = clientWith(async () => ({
+      data: { generation: '1', size: String(10 * 1024 * 1024 + 1), crc32c: 'AAAAAA==' }
+    }));
+    await expect(oversize.client.getStorageObjectText('b', 'o')).rejects.toThrow('exceeds 10 MiB');
+
+    const missingChecksum = clientWith(async (options) => options.responseType === 'arraybuffer'
+      ? { data: Buffer.from('x') }
+      : { data: { generation: '1', size: '1' } });
+    await expect(missingChecksum.client.getStorageObjectText('b', 'o')).rejects.toThrow('omitted CRC32C and MD5');
+
+    const mismatched = clientWith(async (options) => options.responseType === 'arraybuffer'
+      ? { data: Buffer.from('mutated') }
+      : { data: { generation: '9', size: '7', crc32c: 'AAAAAA==' } });
+    await expect(mismatched.client.getStorageObjectText('b', 'o')).rejects.toThrow('CRC32C mismatch');
   });
 
   it('terminates repeated location tokens via the collectPages guard', async () => {
@@ -245,5 +395,129 @@ describe('GCP authenticated REST client', () => {
     const auth = { getClient } as unknown as GoogleAuth;
     new GcpSdkClient(auth, { requestTimeoutMs: 1234, maxAttempts: 3 });
     expect(getClient).not.toHaveBeenCalled();
+  });
+
+  it('GCP-CLIENT-011: API Hub additional content uses exact query enum and response path', async () => {
+    const { client, request } = clientWith(async () => ({
+      data: {
+        additionalSpecContent: {
+          specContents: { contents: Buffer.from('openapi: 3.0.3\n').toString('base64'), mimeType: 'application/yaml' }
+        }
+      }
+    }));
+    const name = 'projects/sample-project-123/locations/us-central1/apis/a/versions/v1/specs/s';
+    await expect(client.fetchApiHubAdditionalSpecContent(name, 'BOOSTED_SPEC_CONTENT')).resolves.toMatchObject({
+      mimeType: 'application/yaml'
+    });
+    const url = new URL(request.mock.calls[0]![0].url);
+    expect(url.pathname).toBe(`/v1/${name}:fetchAdditionalSpecContent`);
+    expect(url.searchParams.get('specContentType')).toBe('BOOSTED_SPEC_CONTENT');
+  });
+
+  it('GCP-CLIENT-013: API Hub additional content preserves valid percent-encoded resource IDs', async () => {
+    const { client, request } = clientWith(async () => ({
+      data: { additionalSpecContent: { specContents: {} } }
+    }));
+    const name = 'projects/sample-project-123/locations/us-central1/apis/a%2Fb/versions/v1/specs/s%20one';
+    await client.fetchApiHubAdditionalSpecContent(name, 'GATEWAY_OPEN_API_SPEC');
+    const url = new URL(request.mock.calls[0]![0].url);
+    expect(url.pathname).toContain('/apis/a%2Fb/versions/v1/specs/s%20one:fetchAdditionalSpecContent');
+    expect(url.pathname).not.toContain('%252F');
+    expect(url.pathname).not.toContain('%2520');
+  });
+
+  it('GCP-CLIENT-012: API Hub mapper defaults additionalSpecContentTypes and parses advertised types', async () => {
+    const { client } = clientWith(async (options) => {
+      const url = new URL(options.url);
+      if (url.pathname.endsWith('/locations')) return { data: { locations: [{ locationId: 'us-central1' }] } };
+      if (url.pathname.endsWith('/apis')) return { data: { apis: [{ name: 'projects/sample-project-123/locations/us-central1/apis/a' }] } };
+      if (url.pathname.endsWith('/versions')) return { data: { versions: [{ name: 'projects/sample-project-123/locations/us-central1/apis/a/versions/v1' }] } };
+      if (url.pathname.endsWith('/specs')) {
+        return {
+          data: {
+            specs: [{
+              name: 'projects/sample-project-123/locations/us-central1/apis/a/versions/v1/specs/s',
+              specType: { enumValues: { values: [{ id: 'openapi' }] } },
+              additionalSpecContents: [
+                { specContentType: 'BOOSTED_SPEC_CONTENT' },
+                { specContentType: 'GATEWAY_OPEN_API_SPEC' },
+                { specContentType: 'UNKNOWN' }
+              ]
+            }]
+          }
+        };
+      }
+      return { data: {} };
+    });
+    const specs = await client.listApiHubSpecs('sample-project-123');
+    expect(specs[0]?.additionalSpecContentTypes).toEqual(['BOOSTED_SPEC_CONTENT', 'GATEWAY_OPEN_API_SPEC']);
+  });
+
+  it('GCP-CLIENT-013: Apigee Registry getContents is binary with Content-Type metadata', async () => {
+    const { client, request } = clientWith(async () => ({
+      data: Uint8Array.from(Buffer.from('openapi: 3.0.3\n')),
+      headers: { 'content-type': 'application/vnd.apigee.openapi' }
+    }));
+    const name = 'projects/sample-project-123/locations/us/apis/a/versions/v1/specs/s';
+    await expect(client.getApigeeRegistrySpecContents(name)).resolves.toEqual({
+      bytes: Buffer.from('openapi: 3.0.3\n'),
+      mimeType: 'application/vnd.apigee.openapi'
+    });
+    expect(request.mock.calls[0]?.[0]).toMatchObject({
+      responseType: 'arraybuffer',
+      url: `https://apigeeregistry.googleapis.com/v1/${name}:getContents`
+    });
+  });
+
+  it('GCP-CLIENT-014: archive download URL generation and trusted GCS host checks', async () => {
+    const { client, request } = clientWith(async () => ({
+      data: { downloadUri: 'https://storage.googleapis.com/bucket/object.zip?X-Goog-Signature=SECRET' }
+    }));
+    const name = 'organizations/sample-project-123/environments/test/archiveDeployments/a1';
+    await expect(client.generateApigeeArchiveDeploymentDownloadUrl(name)).resolves.toContain('storage.googleapis.com');
+    expect(request.mock.calls[0]?.[0]).toMatchObject({
+      method: 'POST',
+      url: `https://apigee.googleapis.com/v1/${name}:generateDownloadUrl`
+    });
+
+    const { isTrustedGcsHost, safeUrlForErrors } = await import('../src/lib/gcp/clients.js');
+    expect(isTrustedGcsHost('storage.googleapis.com')).toBe(true);
+    expect(isTrustedGcsHost('storage.cloud.google.com')).toBe(true);
+    expect(isTrustedGcsHost('my-bucket.storage.googleapis.com')).toBe(true);
+    expect(isTrustedGcsHost('evil.com.storage.googleapis.com.evil.com')).toBe(false);
+    expect(isTrustedGcsHost('example.com')).toBe(false);
+    const signed = new URL('https://storage.googleapis.com/bucket/object.zip?X-Goog-Signature=SECRET');
+    expect(safeUrlForErrors(signed)).toBe('https://storage.googleapis.com/bucket/object.zip');
+    expect(safeUrlForErrors(signed)).not.toContain('Signature');
+
+    await expect(
+      client.downloadTrustedGcsSignedUrl('https://evil.example/path?sig=1')
+    ).rejects.toThrow(/trusted GCS endpoint/);
+    await expect(
+      client.downloadTrustedGcsSignedUrl('http://storage.googleapis.com/bucket/object.zip')
+    ).rejects.toThrow(/HTTPS/);
+  });
+
+  it('GCP-CLIENT-015: archive list paginates and rejects repeated tokens', async () => {
+    const paged = clientWith(async (options) => {
+      const token = new URL(options.url).searchParams.get('pageToken');
+      return token
+        ? { data: { archiveDeployments: [{ name: 'organizations/p/environments/e/archiveDeployments/b' }] } }
+        : {
+            data: {
+              archiveDeployments: [{ name: 'organizations/p/environments/e/archiveDeployments/a' }],
+              nextPageToken: 'next'
+            }
+          };
+    });
+    await expect(paged.client.listApigeeArchiveDeployments('p', 'e')).resolves.toEqual([
+      expect.objectContaining({ name: 'organizations/p/environments/e/archiveDeployments/a' }),
+      expect.objectContaining({ name: 'organizations/p/environments/e/archiveDeployments/b' })
+    ]);
+
+    const repeated = clientWith(async () => ({ data: { archiveDeployments: [], nextPageToken: 'same' } }));
+    await expect(repeated.client.listApigeeArchiveDeployments('p', 'e')).rejects.toThrow(
+      'Apigee archive deployment list returned a repeated page token; aborting'
+    );
   });
 });

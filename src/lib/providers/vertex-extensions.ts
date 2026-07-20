@@ -1,9 +1,9 @@
-import type { ProviderProbeStatus } from '../../contracts.js';
+import type { ProviderProbeStatus, SourceAuthority } from '../../contracts.js';
 import type { GcpDiscoveryClient, VertexExtensionSummary } from '../gcp/clients.js';
 import { parseGcsSpecLocation } from './connectors-custom.js';
 import { decodeUtf8OpenApi } from './source-document.js';
 import { probeFailureStatus } from './probe.js';
-import type { SpecCandidate, SpecExportResult, SpecProvider } from './types.js';
+import { withAuthority, type SpecCandidate, type SpecExportResult, type SpecProvider } from './types.js';
 
 const PATTERN = /^projects\/([^/]+)\/locations\/([^/]+)\/extensions\/([^/]+)$/;
 export function parseVertexExtensionName(value: string) {
@@ -60,9 +60,27 @@ export class VertexExtensionsProvider implements SpecProvider {
   private toCandidate(extension: VertexExtensionSummary): SpecCandidate {
     const count = Number(Boolean(extension.openApiYaml?.trim())) + Number(Boolean(extension.openApiGcsUri));
     let supported = count === 1;
-    if (extension.openApiYaml?.trim()) try { decodeUtf8OpenApi(extension.openApiYaml); } catch { supported = false; }
-    if (extension.openApiGcsUri && !parseGcsSpecLocation(extension.openApiGcsUri)) supported = false;
-    return { id: extension.name, apiId: extension.name, name: extension.displayName || extension.name.split('/').pop()!, providerType: this.type, projectId: this.scope.projectId, tags: {}, supported, evidence: [count === 0 ? 'Vertex extension manifest has no OpenAPI source' : count > 1 ? 'Vertex extension manifest has multiple OpenAPI sources' : 'Vertex extension manifest has one OpenAPI source'], meta: { openApiYaml: extension.openApiYaml ?? '', openApiGcsUri: extension.openApiGcsUri ?? '' } };
+    let authority: SourceAuthority = count === 1 ? 'stored-authoritative' : 'metadata-only';
+    if (extension.openApiYaml?.trim()) {
+      try { decodeUtf8OpenApi(extension.openApiYaml); } catch { supported = false; authority = 'metadata-only'; }
+    }
+    if (extension.openApiGcsUri && !parseGcsSpecLocation(extension.openApiGcsUri)) {
+      supported = false;
+      authority = 'unsupported-format';
+    }
+    return withAuthority({
+      id: extension.name,
+      apiId: extension.name,
+      name: extension.displayName || extension.name.split('/').pop()!,
+      providerType: this.type,
+      sourceType: 'vertex-extension-manifest',
+      authority,
+      projectId: this.scope.projectId,
+      tags: {},
+      supported,
+      evidence: [count === 0 ? 'Vertex extension manifest has no OpenAPI source' : count > 1 ? 'Vertex extension manifest has multiple OpenAPI sources' : 'Vertex extension manifest has one OpenAPI source'],
+      meta: { openApiYaml: extension.openApiYaml ?? '', openApiGcsUri: extension.openApiGcsUri ?? '' }
+    });
   }
   public async exportSpec(candidate: SpecCandidate): Promise<SpecExportResult> {
     let text = candidate.meta.openApiYaml ?? '';

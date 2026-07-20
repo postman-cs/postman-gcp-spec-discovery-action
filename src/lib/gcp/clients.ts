@@ -1,3 +1,6 @@
+import { createHash } from 'node:crypto';
+import { TextDecoder } from 'node:util';
+
 import { GoogleAuth } from 'google-auth-library';
 
 export interface GcpClientOptions {
@@ -15,7 +18,64 @@ export interface GcpRequestOptions {
 }
 
 export interface GcpAuthenticatedRequester {
-  request<T>(options: GcpRequestOptions): Promise<{ data: T; status?: number }>;
+  request<T>(options: GcpRequestOptions): Promise<{
+    data: T;
+    status?: number;
+    /** Gaxios Headers, Fetch Headers, or a plain record — normalized by headerValue(). */
+    headers?: unknown;
+  }>;
+}
+
+/** Strip query/fragment before including a URL in error text. */
+export function safeUrlForErrors(url: URL): string {
+  return `${url.origin}${url.pathname}`;
+}
+
+/**
+ * Trusted hosts for Apigee archiveDeployments:generateDownloadUrl signed URLs.
+ * Exact path-style hosts plus single-label virtual-hosted `*.storage.googleapis.com`.
+ */
+export function isTrustedGcsHost(hostname: string): boolean {
+  const host = hostname.toLowerCase();
+  if (host === 'storage.googleapis.com' || host === 'storage.cloud.google.com') return true;
+  const suffix = '.storage.googleapis.com';
+  if (!host.endsWith(suffix)) return false;
+  const prefix = host.slice(0, -suffix.length);
+  return prefix.length > 0 && !prefix.includes('.');
+}
+
+function headerValue(headers: unknown, name: string): string | undefined {
+  if (!headers || typeof headers !== 'object') return undefined;
+  const wanted = name.toLowerCase();
+  if (typeof (headers as { get?: unknown }).get === 'function') {
+    const value = (headers as { get: (key: string) => string | null }).get(name)
+      ?? (headers as { get: (key: string) => string | null }).get(wanted);
+    return typeof value === 'string' && value.length > 0 ? value : undefined;
+  }
+  for (const [key, value] of Object.entries(headers as Record<string, unknown>)) {
+    if (key.toLowerCase() !== wanted) continue;
+    if (typeof value === 'string' && value.length > 0) return value;
+    if (Array.isArray(value) && typeof value[0] === 'string' && value[0].length > 0) return value[0];
+  }
+  return undefined;
+}
+
+/** API Hub fetchAdditionalSpecContent query enum (official wire values). */
+export type ApiHubAdditionalSpecContentType = 'BOOSTED_SPEC_CONTENT' | 'GATEWAY_OPEN_API_SPEC';
+
+export const API_HUB_ADDITIONAL_SPEC_CONTENT_TYPES: readonly ApiHubAdditionalSpecContentType[] = [
+  'BOOSTED_SPEC_CONTENT',
+  'GATEWAY_OPEN_API_SPEC'
+] as const;
+
+function parseApiHubAdditionalContentTypes(value: unknown): ApiHubAdditionalSpecContentType[] {
+  if (!Array.isArray(value)) return [];
+  const seen = new Set<ApiHubAdditionalSpecContentType>();
+  for (const entry of value) {
+    const type = (entry as { specContentType?: unknown } | null)?.specContentType;
+    if (type === 'BOOSTED_SPEC_CONTENT' || type === 'GATEWAY_OPEN_API_SPEC') seen.add(type);
+  }
+  return [...seen];
 }
 
 export interface ApiGatewayApi {
@@ -69,6 +129,25 @@ export interface ApiHubSpecSummary {
   attributes: Record<string, string>;
   createTime?: string;
   sourceUri?: string;
+  /** Distinct additional content types advertised on Spec.additionalSpecContents[].specContentType. */
+  additionalSpecContentTypes: ApiHubAdditionalSpecContentType[];
+}
+
+export interface ApigeeRegistrySpecSummary {
+  name: string;
+  filename?: string;
+  description?: string;
+  mimeType?: string;
+  sizeBytes?: number;
+  labels: Record<string, string>;
+  createTime?: string;
+}
+
+export interface ApigeeArchiveDeploymentSummary {
+  name: string;
+  labels: Record<string, string>;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface ApigeePortalSite { id: string; name?: string; }
@@ -88,6 +167,8 @@ export interface AppIntegrationApiTrigger {
   location: string;
   triggerIds: string[];
   updateTime?: string;
+  /** ACTIVE integration version resource name; one trigger group per ACTIVE version. */
+  versionName?: string;
 }
 
 export interface CustomConnectorVersionSummary {
@@ -98,7 +179,17 @@ export interface CustomConnectorVersionSummary {
 }
 
 export interface ConnectorConnectionSummary { name: string; description?: string; serviceAccount?: string; }
-export interface ConnectorSchemaMetadata { entities?: Record<string, { fields?: Array<{ name?: string; dataType?: string; description?: string }> }>; actions?: Array<{ name?: string; description?: string }> }
+
+/** Documented ConnectionSchemaMetadata singleton (metadata-only; not an OpenAPI source). */
+export interface ConnectorSchemaMetadata {
+  entities?: string[];
+  actions?: string[];
+  name?: string;
+  state?: string;
+  updateTime?: string;
+  refreshTime?: string;
+  errorMessage?: string;
+}
 
 export interface GcpDiscoveryClient {
   preflightProject(projectId: string): Promise<void>;
@@ -115,12 +206,21 @@ export interface GcpDiscoveryClient {
   listApigeeRevisions(org: string, proxyName: string): Promise<string[]>;
   downloadApigeeRevisionBundle(org: string, proxyName: string, revision: string): Promise<Buffer>;
   listApigeeEnvironments(org: string): Promise<string[]>;
-  listApigeeEnvironmentOasFiles(org: string, environment: string): Promise<string[]>;
-  getApigeeEnvironmentOasFile(org: string, environment: string, name: string): Promise<string>;
+  listApigeeArchiveDeployments(org: string, environment: string): Promise<ApigeeArchiveDeploymentSummary[]>;
+  generateApigeeArchiveDeploymentDownloadUrl(archiveDeploymentName: string): Promise<string>;
+  downloadTrustedGcsSignedUrl(downloadUri: string): Promise<Buffer>;
   probeApiHub(projectId: string): Promise<void>;
   listApiHubSpecs(projectId: string): Promise<ApiHubSpecSummary[]>;
   getApiHubSpec(specName: string): Promise<ApiHubSpecSummary>;
   getApiHubSpecContents(specName: string): Promise<{ contents?: string; mimeType?: string }>;
+  fetchApiHubAdditionalSpecContent(
+    specName: string,
+    specContentType: ApiHubAdditionalSpecContentType
+  ): Promise<{ contents?: string; mimeType?: string }>;
+  probeApigeeRegistry(projectId: string): Promise<void>;
+  listApigeeRegistrySpecs(projectId: string): Promise<ApigeeRegistrySpecSummary[]>;
+  getApigeeRegistrySpec(specName: string): Promise<ApigeeRegistrySpecSummary>;
+  getApigeeRegistrySpecContents(specName: string): Promise<{ bytes: Buffer; mimeType?: string }>;
   probeApigeePortal(org: string): Promise<void>;
   listApigeePortalSites(org: string): Promise<ApigeePortalSite[]>;
   listApigeePortalApidocs(org: string, siteId: string): Promise<ApigeePortalApidoc[]>;
@@ -147,6 +247,31 @@ export interface GcpDiscoveryClient {
 
 const CLOUD_PLATFORM_SCOPE = 'https://www.googleapis.com/auth/cloud-platform';
 const MAX_LIST_PAGES = 100;
+/** Matches source-document OpenAPI byte bound for authenticated GCS reads. */
+const MAX_STORAGE_OBJECT_BYTES = 10 * 1024 * 1024;
+
+const CRC32C_TABLE = (() => {
+  const polynomial = 0x82f63b78;
+  const table = new Uint32Array(256);
+  for (let index = 0; index < 256; index += 1) {
+    let crc = index;
+    for (let bit = 0; bit < 8; bit += 1) {
+      crc = (crc & 1) === 1 ? polynomial ^ (crc >>> 1) : crc >>> 1;
+    }
+    table[index] = crc >>> 0;
+  }
+  return table;
+})();
+
+function crc32cBase64(bytes: Buffer): string {
+  let crc = 0xffffffff;
+  for (let index = 0; index < bytes.byteLength; index += 1) {
+    crc = CRC32C_TABLE[(crc ^ bytes[index]!) & 0xff]! ^ (crc >>> 8);
+  }
+  const value = Buffer.alloc(4);
+  value.writeUInt32BE((crc ^ 0xffffffff) >>> 0);
+  return value.toString('base64');
+}
 
 export function createGcpAuth(): GoogleAuth {
   return new GoogleAuth({ scopes: [CLOUD_PLATFORM_SCOPE] });
@@ -169,9 +294,24 @@ function isTransient(error: unknown): boolean {
   return /timeout|timed out|temporar(?:y|ily)|connection reset|socket hang up/i.test(message);
 }
 
-function resourceUrl(origin: string, resourceName: string): URL {
+function resourceUrl(origin: string, resourceName: string, apiVersion = 'v1'): URL {
   const encoded = resourceName.split('/').map((segment) => encodeURIComponent(segment)).join('/');
-  return new URL(`v1/${encoded}`, origin);
+  return new URL(`${apiVersion}/${encoded}`, origin);
+}
+
+/**
+ * API Hub resource names can arrive from explicit selectors with percent-encoded
+ * IDs. Preserve valid escapes while encoding all other segment text, so `%2F`
+ * remains `%2F` rather than double-encoding to `%252F`. Malformed or literal
+ * percent characters remain ordinary segment text.
+ */
+function apiHubResourceUrl(resourceName: string): URL {
+  const encoded = resourceName.split('/').map((segment) => (
+    segment.replace(/%[0-9A-Fa-f]{2}|[^%]+|%/g, (part) => (
+      /^%[0-9A-Fa-f]{2}$/.test(part) ? part.toUpperCase() : encodeURIComponent(part)
+    ))
+  )).join('/');
+  return new URL(`v1/${encoded}`, 'https://apihub.googleapis.com/');
 }
 
 function normalizeLabels(value: unknown): Record<string, string> {
@@ -227,7 +367,7 @@ export class GcpSdkClient implements GcpDiscoveryClient {
   ) {
     this.createRequester = requester
       ? () => Promise.resolve(requester)
-      : () => auth.getClient() as Promise<GcpAuthenticatedRequester>;
+      : async () => (await auth.getClient()) as unknown as GcpAuthenticatedRequester;
     this.options = options;
   }
 
@@ -360,16 +500,64 @@ export class GcpSdkClient implements GcpDiscoveryClient {
     return Array.isArray(body) ? body.map(String) : [];
   }
 
-  public async listApigeeEnvironmentOasFiles(org: string, environment: string): Promise<string[]> {
-    const url = resourceUrl('https://apigee.googleapis.com/', `organizations/${org}/environments/${environment}/resourcefiles`);
-    url.searchParams.set('type', 'oas');
-    const body = await this.getJson<{ resourceFile?: Array<{ name?: string }> }>(url, 'Apigee environment OAS resource list');
-    return (body.resourceFile ?? []).map((file) => file.name ?? '').filter(Boolean);
+  public async listApigeeArchiveDeployments(org: string, environment: string): Promise<ApigeeArchiveDeploymentSummary[]> {
+    return this.collectPages(
+      () => resourceUrl('https://apigee.googleapis.com/', `organizations/${org}/environments/${environment}/archiveDeployments`),
+      'Apigee archive deployment list',
+      (body: { archiveDeployments?: unknown[]; nextPageToken?: string }) => ({
+        items: (body.archiveDeployments ?? []).map((item) => this.toApigeeArchiveDeployment(item)).filter((item) => item.name),
+        nextPageToken: body.nextPageToken
+      }),
+      25
+    );
   }
 
-  public async getApigeeEnvironmentOasFile(org: string, environment: string, name: string): Promise<string> {
-    const bytes = await this.getBinary(resourceUrl('https://apigee.googleapis.com/', `organizations/${org}/environments/${environment}/resourcefiles/oas/${name}`), 'Apigee environment OAS resource download');
-    return bytes.toString('utf8');
+  public async generateApigeeArchiveDeploymentDownloadUrl(archiveDeploymentName: string): Promise<string> {
+    const url = resourceUrl('https://apigee.googleapis.com/', archiveDeploymentName);
+    url.pathname = `${url.pathname}:generateDownloadUrl`;
+    const body = await this.postJson<{ downloadUri?: string }>(url, 'Apigee archive deployment download URL', {});
+    if (typeof body.downloadUri !== 'string' || body.downloadUri.trim().length === 0) {
+      throw new Error('Apigee archive deployment download URL response omitted downloadUri');
+    }
+    return body.downloadUri;
+  }
+
+  public async downloadTrustedGcsSignedUrl(downloadUri: string): Promise<Buffer> {
+    let parsed: URL;
+    try {
+      parsed = new URL(downloadUri);
+    } catch (error) {
+      throw new Error('Apigee archive download URI is not a valid URL', { cause: error });
+    }
+    if (parsed.protocol !== 'https:') {
+      throw new Error(`Apigee archive download URI must use HTTPS (${safeUrlForErrors(parsed)})`);
+    }
+    if (!isTrustedGcsHost(parsed.hostname)) {
+      throw new Error(`Apigee archive download URI host is not a trusted GCS endpoint (${safeUrlForErrors(parsed)})`);
+    }
+    // URL fragments are never part of a signed-object request and must not be
+    // retained if a malformed control-plane response includes one.
+    parsed.hash = '';
+    const response = await fetch(parsed, {
+      method: 'GET',
+      redirect: 'error',
+      signal: AbortSignal.timeout(this.options.requestTimeoutMs)
+    });
+    if (!response.ok) {
+      throw new Error(`Apigee archive download failed with HTTP ${response.status} (${safeUrlForErrors(parsed)})`);
+    }
+    const lengthHeader = response.headers.get('content-length');
+    if (lengthHeader !== null) {
+      const declared = Number(lengthHeader);
+      if (!Number.isFinite(declared) || declared < 0 || declared > MAX_STORAGE_OBJECT_BYTES) {
+        throw new Error(`Apigee archive download exceeds ${MAX_STORAGE_OBJECT_BYTES} bytes (${safeUrlForErrors(parsed)})`);
+      }
+    }
+    const bytes = Buffer.from(await response.arrayBuffer());
+    if (bytes.byteLength > MAX_STORAGE_OBJECT_BYTES) {
+      throw new Error(`Apigee archive download exceeds ${MAX_STORAGE_OBJECT_BYTES} bytes (${safeUrlForErrors(parsed)})`);
+    }
+    return bytes;
   }
 
   private apigeeUrl(org: string, ...segments: string[]): URL {
@@ -426,28 +614,232 @@ export class GcpSdkClient implements GcpDiscoveryClient {
   }
 
   public async getApiHubSpec(specName: string): Promise<ApiHubSpecSummary> {
-    const url = resourceUrl('https://apihub.googleapis.com/', specName);
+    const url = apiHubResourceUrl(specName);
     return this.toApiHubSpec(await this.getJson(url, 'API Hub spec get'), undefined);
   }
 
   public async getApiHubSpecContents(specName: string): Promise<{ contents?: string; mimeType?: string }> {
-    const url = resourceUrl('https://apihub.googleapis.com/', `${specName}:contents`);
+    const url = apiHubResourceUrl(specName);
+    // Appending through href retains encoded path separators; assigning pathname
+    // would decode `%2F` before serializing the custom method suffix.
+    url.href = `${url.href}:contents`;
     const body = await this.getJson<{ contents?: string; mimeType?: string }>(url, 'API Hub spec contents');
     return { contents: body.contents, mimeType: body.mimeType };
+  }
+
+  public async fetchApiHubAdditionalSpecContent(
+    specName: string,
+    specContentType: ApiHubAdditionalSpecContentType
+  ): Promise<{ contents?: string; mimeType?: string }> {
+    const url = apiHubResourceUrl(specName);
+    url.href = `${url.href}:fetchAdditionalSpecContent`;
+    url.searchParams.set('specContentType', specContentType);
+    const body = await this.getJson<{
+      additionalSpecContent?: { specContents?: { contents?: string; mimeType?: string } };
+    }>(url, 'API Hub additional spec content');
+    return {
+      contents: body.additionalSpecContent?.specContents?.contents,
+      mimeType: body.additionalSpecContent?.specContents?.mimeType
+    };
+  }
+
+  public async probeApigeeRegistry(projectId: string): Promise<void> {
+    const url = this.locationsUrl('https://apigeeregistry.googleapis.com/', projectId);
+    url.searchParams.set('pageSize', '1');
+    await this.getJson(url, 'Apigee Registry probe');
+  }
+
+  public async listApigeeRegistrySpecs(projectId: string): Promise<ApigeeRegistrySpecSummary[]> {
+    const specs: ApigeeRegistrySpecSummary[] = [];
+    for (const location of await this.listLocations('https://apigeeregistry.googleapis.com/', projectId, 'Apigee Registry location list')) {
+      let apis: Array<{ name?: string }>;
+      try {
+        apis = await this.collectPages(
+          () => resourceUrl('https://apigeeregistry.googleapis.com/', `projects/${projectId}/locations/${location}/apis`),
+          'Apigee Registry api list',
+          (body: { apis?: Array<{ name?: string }>; nextPageToken?: string }) => ({
+            items: body.apis ?? [],
+            nextPageToken: body.nextPageToken
+          })
+        );
+      } catch {
+        continue;
+      }
+      for (const api of apis) {
+        if (!api.name) continue;
+        const versions = await this.collectPages(
+          () => resourceUrl('https://apigeeregistry.googleapis.com/', `${api.name}/versions`),
+          'Apigee Registry version list',
+          (body: { versions?: Array<{ name?: string }>; nextPageToken?: string }) => ({
+            items: body.versions ?? [],
+            nextPageToken: body.nextPageToken
+          })
+        );
+        for (const version of versions) {
+          if (!version.name) continue;
+          const raw = await this.collectPages(
+            () => resourceUrl('https://apigeeregistry.googleapis.com/', `${version.name}/specs`),
+            'Apigee Registry spec list',
+            (body: { apiSpecs?: unknown[]; specs?: unknown[]; nextPageToken?: string }) => ({
+              items: body.apiSpecs ?? body.specs ?? [],
+              nextPageToken: body.nextPageToken
+            })
+          );
+          specs.push(...raw.map((item) => this.toApigeeRegistrySpec(item)).filter((item) => item.name));
+        }
+      }
+    }
+    return specs;
+  }
+
+  public async getApigeeRegistrySpec(specName: string): Promise<ApigeeRegistrySpecSummary> {
+    const url = resourceUrl('https://apigeeregistry.googleapis.com/', specName);
+    return this.toApigeeRegistrySpec(await this.getJson(url, 'Apigee Registry spec get'));
+  }
+
+  public async getApigeeRegistrySpecContents(specName: string): Promise<{ bytes: Buffer; mimeType?: string }> {
+    const url = resourceUrl('https://apigeeregistry.googleapis.com/', specName);
+    url.pathname = `${url.pathname}:getContents`;
+    return this.getBoundedBinary(url, 'Apigee Registry spec contents');
   }
 
   public async probeApigeePortal(org: string): Promise<void> { const url = resourceUrl('https://apigee.googleapis.com/', `organizations/${org}/sites`); url.searchParams.set('pageSize', '1'); await this.getJson(url, 'Apigee portal probe'); }
   public async listApigeePortalSites(org: string): Promise<ApigeePortalSite[]> { return this.collectPages(() => resourceUrl('https://apigee.googleapis.com/', `organizations/${org}/sites`), 'Apigee portal site list', (body: { sites?: Array<{ id?: string; name?: string }>; nextPageToken?: string }) => ({ items: (body.sites ?? []).map((x) => ({ id: x.id ?? x.name?.split('/').pop() ?? '', name: x.name })).filter((x) => x.id), nextPageToken: body.nextPageToken })); }
   public async listApigeePortalApidocs(org: string, siteId: string): Promise<ApigeePortalApidoc[]> { return this.collectPages(() => resourceUrl('https://apigee.googleapis.com/', `organizations/${org}/sites/${siteId}/apidocs`), 'Apigee portal apidoc list', (body: { data?: ApigeePortalApidoc[]; nextPageToken?: string }) => ({ items: body.data ?? [], nextPageToken: body.nextPageToken })); }
   public async getApigeePortalDocumentation(org: string, siteId: string, apidocId: string): Promise<ApigeePortalDocumentation> { const body = await this.getJson<{ data?: Record<string, unknown> }>(resourceUrl('https://apigee.googleapis.com/', `organizations/${org}/sites/${siteId}/apidocs/${apidocId}/documentation`), 'Apigee portal documentation get'); const data = body.data ?? {}; for (const type of ['oasDocumentation', 'graphqlDocumentation', 'asyncapiDocumentation'] as const) { if (data[type]) return { type, contents: type === 'oasDocumentation' ? (data[type] as { spec?: { contents?: string } }).spec?.contents : undefined }; } return { type: 'missing' }; }
-  public async probeVertexExtensions(projectId: string, location: string): Promise<void> { const url = resourceUrl(`https://${location}-aiplatform.googleapis.com/`, `projects/${projectId}/locations/${location}/extensions`); url.searchParams.set('pageSize', '1'); await this.getJson(url, 'Vertex Extensions probe'); }
-  public async listVertexLocations(projectId: string): Promise<string[]> { return this.listLocations('https://aiplatform.googleapis.com/', projectId, 'Vertex AI location list'); }
-  public async listVertexExtensions(projectId: string, location: string): Promise<VertexExtensionSummary[]> { return this.collectPages(() => resourceUrl(`https://${location}-aiplatform.googleapis.com/`, `projects/${projectId}/locations/${location}/extensions`), 'Vertex Extensions list', (body: { extensions?: Array<{ name?: string; displayName?: string; manifest?: { apiSpec?: { openApiYaml?: string; openApiGcsUri?: string } } }>; nextPageToken?: string }) => ({ items: (body.extensions ?? []).filter((x) => x.name).map((x) => ({ name: x.name!, displayName: x.displayName, openApiYaml: x.manifest?.apiSpec?.openApiYaml, openApiGcsUri: x.manifest?.apiSpec?.openApiGcsUri })), nextPageToken: body.nextPageToken })); }
-  public async probeAgentEngines(projectId: string, location: string): Promise<void> { const url = resourceUrl(`https://${location}-aiplatform.googleapis.com/`, `projects/${projectId}/locations/${location}/reasoningEngines`); url.searchParams.set('pageSize', '1'); await this.getJson(url, 'Vertex Agent Engines probe'); }
-  public async listAgentEngines(projectId: string, location: string): Promise<AgentEngineSummary[]> { return this.collectPages(() => resourceUrl(`https://${location}-aiplatform.googleapis.com/`, `projects/${projectId}/locations/${location}/reasoningEngines`), 'Vertex Agent Engines list', (body: { reasoningEngines?: Array<{ name?: string; displayName?: string; spec?: { classMethods?: Array<Record<string, unknown>> } }>; nextPageToken?: string }) => ({ items: (body.reasoningEngines ?? []).filter((x) => x.name).map((x) => ({ name: x.name!, displayName: x.displayName, classMethods: x.spec?.classMethods ?? [] })), nextPageToken: body.nextPageToken })); }
-  public async probeDialogflow(projectId: string): Promise<void> { const url = resourceUrl('https://dialogflow.googleapis.com/', `projects/${projectId}/locations/global/agents`); url.searchParams.set('pageSize', '1'); await this.getJson(url, 'Dialogflow probe'); }
-  public async listDialogflowAgents(projectId: string): Promise<DialogflowAgentSummary[]> { const agents: DialogflowAgentSummary[]=[]; for(const location of await this.listLocations('https://dialogflow.googleapis.com/',projectId,'Dialogflow location list')){const origin=location==='global'?'https://dialogflow.googleapis.com/':`https://${location}-dialogflow.googleapis.com/`;agents.push(...await this.collectPages(() => resourceUrl(origin, `projects/${projectId}/locations/${location}/agents`), 'Dialogflow agent list', (body: { agents?: DialogflowAgentSummary[]; nextPageToken?: string }) => ({ items: body.agents ?? [], nextPageToken: body.nextPageToken })));}return agents; }
-  public async listDialogflowTools(agentName: string): Promise<DialogflowToolSummary[]> { const location=/\/locations\/([^/]+)\//.exec(agentName)?.[1]??'global';const origin=location==='global'?'https://dialogflow.googleapis.com/':`https://${location}-dialogflow.googleapis.com/`;return this.collectPages(() => resourceUrl(origin, `${agentName}/tools`), 'Dialogflow tool list', (body: { tools?: Array<{ name: string; displayName?: string; openApiSpec?: { textSchema?: string } }>; nextPageToken?: string }) => ({ items: (body.tools ?? []).map((x) => ({ name: x.name, displayName: x.displayName, textSchema: x.openApiSpec?.textSchema })), nextPageToken: body.nextPageToken })); }
+  public async probeVertexExtensions(projectId: string, location: string): Promise<void> {
+    const url = resourceUrl(
+      `https://${location}-aiplatform.googleapis.com/`,
+      `projects/${projectId}/locations/${location}/extensions`,
+      'v1beta1'
+    );
+    url.searchParams.set('pageSize', '1');
+    await this.getJson(url, 'Vertex Extensions probe');
+  }
+
+  public async listVertexLocations(projectId: string): Promise<string[]> {
+    return this.listLocations('https://aiplatform.googleapis.com/', projectId, 'Vertex AI location list');
+  }
+
+  public async listVertexExtensions(projectId: string, location: string): Promise<VertexExtensionSummary[]> {
+    return this.collectPages(
+      () => resourceUrl(
+        `https://${location}-aiplatform.googleapis.com/`,
+        `projects/${projectId}/locations/${location}/extensions`,
+        'v1beta1'
+      ),
+      'Vertex Extensions list',
+      (body: {
+        extensions?: Array<{
+          name?: string;
+          displayName?: string;
+          manifest?: { apiSpec?: { openApiYaml?: string; openApiGcsUri?: string } };
+        }>;
+        nextPageToken?: string;
+      }) => ({
+        items: (body.extensions ?? [])
+          .filter((extension) => extension.name)
+          .map((extension) => ({
+            name: extension.name!,
+            displayName: extension.displayName,
+            openApiYaml: extension.manifest?.apiSpec?.openApiYaml,
+            openApiGcsUri: extension.manifest?.apiSpec?.openApiGcsUri
+          })),
+        nextPageToken: body.nextPageToken
+      })
+    );
+  }
+
+  public async probeAgentEngines(projectId: string, location: string): Promise<void> {
+    const url = resourceUrl(
+      `https://${location}-aiplatform.googleapis.com/`,
+      `projects/${projectId}/locations/${location}/reasoningEngines`
+    );
+    url.searchParams.set('pageSize', '1');
+    await this.getJson(url, 'Vertex Agent Engines probe');
+  }
+
+  public async listAgentEngines(projectId: string, location: string): Promise<AgentEngineSummary[]> {
+    return this.collectPages(
+      () => resourceUrl(
+        `https://${location}-aiplatform.googleapis.com/`,
+        `projects/${projectId}/locations/${location}/reasoningEngines`
+      ),
+      'Vertex Agent Engines list',
+      (body: {
+        reasoningEngines?: Array<{
+          name?: string;
+          displayName?: string;
+          spec?: { classMethods?: Array<Record<string, unknown>> };
+        }>;
+        nextPageToken?: string;
+      }) => ({
+        items: (body.reasoningEngines ?? [])
+          .filter((engine) => engine.name)
+          .map((engine) => ({
+            name: engine.name!,
+            displayName: engine.displayName,
+            classMethods: engine.spec?.classMethods ?? []
+          })),
+        nextPageToken: body.nextPageToken
+      })
+    );
+  }
+
+  public async probeDialogflow(projectId: string): Promise<void> {
+    const url = resourceUrl(
+      'https://dialogflow.googleapis.com/',
+      `projects/${projectId}/locations/global/agents`,
+      'v3'
+    );
+    url.searchParams.set('pageSize', '1');
+    await this.getJson(url, 'Dialogflow probe');
+  }
+
+  public async listDialogflowAgents(projectId: string): Promise<DialogflowAgentSummary[]> {
+    const agents: DialogflowAgentSummary[] = [];
+    for (const location of await this.listLocations(
+      'https://dialogflow.googleapis.com/',
+      projectId,
+      'Dialogflow location list',
+      'v3'
+    )) {
+      const origin = location === 'global'
+        ? 'https://dialogflow.googleapis.com/'
+        : `https://${location}-dialogflow.googleapis.com/`;
+      agents.push(...await this.collectPages(
+        () => resourceUrl(origin, `projects/${projectId}/locations/${location}/agents`, 'v3'),
+        'Dialogflow agent list',
+        (body: { agents?: DialogflowAgentSummary[]; nextPageToken?: string }) => ({
+          items: body.agents ?? [],
+          nextPageToken: body.nextPageToken
+        })
+      ));
+    }
+    return agents;
+  }
+
+  public async listDialogflowTools(agentName: string): Promise<DialogflowToolSummary[]> {
+    const location = /\/locations\/([^/]+)\//.exec(agentName)?.[1] ?? 'global';
+    const origin = location === 'global'
+      ? 'https://dialogflow.googleapis.com/'
+      : `https://${location}-dialogflow.googleapis.com/`;
+    return this.collectPages(
+      () => resourceUrl(origin, `${agentName}/tools`, 'v3'),
+      'Dialogflow tool list',
+      (body: {
+        tools?: Array<{ name: string; displayName?: string; openApiSpec?: { textSchema?: string } }>;
+        nextPageToken?: string;
+      }) => ({
+        items: (body.tools ?? []).map((tool) => ({
+          name: tool.name,
+          displayName: tool.displayName,
+          textSchema: tool.openApiSpec?.textSchema
+        })),
+        nextPageToken: body.nextPageToken
+      })
+    );
+  }
   public async probeCes(projectId: string): Promise<void> { const url = resourceUrl('https://ces.googleapis.com/', `projects/${projectId}/locations/global/apps`); url.searchParams.set('pageSize', '1'); await this.getJson(url, 'CES probe'); }
   public async listCesToolsets(projectId: string): Promise<CesToolsetSummary[]> {
     const apps = await this.collectPages(
@@ -526,22 +918,38 @@ export class GcpSdkClient implements GcpDiscoveryClient {
       }
       for (const integration of integrations) {
         if (!integration.name) continue;
-        const versionsUrl = resourceUrl('https://integrations.googleapis.com/', `${integration.name}/versions`);
-        versionsUrl.searchParams.set('filter', 'state=ACTIVE');
-        versionsUrl.searchParams.set('pageSize', '1');
-        const versions = await this.getJson<{
-          integrationVersions?: Array<{ triggerConfigs?: Array<{ triggerId?: string }> }>;
-        }>(versionsUrl, 'Application Integration version list');
-        const active = versions.integrationVersions?.[0];
-        const triggerIds = (active?.triggerConfigs ?? [])
-          .map((config) => config.triggerId ?? '')
-          .filter((id) => id.startsWith('api_trigger/'));
-        if (triggerIds.length > 0) {
+        const versions = await this.collectPages(
+          () => {
+            const versionsUrl = resourceUrl('https://integrations.googleapis.com/', `${integration.name}/versions`);
+            versionsUrl.searchParams.set('filter', 'state=ACTIVE');
+            return versionsUrl;
+          },
+          'Application Integration version list',
+          (body: {
+            integrationVersions?: Array<{
+              name?: string;
+              updateTime?: string;
+              triggerConfigs?: Array<{ triggerId?: string }>;
+            }>;
+            nextPageToken?: string;
+          }) => ({
+            items: body.integrationVersions ?? [],
+            nextPageToken: body.nextPageToken
+          })
+        );
+        const orderedVersions = [...versions].sort((left, right) => (left.name ?? '').localeCompare(right.name ?? ''));
+        for (const version of orderedVersions) {
+          const triggerIds = (version.triggerConfigs ?? [])
+            .map((config) => config.triggerId ?? '')
+            .filter((id) => id.startsWith('api_trigger/'))
+            .sort((left, right) => left.localeCompare(right));
+          if (triggerIds.length === 0) continue;
           triggers.push({
             integrationResource: integration.name,
             location,
             triggerIds,
-            updateTime: integration.updateTime
+            updateTime: version.updateTime ?? integration.updateTime,
+            versionName: version.name
           });
         }
       }
@@ -609,11 +1017,33 @@ export class GcpSdkClient implements GcpDiscoveryClient {
   }
 
   public async getConnectorSchemaMetadata(connectionName: string): Promise<ConnectorSchemaMetadata | undefined> {
-    const url = resourceUrl('https://connectors.googleapis.com/', connectionName);
-    url.pathname = `${url.pathname}:getConnectionSchemaMetadata`;
+    const url = resourceUrl('https://connectors.googleapis.com/', `${connectionName}/connectionSchemaMetadata`);
     try {
-      const body = await this.postJson<ConnectorSchemaMetadata>(url, 'Integration Connectors schema metadata retrieval', {});
-      return Object.keys(body.entities ?? {}).length || (body.actions?.length ?? 0) ? body : undefined;
+      const body = await this.getJson<{
+        entities?: unknown;
+        actions?: unknown;
+        name?: unknown;
+        state?: unknown;
+        updateTime?: unknown;
+        refreshTime?: unknown;
+        errorMessage?: unknown;
+      }>(url, 'Integration Connectors schema metadata retrieval');
+      const entities = Array.isArray(body.entities)
+        ? body.entities.filter((entity): entity is string => typeof entity === 'string')
+        : undefined;
+      const actions = Array.isArray(body.actions)
+        ? body.actions.filter((action): action is string => typeof action === 'string')
+        : undefined;
+      const metadata: ConnectorSchemaMetadata = {
+        ...(entities ? { entities } : {}),
+        ...(actions ? { actions } : {}),
+        ...(typeof body.name === 'string' ? { name: body.name } : {}),
+        ...(typeof body.state === 'string' ? { state: body.state } : {}),
+        ...(typeof body.updateTime === 'string' ? { updateTime: body.updateTime } : {}),
+        ...(typeof body.refreshTime === 'string' ? { refreshTime: body.refreshTime } : {}),
+        ...(typeof body.errorMessage === 'string' ? { errorMessage: body.errorMessage } : {})
+      };
+      return Object.keys(metadata).length > 0 ? metadata : undefined;
     } catch (error) {
       if (/HTTP (?:400|404)/.test(error instanceof Error ? error.message : String(error))) return undefined;
       throw error;
@@ -621,24 +1051,70 @@ export class GcpSdkClient implements GcpDiscoveryClient {
   }
 
   public async getStorageObjectText(bucket: string, object: string): Promise<string> {
-    const url = new URL(
-      `storage/v1/b/${encodeURIComponent(bucket)}/o/${encodeURIComponent(object)}`,
-      'https://storage.googleapis.com/'
-    );
-    url.searchParams.set('alt', 'media');
-    const bytes = await this.getBinary(url, 'Cloud Storage spec object download');
-    return bytes.toString('utf8');
+    const objectPath = `storage/v1/b/${encodeURIComponent(bucket)}/o/${encodeURIComponent(object)}`;
+    const metadataUrl = new URL(objectPath, 'https://storage.googleapis.com/');
+    const metadata = await this.getJson<{
+      generation?: string;
+      size?: string;
+      contentType?: string;
+      crc32c?: string;
+      md5Hash?: string;
+    }>(metadataUrl, 'Cloud Storage object metadata');
+
+    const generation = metadata.generation?.trim();
+    if (!generation) {
+      throw new Error('Cloud Storage object metadata omitted generation');
+    }
+    const size = Number(metadata.size);
+    if (!Number.isFinite(size) || size < 0) {
+      throw new Error('Cloud Storage object metadata omitted a valid size');
+    }
+    if (size > MAX_STORAGE_OBJECT_BYTES) {
+      throw new Error('Cloud Storage object exceeds 10 MiB');
+    }
+    void metadata.contentType;
+
+    const mediaUrl = new URL(objectPath, 'https://storage.googleapis.com/');
+    mediaUrl.searchParams.set('alt', 'media');
+    mediaUrl.searchParams.set('generation', generation);
+    const bytes = await this.getBinary(mediaUrl, 'Cloud Storage spec object download');
+    if (bytes.byteLength > MAX_STORAGE_OBJECT_BYTES) {
+      throw new Error('Cloud Storage object exceeds 10 MiB');
+    }
+
+    if (metadata.crc32c) {
+      if (crc32cBase64(bytes) !== metadata.crc32c) {
+        throw new Error('Cloud Storage object CRC32C mismatch');
+      }
+    } else if (metadata.md5Hash) {
+      if (createHash('md5').update(bytes).digest('base64') !== metadata.md5Hash) {
+        throw new Error('Cloud Storage object MD5 mismatch');
+      }
+    } else {
+      throw new Error('Cloud Storage object metadata omitted CRC32C and MD5 checksums');
+    }
+
+    try {
+      return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+    } catch {
+      throw new Error('Cloud Storage object is not valid UTF-8');
+    }
   }
 
-  private locationsUrl(origin: string, projectId: string): URL {
-    const url = resourceUrl(origin, `projects/${projectId}/locations`);
+  private locationsUrl(origin: string, projectId: string, apiVersion = 'v1'): URL {
+    const url = resourceUrl(origin, `projects/${projectId}/locations`, apiVersion);
     url.searchParams.set('pageSize', '200');
     return url;
   }
 
-  private async listLocations(origin: string, projectId: string, operation: string): Promise<string[]> {
+  private async listLocations(
+    origin: string,
+    projectId: string,
+    operation: string,
+    apiVersion = 'v1'
+  ): Promise<string[]> {
     return this.collectPages(
-      () => this.locationsUrl(origin, projectId),
+      () => this.locationsUrl(origin, projectId, apiVersion),
       operation,
       (body: { locations?: Array<{ locationId?: string }>; nextPageToken?: string }) => ({
         items: (body.locations ?? []).map((location) => location.locationId ?? '').filter((locationId) => locationId.length > 0),
@@ -659,8 +1135,32 @@ export class GcpSdkClient implements GcpDiscoveryClient {
         .map((entry) => entry.id ?? '')
         .filter((id) => id.length > 0),
       attributes: flattenApiHubAttributes(item.attributes),
+      createTime: typeof item.createTime === 'string' ? item.createTime : undefined,
+      sourceUri: typeof item.sourceUri === 'string' ? item.sourceUri : undefined,
+      additionalSpecContentTypes: parseApiHubAdditionalContentTypes(item.additionalSpecContents)
+    };
+  }
+
+  private toApigeeArchiveDeployment(value: unknown): ApigeeArchiveDeploymentSummary {
+    const item = (value ?? {}) as Record<string, unknown>;
+    return {
+      name: typeof item.name === 'string' ? item.name : '',
+      labels: normalizeLabels(item.labels),
+      createdAt: typeof item.createdAt === 'string' ? item.createdAt : undefined,
+      updatedAt: typeof item.updatedAt === 'string' ? item.updatedAt : undefined
+    };
+  }
+
+  private toApigeeRegistrySpec(value: unknown): ApigeeRegistrySpecSummary {
+    const item = (value ?? {}) as Record<string, unknown>;
+    return {
+      name: typeof item.name === 'string' ? item.name : '',
+      filename: typeof item.filename === 'string' ? item.filename : undefined,
+      description: typeof item.description === 'string' ? item.description : undefined,
+      mimeType: typeof item.mimeType === 'string' ? item.mimeType : undefined,
+      sizeBytes: typeof item.sizeBytes === 'number' ? item.sizeBytes : undefined,
+      labels: normalizeLabels(item.labels),
       createTime: typeof item.createTime === 'string' ? item.createTime : undefined
-      ,sourceUri: typeof item.sourceUri === 'string' ? item.sourceUri : undefined
     };
   }
 
@@ -698,13 +1198,28 @@ export class GcpSdkClient implements GcpDiscoveryClient {
   }
 
   private async getBinary(url: URL, operation: string): Promise<Buffer> {
+    return (await this.getBoundedBinary(url, operation)).bytes;
+  }
+
+  private async getBoundedBinary(url: URL, operation: string): Promise<{ bytes: Buffer; mimeType?: string }> {
     const requester = await this.requester();
     for (let attempt = 1; attempt <= this.options.maxAttempts; attempt += 1) {
       try {
-        const response = await requester.request<ArrayBuffer | Uint8Array | Buffer>({ url: url.toString(), method: 'GET', timeout: this.options.requestTimeoutMs, retry: false, responseType: 'arraybuffer' });
-        return Buffer.from(response.data as ArrayBuffer);
+        const response = await requester.request<ArrayBuffer | Uint8Array | Buffer>({
+          url: url.toString(),
+          method: 'GET',
+          timeout: this.options.requestTimeoutMs,
+          retry: false,
+          responseType: 'arraybuffer'
+        });
+        const bytes = Buffer.from(response.data as ArrayBuffer);
+        if (bytes.byteLength > MAX_STORAGE_OBJECT_BYTES) {
+          throw new Error(`${operation} exceeds ${MAX_STORAGE_OBJECT_BYTES} bytes`);
+        }
+        return { bytes, mimeType: headerValue(response.headers, 'content-type') };
       } catch (error) {
         if (!isTransient(error) || attempt === this.options.maxAttempts) {
+          if (error instanceof Error && error.message.includes('exceeds')) throw error;
           const status = errorStatus(error);
           throw new Error(`${operation} failed${status === undefined ? '' : ` with HTTP ${status}`} after ${attempt} attempt(s)`, { cause: error });
         }

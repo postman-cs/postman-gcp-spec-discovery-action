@@ -1,8 +1,8 @@
-import type { ProviderProbeStatus } from '../../contracts.js';
+import type { ProviderProbeStatus, SourceAuthority } from '../../contracts.js';
 import type { ApiGatewayApi, ApiGatewayConfig, GcpDiscoveryClient } from '../gcp/clients.js';
 import { decodeSourceDocument } from './source-document.js';
 import { probeFailureStatus } from './probe.js';
-import type { SpecCandidate, SpecExportResult, SpecProvider } from './types.js';
+import { withAuthority, type SpecCandidate, type SpecExportResult, type SpecProvider } from './types.js';
 
 const CONFIG_PATTERN = /^projects\/([^/]+)\/locations\/([^/]+)\/apis\/([^/]+)\/configs\/([^/]+)$/;
 
@@ -28,21 +28,36 @@ function shortName(value: string): string {
   return value.split('/').pop() ?? value;
 }
 
-function supportEvidence(config: ApiGatewayConfig): { supported: boolean; evidence: string[] } {
+function supportEvidence(
+  config: ApiGatewayConfig,
+  options: { allowInactive?: boolean } = {}
+): { supported: boolean; authority: SourceAuthority; evidence: string[] } {
   const evidence = [`API Gateway config ${shortName(config.name)} is ${config.state ?? 'STATE_UNSPECIFIED'}`];
   if (config.state !== 'ACTIVE') {
-    return { supported: false, evidence: [...evidence, 'Only ACTIVE API Gateway configs are exportable'] };
+    if (!options.allowInactive) {
+      return {
+        supported: false,
+        authority: 'metadata-only',
+        evidence: [...evidence, 'Only ACTIVE API Gateway configs are exportable']
+      };
+    }
+    evidence.push('Explicit api-id requested inactive/historical API Gateway config export');
   }
   if (config.openapiDocuments.length !== 1) {
-    const detail = config.openapiDocuments.length === 0
-      ? 'API Gateway config has no OpenAPI source document'
-      : `API Gateway config has ${config.openapiDocuments.length} OpenAPI source documents; refusing to merge or guess`;
-    return { supported: false, evidence: [...evidence, detail] };
+    const detail =
+      config.openapiDocuments.length === 0
+        ? 'API Gateway config has no OpenAPI source document'
+        : `API Gateway config has ${config.openapiDocuments.length} OpenAPI source documents; refusing to merge or guess`;
+    return { supported: false, authority: 'metadata-only', evidence: [...evidence, detail] };
   }
   if (config.grpcServices.length > 0) {
-    return { supported: false, evidence: [...evidence, 'gRPC API Gateway configs are not converted in v1.0.0'] };
+    return {
+      supported: false,
+      authority: 'unsupported-format',
+      evidence: [...evidence, 'gRPC API Gateway configs are not converted in v1.0.0']
+    };
   }
-  return { supported: true, evidence };
+  return { supported: true, authority: 'stored-authoritative', evidence };
 }
 
 export class ApiGatewayProvider implements SpecProvider {
@@ -70,7 +85,9 @@ export class ApiGatewayProvider implements SpecProvider {
       }
       // The API returns config.name with the numeric project number; keep the
       // caller's project-id form so the explicit api-id match in the runtime holds.
-      const candidate = this.toCandidate(await this.client.getApiGatewayConfig(this.scope.apiId!), undefined);
+      const candidate = this.toCandidate(await this.client.getApiGatewayConfig(this.scope.apiId!), undefined, {
+        allowInactive: true
+      });
       return [{ ...candidate, apiId: this.scope.apiId! }];
     }
     if (this.scope.apiId) return [];
@@ -83,15 +100,19 @@ export class ApiGatewayProvider implements SpecProvider {
       for (const summary of configs) {
         if (!summary.name) continue;
         const full = await this.client.getApiGatewayConfig(summary.name);
-        candidates.push(this.toCandidate(full, api));
+        candidates.push(this.toCandidate(full, api, { allowInactive: false }));
       }
     }
     return candidates;
   }
 
   public async exportSpec(candidate: SpecCandidate): Promise<SpecExportResult> {
-    const config = await this.client.getApiGatewayConfig(candidate.id);
-    const support = supportEvidence(config);
+    const configName = candidate.apiId && parseApiGatewayConfigName(candidate.apiId) ? candidate.apiId : candidate.id;
+    const config = await this.client.getApiGatewayConfig(configName);
+    const allowInactive =
+      candidate.meta.allowInactiveExport === 'true' ||
+      Boolean(this.scope.apiId && parseApiGatewayConfigName(this.scope.apiId));
+    const support = supportEvidence(config, { allowInactive });
     if (!support.supported) throw new Error(support.evidence.at(-1));
     const decoded = decodeSourceDocument(config.openapiDocuments[0]?.document?.contents);
     return {
@@ -100,13 +121,19 @@ export class ApiGatewayProvider implements SpecProvider {
     };
   }
 
-  private toCandidate(config: ApiGatewayConfig, api: ApiGatewayApi | undefined): SpecCandidate {
-    const support = supportEvidence(config);
+  private toCandidate(
+    config: ApiGatewayConfig,
+    api: ApiGatewayApi | undefined,
+    options: { allowInactive: boolean }
+  ): SpecCandidate {
+    const support = supportEvidence(config, options);
     const apiName = config.name.split('/configs/')[0] ?? config.name;
-    return {
+    return withAuthority({
       id: config.name,
       name: config.displayName || api?.displayName || shortName(apiName),
       providerType: this.type,
+      sourceType: 'api-gateway-config',
+      authority: support.authority,
       apiId: config.name,
       projectId: this.scope.projectId,
       tags: { ...(api?.labels ?? {}), ...config.labels },
@@ -116,8 +143,10 @@ export class ApiGatewayProvider implements SpecProvider {
         apiName,
         configId: shortName(config.name),
         createTime: config.createTime ?? '',
-        updateTime: config.updateTime ?? ''
+        updateTime: config.updateTime ?? '',
+        state: config.state ?? '',
+        allowInactiveExport: options.allowInactive && config.state !== 'ACTIVE' && support.supported ? 'true' : 'false'
       }
-    };
+    });
   }
 }

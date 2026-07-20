@@ -1,7 +1,7 @@
 # GCP Spec Discovery Action v1.0.0 PRD
 
-Status: implementation-ready  
-Authoritative plan: `.plans/gcp-spec-discovery-v1-plan.md`  
+Status: coverage closure in progress; mocked provider tests are not live proof.
+Authoritative plan: workspace `.plans/gcp-spec-discovery-coverage-closure-plan.md`
 Repository: `postman-cs/postman-gcp-spec-discovery-action`  
 Local path: `cse/postman-gcp-spec-discovery-action/`  
 Release: `v1.0.0`; npm `@postman-cse/onboarding-gcp-spec-discovery@1.0.0`
@@ -19,7 +19,7 @@ The action discovers or derives an OpenAPI 3.x or Swagger 2.0 document from one 
 | `mode` | false | `resolve-one` | `resolve-one` or `discover-many`. |
 | `project-id` | true | none | Exact Google Cloud project ID; never inferred from ambient ADC. |
 | `location` | false | `global` | API Gateway location; v1 accepts only `global`. |
-| `api-id` | false | `''` | Exact full resource name of any explicitly selectable source: API Gateway config, Cloud Endpoints config, Apigee proxy revision, API Hub spec, Apigee portal apidoc, Vertex extension, Dialogflow tool, or CES tool/toolset. |
+| `api-id` | false | `''` | Exact full resource name of an implemented stored/generated source, including API Gateway config, Cloud Endpoints config, Apigee proxy revision or archive deployment, API Hub spec, legacy Apigee Registry spec, portal apidoc, Vertex extension, Dialogflow tool, or CES tool/toolset. It cannot make local-derived or metadata-only candidates exportable. |
 | `repo-slug` | false | `''` | Repository slug (owner/name) for repository-association matching against `postman-repo` labels; defaults to the CI-detected repository. |
 | `expected-service-name` | false | `''` | Ranking hint; also names manual-review results. |
 | `expected-api-ids-json` | false | `[]` | JSON array of expected full resource names; exact matches rank highest. |
@@ -57,7 +57,7 @@ The action MUST set all 22 outputs in this order on every successful invocation:
 21. `derived-openapi-evidence-json`
 22. `narrowing-strategy`
 
-Provider types are `api-gateway | cloud-endpoints | apigee | api-hub | app-integration | connectors-custom | apigee-portal | vertex-extensions | agent-engines | dialogflow-tools | ces-toolsets | iac-local`. Source types are `repo-spec | api-gateway-config | cloud-endpoints-config | apigee-proxy | apigee-env-oas | api-hub-spec | app-integration-trigger | connectors-custom-spec | connectors-generated-spec | apigee-portal-doc | vertex-extension-manifest | agent-engine-generated-spec | dialogflow-tool-schema | ces-tool-schema | ces-toolset-schema | iac-embedded | manual-review | discover-many`. Spec formats are `openapi-json | openapi-yaml`. Compatibility outputs 14-16 are empty in v1. Dotenv names use `POSTMAN_GCP_SPEC_*`.
+Provider types are `api-gateway | cloud-endpoints | apigee | api-hub | apigee-registry | app-integration | connectors-custom | apigee-portal | vertex-extensions | agent-engines | dialogflow-tools | ces-toolsets | iac-local`. Source types are declared by `src/contracts.ts`; unsupported Config Connector `APIConfig` is deliberately excluded because the official inventory has no OpenAPI content field. Spec formats are `openapi-json | openapi-yaml`. Compatibility outputs 14-16 are empty in v1. Dotenv names use `POSTMAN_GCP_SPEC_*`.
 
 ## Requirements
 
@@ -180,7 +180,7 @@ Acceptance:
 
 - README tables are generated from the contract; docs state exact providers, ADC/WIF setup, IAM permissions, and deferred surfaces without overclaiming.
 - CI is one Node 24 `gate` job with one `npm ci`, one bundle, max two concurrent local checks, read-only dist assertion, and no credentialed live step on pull requests.
-- Live runner uses explicit `GCP_PROJECT_ID=dans-project-491920`, requires `--provision --teardown`, provisions collision-resistant run-marked API Gateway API/config, Cloud Endpoints service/config, and Apigee proxy resources, validates the current compiled CLI, and tears down exact run-scoped identities in `finally`. Apigee teardown verifies remote ownership before deletion and refuses foreign resources.
+- Live validation is operator-triggered and requires an explicitly supplied disposable project, `--provision --teardown`, current compiled bundles, and run-scoped cleanup. It is not performed by unit tests and mock fixtures do not constitute live evidence.
 - Live cases are exactly `gateway-explicit-api-id`, `gateway-discovery`, `gateway-repo-label`, `gateway-label-conflict`, `endpoints-explicit-api-id`, `endpoints-discovery`, `apigee-discovery`, `discover-many`, `iac-single`, and `ambiguity`. Evidence stores only case name/status/source/provider/format and totals.
 - Release accepts only immutable `v1.0.0` at `origin/main`, runs all gates, publishes npm with provenance, creates GitHub release, then moves only `v1` and `v1.0`. Rolling tags never publish npm.
 
@@ -214,8 +214,8 @@ Then judge-sol and judge-fable MUST both return COMPLETE. Release verification M
 
 ## Must Not
 
-- No service-account key or credential JSON input, durable secret, token logging, ambient project inference, or personal project validation.
-- API Hub, Application Integration, and Integration Connectors custom connectors are IN scope as fail-soft providers (`api-hub`, `app-integration`, `connectors-custom`). No Cloud Run/Functions runtime probing, arbitrary remote URL fetch, traffic-derived route synthesis (APIM shadow-API observation), legacy Apigee Registry, gRPC/`google.api.Service` conversion, Terraform/gcloud execution, or cross-action TypeScript import in v1. Apigee is explicitly IN SCOPE and release-blocking: the Dan's-project org and its billing org must be fully working (management plane, data plane, spec surfaces) before v1 ships, at any cost.
+- No service-account key or credential JSON input, durable secret, token logging, ambient project inference, personal-project validation, arbitrary URL fetch, or Config Connector APIConfig support.
+- API Hub, legacy Apigee Registry (existing data only), Application Integration, and Integration Connectors custom connectors are fail-soft providers. No Cloud Run/Functions runtime probing, arbitrary remote URL fetch, traffic-derived route synthesis, gRPC/`google.api.Service` conversion, Terraform/gcloud execution, or cross-action TypeScript import is allowed.
 - No arbitrary ambiguity selection, destructive narrowing, cap-before-partition, path escape, stale-dist proof, credentialed PR job, rolling-tag npm publish, immutable-tag movement, or release from a commit other than protected `origin/main`.
 
 ## Completion Audit

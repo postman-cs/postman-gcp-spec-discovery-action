@@ -3,6 +3,8 @@ import path from 'node:path';
 
 import {
   actionContract,
+  isResolvableAuthority,
+  RETAINED_PROVIDER_ORDER,
   type ActionMode,
   type DiscoveredService,
   type ExportSummary,
@@ -11,6 +13,8 @@ import {
   type ResolutionResult,
   type SpecFormat
 } from './contracts.js';
+
+export { RETAINED_PROVIDER_ORDER };
 import type { GcpDiscoveryClient } from './lib/gcp/clients.js';
 import { sanitizeLogMessage } from './lib/logging/sanitize.js';
 import { detectRepoContext, type RepoContext } from './lib/repo/context.js';
@@ -29,8 +33,9 @@ import { canonicalRepoLabelValue, runNarrowingPipeline, type NarrowingCandidate,
 import { deriveOpenApiDocument } from './lib/spec/oas-derivation.js';
 import { ApiGatewayProvider, parseApiGatewayConfigName } from './lib/providers/api-gateway.js';
 import { CloudEndpointsProvider, parseEndpointConfigName } from './lib/providers/cloud-endpoints.js';
-import { ApigeeProvider, parseApigeeRevisionName } from './lib/providers/apigee.js';
-import { ApiHubProvider, parseApiHubSpecName } from './lib/providers/api-hub.js';
+import { ApigeeProvider, parseApigeeArchiveDeploymentName, parseApigeeRevisionName } from './lib/providers/apigee.js';
+import { ApiHubProvider, parseApiHubAdditionalSpecName, parseApiHubSpecName } from './lib/providers/api-hub.js';
+import { ApigeeRegistryProvider, parseApigeeRegistrySpecName } from './lib/providers/apigee-registry.js';
 import { AppIntegrationProvider } from './lib/providers/app-integration.js';
 import { ConnectorsCustomProvider } from './lib/providers/connectors-custom.js';
 import { ApigeePortalProvider, parseApigeePortalApidocName } from './lib/providers/apigee-portal.js';
@@ -40,7 +45,7 @@ import { AgentEnginesProvider } from './lib/providers/agent-engines.js';
 import { CesToolsetsProvider } from './lib/providers/ces-toolsets.js';
 import { IacLocalProvider } from './lib/providers/iac-local.js';
 import { resolvePathWithinRoot } from './lib/utils/resolve-path-within-root.js';
-import type { SpecCandidate, SpecExportResult, SpecProvider } from './lib/providers/types.js';
+import { resolveCandidateAuthority, type SpecCandidate, type SpecExportResult, type SpecProvider } from './lib/providers/types.js';
 
 export interface InputReaderLike {
   getInput(name: string, options?: { required?: boolean }): string;
@@ -175,20 +180,30 @@ export function resolveInputs(env: NodeJS.ProcessEnv = process.env): ResolvedInp
     const gateway = parseApiGatewayConfigName(apiId);
     const endpoints = parseEndpointConfigName(apiId);
     const apigee = parseApigeeRevisionName(apiId);
+    const apigeeArchive = parseApigeeArchiveDeploymentName(apiId);
     const apiHub = parseApiHubSpecName(apiId);
+    const apiHubAdditional = parseApiHubAdditionalSpecName(apiId);
+    const apigeeRegistry = parseApigeeRegistrySpecName(apiId);
     const portal = parseApigeePortalApidocName(apiId);
     const dialogflow = parseDialogflowToolName(apiId);
     const vertex = parseVertexExtensionName(apiId);
     // Nested toolset tools (apps/{app}/toolsets/{toolset}/tools/{tool}) are first-class
     // CES candidates, so the explicit selector accepts them too.
     const ces = /^projects\/([^/]+)\/locations\/global\/apps\/[^/]+\/(?:tools\/[^/]+|toolsets\/[^/]+(?:\/tools\/[^/]+)?)$/.exec(apiId);
-    if (!gateway && !endpoints && !apigee && !apiHub && !portal && !dialogflow && !vertex && !ces) {
-      throw new Error('api-id must be a full API Gateway config, Cloud Endpoints config, Apigee proxy revision, API Hub spec, Apigee portal apidoc, Vertex extension, Dialogflow tool, or CES tool/toolset resource name');
+    if (!gateway && !endpoints && !apigee && !apigeeArchive && !apiHub && !apiHubAdditional && !apigeeRegistry && !portal && !dialogflow && !vertex && !ces) {
+      throw new Error('api-id must be a full API Gateway config, Cloud Endpoints config, Apigee proxy revision, Apigee archive deployment, API Hub spec, API Hub additional spec variant, legacy Apigee Registry spec, Apigee portal apidoc, Vertex extension, Dialogflow tool, or CES tool/toolset resource name');
     }
     if (apiHub && apiHub.projectId !== projectId) {
       throw new Error('api-id must belong to the configured project-id API Hub instance');
     }
+    if (apiHubAdditional && apiHubAdditional.projectId !== projectId) {
+      throw new Error('api-id must belong to the configured project-id API Hub instance');
+    }
+    if (apigeeRegistry && apigeeRegistry.projectId !== projectId) {
+      throw new Error('api-id must belong to the configured project-id Apigee Registry instance');
+    }
     if (apigee && apigee.org !== projectId) throw new Error('api-id must belong to the configured project-id Apigee org');
+    if (apigeeArchive && apigeeArchive.org !== projectId) throw new Error('api-id must belong to the configured project-id Apigee org');
     if (portal && portal.org !== projectId) throw new Error('api-id must belong to the configured project-id Apigee portal org');
     if (dialogflow && dialogflow.projectId !== projectId) throw new Error('api-id must belong to the configured project-id Dialogflow agent');
     if (vertex && vertex.projectId !== projectId) throw new Error('api-id must belong to the configured project-id Vertex extension registry');
@@ -301,6 +316,7 @@ function sourceTypeForProvider(
   if (provider === 'cloud-endpoints') return 'cloud-endpoints-config';
   if (provider === 'apigee') return 'apigee-proxy';
   if (provider === 'api-hub') return 'api-hub-spec';
+  if (provider === 'apigee-registry') return 'apigee-registry-spec';
   if (provider === 'app-integration') return 'app-integration-trigger';
   if (provider === 'connectors-custom') return 'connectors-custom-spec';
   if (provider === 'apigee-portal') return 'apigee-portal-doc';
@@ -368,16 +384,23 @@ async function writeSpecExport(
 }
 
 function toCandidateInput(candidate: SpecCandidate): GCPCandidateInput {
+  const authority = resolveCandidateAuthority(candidate);
   return {
     id: candidate.id,
     name: candidate.name,
     providerType: candidate.providerType,
     sourceType: candidate.sourceType,
+    authority,
     apiId: candidate.apiId,
     tags: candidate.tags,
-    supported: candidate.supported,
+    supported: candidate.supported && isResolvableAuthority(authority),
     evidence: candidate.evidence
   };
+}
+
+function isExportableCandidate(candidate: SpecCandidate): boolean {
+  const authority = resolveCandidateAuthority(candidate);
+  return candidate.supported && isResolvableAuthority(authority);
 }
 
 interface ProbeOutcome {
@@ -403,6 +426,7 @@ function buildProviders(inputs: ResolvedInputs, dependencies: GCPDependencies, i
   if (dependencies.providers) {
     return dependencies.providers;
   }
+  // Order must stay aligned with RETAINED_PROVIDER_ORDER in contracts.ts.
   return [
     new ApiGatewayProvider(dependencies.client, {
       projectId: inputs.projectId,
@@ -415,6 +439,7 @@ function buildProviders(inputs: ResolvedInputs, dependencies: GCPDependencies, i
     }),
     new ApigeeProvider(dependencies.client, { projectId: inputs.projectId, apiId: inputs.apiId }),
     new ApiHubProvider(dependencies.client, { projectId: inputs.projectId, apiId: inputs.apiId }),
+    new ApigeeRegistryProvider(dependencies.client, { projectId: inputs.projectId, apiId: inputs.apiId }),
     new AppIntegrationProvider(dependencies.client, { projectId: inputs.projectId, apiId: inputs.apiId }),
     new ConnectorsCustomProvider(dependencies.client, { projectId: inputs.projectId, apiId: inputs.apiId }),
     new ApigeePortalProvider(dependencies.client, { projectId: inputs.projectId, apiId: inputs.apiId }),
@@ -520,6 +545,7 @@ async function runResolveOne(inputs: ResolvedInputs, dependencies: GCPDependenci
       sourceType: 'iac-embedded',
       serviceName,
       confidence: 100,
+      authority: 'stored-authoritative',
       specPath: written.specPath,
       providerType: 'iac-local',
       specFormat: written.specFormat,
@@ -584,18 +610,25 @@ async function runResolveOne(inputs: ResolvedInputs, dependencies: GCPDependenci
   const enumerated = applyApiFilter(await collectCandidates(availableProviders, core), inputs.apiFilter);
 
   // 3a. Explicit api-id is a caller selection with confidence 100.
+  // Authority gate still applies: api-id cannot bypass local-derived /
+  // metadata-only / unsupported-format (no opt-in input exists).
   if (inputs.apiId) {
     const requestedApiId = inputs.apiId;
     const target = enumerated.find((candidate) => candidate.apiId === requestedApiId || candidate.id === requestedApiId);
-    if (target && !target.supported) {
+    if (target && !isExportableCandidate(target)) {
+      const authority = resolveCandidateAuthority(target);
       const resolution: ResolutionResult = {
         status: 'unresolved',
         sourceType: 'manual-review',
         serviceName: resolveServiceName(target, inputs.serviceMapping),
         confidence: 100,
+        authority,
         providerProbes: probes,
         rankedCandidates: toAmbiguousViews(rankServiceCandidates([toCandidateInput(target)], signals)),
-        evidence: target.evidence
+        evidence: [
+          ...target.evidence,
+          `Authority ${authority} cannot auto-resolve even with explicit api-id`
+        ]
       };
       return {
         mode: inputs.mode,
@@ -615,6 +648,7 @@ async function runResolveOne(inputs: ResolvedInputs, dependencies: GCPDependenci
           sourceType: sourceTypeForProvider(target.providerType, target.sourceType),
           serviceName,
           confidence: 100,
+          authority: resolveCandidateAuthority(target),
           specPath: written.specPath,
           ...(target.apiId ? { apiId: target.apiId } : {}),
           providerType: target.providerType,
@@ -701,10 +735,17 @@ async function runResolveOne(inputs: ResolvedInputs, dependencies: GCPDependenci
     ? { tier: narrowing.tier, mode: narrowing.mode, droppedCount: narrowing.droppedCount }
     : undefined;
 
-  if (best && !best.ambiguous && !narrowing?.conflict && best.supported && best.confidence >= MINIMUM_RESOLVED_CONFIDENCE) {
+  if (
+    best &&
+    !best.ambiguous &&
+    !narrowing?.conflict &&
+    best.supported &&
+    isResolvableAuthority(best.authority) &&
+    best.confidence >= MINIMUM_RESOLVED_CONFIDENCE
+  ) {
     const target = partitioned.find((candidate) => candidate.id === best?.resourceId);
     const provider = target ? availableProviders.find((p) => p.type === target.providerType) : undefined;
-    if (target && provider) {
+    if (target && provider && isExportableCandidate(target)) {
       try {
         const exportResult = await provider.exportSpec(target);
         const serviceName = resolveServiceName(target, inputs.serviceMapping);
@@ -714,6 +755,7 @@ async function runResolveOne(inputs: ResolvedInputs, dependencies: GCPDependenci
           sourceType: sourceTypeForProvider(target.providerType, target.sourceType),
           serviceName,
           confidence: best.confidence,
+          authority: best.authority,
           specPath: written.specPath,
           ...(target.apiId ? { apiId: target.apiId } : {}),
           providerType: target.providerType,
@@ -753,6 +795,7 @@ async function runResolveOne(inputs: ResolvedInputs, dependencies: GCPDependenci
     sourceType: 'manual-review',
     serviceName: inputs.expectedServiceName ?? best?.serviceName ?? 'unknown-service',
     confidence: best?.confidence ?? 0,
+    ...(best ? { authority: best.authority } : {}),
     ...(narrowingMetadata ? { narrowing: narrowingMetadata } : {}),
     providerProbes: probes,
     rankedCandidates: toAmbiguousViews(ranked.slice(0, inputs.maxCandidates)),
@@ -812,7 +855,7 @@ async function runDiscoverMany(inputs: ResolvedInputs, dependencies: GCPDependen
   const writtenPaths = new Map<string, string>();
 
   for (const candidate of capped) {
-    if (!candidate.supported) {
+    if (!isExportableCandidate(candidate)) {
       summary.skipped += 1;
       continue;
     }
@@ -840,6 +883,7 @@ async function runDiscoverMany(inputs: ResolvedInputs, dependencies: GCPDependen
         specPath: written.specPath,
         ...(candidate.apiId ? { apiId: candidate.apiId } : {}),
         providerType: candidate.providerType,
+        authority: resolveCandidateAuthority(candidate),
         specFormat: written.specFormat,
         ...(written.derived
           ? {

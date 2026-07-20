@@ -17,7 +17,9 @@ describe('CES toolsets provider', () => {
   it('probes and lists toolset candidates', async () => {
     const provider = new CesToolsetsProvider(client(), { projectId: 'sample-project-123' });
     await expect(provider.probe()).resolves.toBe('available');
-    await expect(provider.listCandidates()).resolves.toEqual([expect.objectContaining({ id: ID, supported: true, providerType: 'ces-toolsets' })]);
+    await expect(provider.listCandidates()).resolves.toEqual([
+      expect.objectContaining({ id: ID, supported: true, providerType: 'ces-toolsets', authority: 'stored-authoritative' })
+    ]);
   });
   it('treats disabled and forbidden APIs as fail-soft', async () => {
     for (const message of ['403 SERVICE_DISABLED', '403 PERMISSION_DENIED', '404 not found']) {
@@ -32,7 +34,7 @@ describe('CES toolsets provider', () => {
   it('exports standalone tool schemas and supports exact tool resource selection', async () => {
     const provider = new CesToolsetsProvider(client({ listCesToolsets: vi.fn(async () => [{ name: ID, openApiSchema: OAS }, { name: TOOL_ID, displayName: 'Refunds', openApiSchema: OAS }]) }), { projectId: 'sample-project-123', apiId: TOOL_ID });
     const candidates = await provider.listCandidates();
-    expect(candidates).toEqual([expect.objectContaining({ id: TOOL_ID, supported: true })]);
+    expect(candidates).toEqual([expect.objectContaining({ id: TOOL_ID, supported: true, authority: 'stored-authoritative' })]);
     await expect(provider.exportSpec(candidates[0]!)).resolves.toMatchObject({ content: OAS, format: 'openapi-yaml' });
   });
   it('selects an exact toolset-scoped tool as ces-toolset-schema while standalone tools remain ces-tool-schema', async () => {
@@ -63,7 +65,9 @@ describe('CES toolsets provider', () => {
   });
   it('marks a standalone tool without a schema unsupported', async () => {
     const provider = new CesToolsetsProvider(client({ listCesToolsets: vi.fn(async () => [{ name: TOOL_ID }]) }), { projectId: 'sample-project-123' });
-    await expect(provider.listCandidates()).resolves.toEqual([expect.objectContaining({ id: TOOL_ID, supported: false })]);
+    await expect(provider.listCandidates()).resolves.toEqual([
+      expect.objectContaining({ id: TOOL_ID, supported: false, authority: 'metadata-only' })
+    ]);
   });
   it('rejects malformed stored schemas', async () => {
     const provider = new CesToolsetsProvider(client({ listCesToolsets: vi.fn(async () => [{ name: ID, openApiSchema: 'not openapi' }]) }), { projectId: 'sample-project-123' });

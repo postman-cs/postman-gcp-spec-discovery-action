@@ -6,6 +6,8 @@ export interface ValidatedOpenApi {
   isJson: boolean;
 }
 
+const HTTP_OPERATIONS = new Set(['get', 'put', 'post', 'delete', 'options', 'head', 'patch', 'trace']);
+
 /**
  * Parse and validate an OpenAPI/Swagger document string.
  *
@@ -13,7 +15,8 @@ export interface ValidatedOpenApi {
  *  - unparseable content;
  *  - documents that are not Swagger 2.0 or OpenAPI 3.x;
  *  - missing or non-object `paths`;
- *  - empty `paths` (a spec with zero operations is not exportable evidence).
+ *  - empty `paths` (a spec with zero operations is not exportable evidence);
+ *  - `paths` entries that contain no recognized HTTP operation.
  */
 export function parseAndValidateOpenApi(content: string): ValidatedOpenApi {
   const trimmed = content.trim();
@@ -54,6 +57,19 @@ export function parseAndValidateOpenApi(content: string): ValidatedOpenApi {
   if (Object.keys(paths as Record<string, unknown>).length === 0) {
     throw new Error('Specification has an empty paths object');
   }
+  if (!hasRecognizedHttpOperation(paths as Record<string, unknown>)) {
+    throw new Error('Specification has no recognized HTTP operation under paths');
+  }
 
   return { document, version, isJson };
+}
+
+function hasRecognizedHttpOperation(paths: Record<string, unknown>): boolean {
+  for (const pathItem of Object.values(paths)) {
+    if (!pathItem || typeof pathItem !== 'object' || Array.isArray(pathItem)) continue;
+    for (const key of Object.keys(pathItem as Record<string, unknown>)) {
+      if (HTTP_OPERATIONS.has(key.toLowerCase())) return true;
+    }
+  }
+  return false;
 }

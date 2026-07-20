@@ -1,6 +1,6 @@
 # Provider contracts
 
-GCP spec discovery probes providers fail-soft in this order: `api-gateway`, `cloud-endpoints`, `apigee`, `api-hub`, `app-integration`, `connectors-custom`, `apigee-portal`, `vertex-extensions`, `agent-engines`, `dialogflow-tools`, `ces-toolsets`, `iac-local`. Authorization failures become `skipped:iam`; other provider failures become `skipped:error`; remaining providers continue.
+GCP spec discovery probes providers fail-soft in this order: `api-gateway`, `cloud-endpoints`, `apigee`, `api-hub`, `apigee-registry`, `app-integration`, `connectors-custom`, `apigee-portal`, `vertex-extensions`, `agent-engines`, `dialogflow-tools`, `ces-toolsets`, `iac-local`. Authorization failures become `skipped:iam`; other provider failures become `skipped:error`; remaining providers continue.
 
 ## Repository-association capability
 
@@ -17,6 +17,8 @@ Label-incapable providers still participate in discovery and ranking; they simpl
 ## `api-gateway`
 
 - Lists API Gateway APIs and configs in the requested project and `global` location.
+- Automatic discovery marks non-ACTIVE configs unsupported (metadata-only).
+- A strict explicit full config `api-id` may export an inactive/historical config when FULL returns exactly one valid OpenAPI document and no gRPC source.
 - Exports the complete `openapiDocuments` content from the selected config.
 - Produces `api-gateway-config` candidates and records the full config resource name in `api-id`.
 
@@ -31,16 +33,26 @@ Label-incapable providers still participate in discovery and ranking; they simpl
 - Lists accessible Apigee proxies and revisions for the requested project context.
 - Downloads the selected proxy revision zip and extracts OpenAPI documents only from `resources/oas` or `resources/openapi`.
 - Produces `apigee-proxy` candidates and records the proxy revision resource name in `api-id`.
-- Enumerates environments and exports validated `type=oas` resource files as `apigee-env-oas` candidates.
+- After proxy revisions, lists environment-scoped `archiveDeployments`, calls `:generateDownloadUrl`, and downloads the original zip only from trusted HTTPS GCS hosts (query strings never logged).
+- Archive zips reject unsafe entry names; only JSON/YAML entries are inspected. Exactly one valid OpenAPI document yields a stored-authoritative `apigee-archive-deployment` candidate; zero is metadata-only; multiple remain manual review.
+- Environment `resourcefiles` / `type=oas` is not a documented Apigee resource type and is not probed.
 - A proxy without a supported embedded document is surfaced for manual review; the action does not synthesize routes or convert gRPC definitions.
 
 ## `api-hub`
 
 - Walks the provisioned API Hub locations, then `apis -> versions -> specs`, in the requested project.
 - Exports verbatim spec bytes with `specs/{spec}:contents`; API Hub is the consolidation layer for manually registered specs and Apigee / API Gateway plugin ingestion.
-- Produces `api-hub-spec` candidates and records the full spec resource name in `api-id`.
-- Non-OpenAPI spec types (proto, WSDL, MCP) surface as unsupported candidates for manual review; nothing is converted.
+- Produces stored-authoritative `api-hub-spec` candidates and records the full spec resource name in `api-id`.
+- When `Spec.additionalSpecContents[].specContentType` advertises `BOOSTED_SPEC_CONTENT` or `GATEWAY_OPEN_API_SPEC`, fetches `GET {spec}:fetchAdditionalSpecContent?specContentType=...` and emits distinct google-generated candidates (`api-hub-boosted-spec` / `api-hub-gateway-openapi-spec`). Original stored bytes are never replaced or merged; generated candidates rank below stored-authoritative.
+- Non-OpenAPI spec types (proto, WSDL, MCP) and malformed/absent additional content surface as unsupported/manual-review with evidence.
 - IAM note: API Hub uses product-specific roles (`roles/apihub.viewer`); project Owner alone is not sufficient, so unprovisioned or unauthorized hubs probe as `skipped:iam` and discovery continues.
+
+## `apigee-registry` (legacy)
+
+- Fail-soft compatibility surface for existing customer data in the legacy Apigee Registry API (`apigeeregistry.googleapis.com`). It is no longer supported as a replacement for API Hub and must not be provisioned for new registrations.
+- Enumerates service locations, then `apis -> versions -> specs`, and exports via `{spec}:getContents` as a bounded binary HTTP body with content/mime metadata (not the API Hub JSON/base64 shape).
+- Accepts only validated OpenAPI/Swagger bytes. Non-OpenAPI mime types and compressed/multi-file bundles remain unsupported/manual review unless a bounded zip inspection proves exactly one OpenAPI document.
+- Service disabled / 404 / 403 probe fail-soft (`skipped:error` or `skipped:iam`).
 
 ## `app-integration`
 
@@ -112,6 +124,6 @@ The `postman-repo` label is an ownership signal for label prefiltering. The sele
 
 ## Deferred surfaces
 
-Runtime URL probing (`Cloud Run`, `GKE`, `Functions`, Firebase hosting, App Engine `_ah/api/discovery` endpoints) is outside v1 because GCP has no catalog of runtime spec endpoints. Traffic-derived surfaces (APIM shadow-API observation jobs, API Hub discovered observations) yield operations, not contracts, and are not spec sources. Convention-only storage (arbitrary GCS buckets, Secret Manager / Parameter Manager payloads, Artifact Registry generic repos, Cloud Build artifacts) and the legacy Apigee Registry (superseded by API Hub) are also excluded. Service Directory holds endpoint routing metadata with no schema payloads. Google API Discovery documents describe Google's own services, not customer APIs. GKE Gateway `HTTPRoute`/Ingress resources carry path skeletons without schemas, and synthesizing routes from them would violate the no-guessed-contract rule. The action does not fetch arbitrary remote URLs, synthesize routes, or convert gRPC descriptor sets (API Gateway `grpcServices`, Cloud Endpoints `FILE_DESCRIPTOR_SET_PROTO`, `google.api.Service` definitions) — descriptor-to-OpenAPI reconstruction produces an inferred contract, not a stored one.
+Runtime URL probing (`Cloud Run`, `GKE`, `Functions`, Firebase hosting, App Engine `_ah/api/discovery` endpoints) is outside v1 because GCP has no catalog of runtime spec endpoints. Traffic-derived surfaces (APIM shadow-API observation jobs, API Hub discovered observations) yield operations, not contracts, and are not spec sources. Convention-only storage (arbitrary GCS buckets, Secret Manager / Parameter Manager payloads, Artifact Registry generic repos, Cloud Build artifacts) remains excluded. The legacy Apigee Registry is retained only as a fail-soft compatibility provider for existing data and is labeled no-longer-supported (not a replacement for API Hub). Service Directory holds endpoint routing metadata with no schema payloads. Google API Discovery documents describe Google's own services, not customer APIs. GKE Gateway `HTTPRoute`/Ingress resources carry path skeletons without schemas, and synthesizing routes from them would violate the no-guessed-contract rule. The action does not fetch arbitrary remote URLs, synthesize routes, or convert gRPC descriptor sets (API Gateway `grpcServices`, Cloud Endpoints `FILE_DESCRIPTOR_SET_PROTO`, `google.api.Service` definitions) — descriptor-to-OpenAPI reconstruction produces an inferred contract, not a stored one.
 
-IaC scanning is likewise bounded. `iac-local` recognizes Terraform `google_api_gateway_api_config` path references and `google_endpoints_service` definitions only. Other IaC shapes are deferred with rationale: Deployment Manager templates and Config Connector CRDs (`apigateway.cnrm.cloud.google.com`, `servicemanagement.cnrm.cloud.google.com`) embed the same config payloads but require YAML/Jinja evaluation the action does not perform; Pulumi and CDK-for-Terraform programs require executing user code, which is forbidden; Terraform `google_apigee_*` resources reference proxy bundles, not spec documents; `gcloud` invocation scripts and Cloud Build steps are arbitrary shell, not declarative references. Executing Terraform, Deployment Manager, or any user code remains out of scope; only static path or document references committed to the repository are read.
+IaC scanning is likewise bounded. `iac-local` recognizes Terraform `google_api_gateway_api_config` path references, `google_endpoints_service` definitions, and literal declarative Pulumi API Gateway documents only. Config Connector `APIConfig` is explicitly excluded: the official Config Connector inventory exposes configuration metadata but no supported OpenAPI source-content field, so the action must not infer one. Deployment Manager templates, Pulumi and CDK-for-Terraform programs require evaluation or execution and remain excluded; Terraform `google_apigee_*` resources reference proxy bundles, not spec documents; `gcloud` invocation scripts and Cloud Build steps are arbitrary shell, not declarative references. Executing Terraform, Deployment Manager, or user code remains out of scope; only static committed documents are read.

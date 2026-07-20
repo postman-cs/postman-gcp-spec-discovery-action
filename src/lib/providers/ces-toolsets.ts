@@ -1,8 +1,8 @@
-import type { ProviderProbeStatus } from '../../contracts.js';
+import type { ProviderProbeStatus, SourceAuthority } from '../../contracts.js';
 import type { CesToolsetSummary, GcpDiscoveryClient } from '../gcp/clients.js';
 import { decodeUtf8OpenApi } from './source-document.js';
 import { probeFailureStatus } from './probe.js';
-import type { SpecCandidate, SpecExportResult, SpecProvider } from './types.js';
+import { withAuthority, type SpecCandidate, type SpecExportResult, type SpecProvider } from './types.js';
 
 const PATTERN = /^projects\/([^/]+)\/locations\/global\/apps\/[^/]+\/(?:tools\/[^/]+|toolsets\/[^/]+(?:\/tools\/[^/]+)?)$/;
 
@@ -27,8 +27,23 @@ export class CesToolsetsProvider implements SpecProvider {
     const standaloneTool = /\/apps\/[^/]+\/tools\/[^/]+$/.test(toolset.name);
     const resourceKind = toolsetScopedTool ? 'toolset-scoped tool' : standaloneTool ? 'tool' : 'toolset';
     let supported = Boolean(schema);
-    if (schema) try { decodeUtf8OpenApi(schema); } catch { supported = false; }
-    return { id: toolset.name, apiId: toolset.name, name: toolset.displayName || toolset.name.split('/').pop()!, providerType: this.type, sourceType: standaloneTool ? 'ces-tool-schema' : 'ces-toolset-schema', projectId: this.scope.projectId, tags: {}, supported, evidence: [schema ? `CES ${resourceKind} stores an OpenAPI schema` : `CES ${resourceKind} has no OpenAPI schema`], meta: { openApiSchema: schema ?? '', resourceKind } };
+    let authority: SourceAuthority = schema ? 'stored-authoritative' : 'metadata-only';
+    if (schema) {
+      try { decodeUtf8OpenApi(schema); } catch { supported = false; authority = 'metadata-only'; }
+    }
+    return withAuthority({
+      id: toolset.name,
+      apiId: toolset.name,
+      name: toolset.displayName || toolset.name.split('/').pop()!,
+      providerType: this.type,
+      sourceType: standaloneTool ? 'ces-tool-schema' : 'ces-toolset-schema',
+      authority,
+      projectId: this.scope.projectId,
+      tags: {},
+      supported,
+      evidence: [schema ? `CES ${resourceKind} stores an OpenAPI schema` : `CES ${resourceKind} has no OpenAPI schema`],
+      meta: { openApiSchema: schema ?? '', resourceKind }
+    });
   }
   public async exportSpec(candidate: SpecCandidate): Promise<SpecExportResult> {
     return { ...decodeUtf8OpenApi(candidate.meta.openApiSchema ?? ''), evidence: [`Exported original CES ${candidate.meta.resourceKind ?? 'toolset'} OpenAPI schema`] };

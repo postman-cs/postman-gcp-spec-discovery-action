@@ -52,7 +52,13 @@ describe('Apigee provider', () => {
     const fake = client(zip({ 'apiproxy/resources/oas/openapi.yaml': OAS }));
     const provider = new ApigeeProvider(fake, { projectId: 'sample-project-123' });
     const candidate = (await provider.listCandidates())[0]!;
-    expect(candidate).toMatchObject({ id: 'organizations/sample-project-123/apis/payments/revisions/10', supported: true, providerType: 'apigee' });
+    expect(candidate).toMatchObject({
+      id: 'organizations/sample-project-123/apis/payments/revisions/10',
+      supported: true,
+      providerType: 'apigee',
+      authority: 'stored-authoritative',
+      sourceType: 'apigee-proxy'
+    });
     await expect(provider.exportSpec(candidate)).resolves.toMatchObject({ content: OAS, format: 'openapi-yaml', filename: 'index.yaml' });
   });
   it('classifies no OAS and multiple OAS as unsupported', async () => {
@@ -84,15 +90,92 @@ describe('Apigee provider', () => {
     expect(inflateZip(zip({ 'a.txt': 'stored' }, false)).get('a.txt')?.toString()).toBe('stored');
     expect(inflateZip(zip({ 'b.txt': 'deflated' })).get('b.txt')?.toString()).toBe('deflated');
   });
-  it('lists, validates, and exports environment OAS resource files', async () => {
-    const fake = client(zip({}), {
-      listApigeeEnvironments: vi.fn(async () => ['test env']),
-      listApigeeEnvironmentOasFiles: vi.fn(async () => ['payments.yaml']),
-      getApigeeEnvironmentOasFile: vi.fn(async () => OAS)
+  it('does not discover or export Apigee environment resourcefiles/oas candidates', async () => {
+    const listEnvironments = vi.fn(async () => ['test env']);
+    const listArchives = vi.fn(async () => []);
+    const fake = client(zip({ 'apiproxy/resources/oas/openapi.yaml': OAS }), {
+      listApigeeEnvironments: listEnvironments,
+      listApigeeArchiveDeployments: listArchives
     });
     const provider = new ApigeeProvider(fake, { projectId: 'sample-project-123' });
-    const candidate = (await provider.listCandidates()).find((value) => value.sourceType === 'apigee-env-oas')!;
-    expect(candidate).toMatchObject({ id: 'organizations/sample-project-123/environments/test env/resourcefiles/oas/payments.yaml', supported: true, sourceType: 'apigee-env-oas' });
-    await expect(provider.exportSpec(candidate)).resolves.toMatchObject({ content: OAS, evidence: ['Exported original validated Apigee environment OAS resource file'] });
+    const candidates = await provider.listCandidates();
+    expect(candidates.every((candidate) => candidate.sourceType === 'apigee-proxy' || candidate.sourceType === 'apigee-archive-deployment')).toBe(true);
+    expect(candidates.map((candidate) => candidate.id).join('\n')).not.toMatch(/resourcefiles\/oas/);
+    expect(listEnvironments).toHaveBeenCalled();
+    expect(listArchives).toHaveBeenCalled();
+    await expect(provider.exportSpec({
+      id: 'organizations/sample-project-123/environments/test env/resourcefiles/oas/payments.yaml',
+      name: 'payments.yaml',
+      providerType: 'apigee',
+      sourceType: 'apigee-proxy',
+      authority: 'metadata-only',
+      projectId: 'sample-project-123',
+      tags: {},
+      supported: false,
+      evidence: [],
+      meta: {}
+    })).rejects.toThrow(/invalid revision resource name|invalid resource name/);
+  });
+
+  it('GCP-APIGEE-ARCHIVE-001: lists archive deployments with exactly one OpenAPI as stored-authoritative', async () => {
+    const archiveId = 'organizations/sample-project-123/environments/test/archiveDeployments/archive-1';
+    const archiveZip = zip({ 'specs/openapi.yaml': OAS, 'readme.txt': 'ignore' });
+    const fake = client(zip({ 'apiproxy/resources/oas/openapi.yaml': OAS }), {
+      listApigeeEnvironments: vi.fn(async () => ['test']),
+      listApigeeArchiveDeployments: vi.fn(async () => [{ name: archiveId, labels: { env: 'test' } }]),
+      generateApigeeArchiveDeploymentDownloadUrl: vi.fn(async () => 'https://storage.googleapis.com/bucket/archive.zip?X-Goog-Signature=SECRET'),
+      downloadTrustedGcsSignedUrl: vi.fn(async () => archiveZip)
+    });
+    const candidates = await new ApigeeProvider(fake, { projectId: 'sample-project-123' }).listCandidates();
+    const archive = candidates.find((candidate) => candidate.sourceType === 'apigee-archive-deployment');
+    expect(archive).toMatchObject({
+      id: archiveId,
+      apiId: archiveId,
+      authority: 'stored-authoritative',
+      supported: true,
+      tags: { env: 'test' }
+    });
+  });
+
+  it('GCP-APIGEE-ARCHIVE-002: explicit archive api-id bypasses proxy listing and confines org', async () => {
+    const archiveId = 'organizations/sample-project-123/environments/test/archiveDeployments/archive-1';
+    const archiveZip = zip({ 'openapi.json': JSON.stringify({ openapi: '3.0.3', info: { title: 'A', version: '1' }, paths: { '/x': { get: { responses: { 200: { description: 'ok' } } } } } }) });
+    const fake = client(zip({}), {
+      generateApigeeArchiveDeploymentDownloadUrl: vi.fn(async () => 'https://storage.googleapis.com/bucket/a.zip?sig=1'),
+      downloadTrustedGcsSignedUrl: vi.fn(async () => archiveZip)
+    });
+    const candidates = await new ApigeeProvider(fake, { projectId: 'sample-project-123', apiId: archiveId }).listCandidates();
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0]?.sourceType).toBe('apigee-archive-deployment');
+    expect(fake.listApigeeProxies).not.toHaveBeenCalled();
+    expect(fake.listApigeeEnvironments).not.toHaveBeenCalled();
+    await expect(
+      new ApigeeProvider(fake, { projectId: 'sample-project-123', apiId: 'organizations/other/environments/test/archiveDeployments/a' }).listCandidates()
+    ).rejects.toThrow('api-id Apigee archive deployment does not belong to the configured project-id org');
+  });
+
+  it('GCP-APIGEE-ARCHIVE-003: rejects traversal entry names and classifies zero/multiple OpenAPI', async () => {
+    const archiveId = 'organizations/sample-project-123/environments/test/archiveDeployments/archive-1';
+    const traversal = zip({ '../escape.yaml': OAS });
+    await expect(
+      new ApigeeProvider(client(zip({}), {
+        generateApigeeArchiveDeploymentDownloadUrl: vi.fn(async () => 'https://storage.googleapis.com/b/a.zip'),
+        downloadTrustedGcsSignedUrl: vi.fn(async () => traversal)
+      }), { projectId: 'sample-project-123', apiId: archiveId }).listCandidates()
+    ).resolves.toEqual([
+      expect.objectContaining({
+        id: archiveId,
+        supported: false,
+        authority: 'metadata-only'
+      })
+    ]);
+
+    const multi = zip({ 'a.yaml': OAS, 'b.yaml': OAS });
+    const multiCandidate = (await new ApigeeProvider(client(zip({}), {
+      generateApigeeArchiveDeploymentDownloadUrl: vi.fn(async () => 'https://storage.googleapis.com/b/a.zip'),
+      downloadTrustedGcsSignedUrl: vi.fn(async () => multi)
+    }), { projectId: 'sample-project-123', apiId: archiveId }).listCandidates())[0]!;
+    expect(multiCandidate.supported).toBe(false);
+    expect(multiCandidate.evidence.join(' ')).toContain('2 OpenAPI');
   });
 });

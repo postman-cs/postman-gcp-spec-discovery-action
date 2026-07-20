@@ -34,12 +34,18 @@ function fakeClient(value = config()): GcpDiscoveryClient {
     listApigeeRevisions: vi.fn(async () => []),
     downloadApigeeRevisionBundle: vi.fn(),
     listApigeeEnvironments: vi.fn(async () => []),
-    listApigeeEnvironmentOasFiles: vi.fn(async () => []),
-    getApigeeEnvironmentOasFile: vi.fn(async () => ''),
     probeApiHub: vi.fn(),
     listApiHubSpecs: vi.fn(async () => []),
-    getApiHubSpec: vi.fn(async () => ({ name: '', specTypeIds: [], attributes: {} })),
+    getApiHubSpec: vi.fn(async () => ({ name: '', specTypeIds: [], attributes: {}, additionalSpecContentTypes: [] })),
     getApiHubSpecContents: vi.fn(async () => ({})),
+    fetchApiHubAdditionalSpecContent: vi.fn(async () => ({})),
+    probeApigeeRegistry: vi.fn(),
+    listApigeeRegistrySpecs: vi.fn(async () => []),
+    getApigeeRegistrySpec: vi.fn(async () => ({ name: '', labels: {} })),
+    getApigeeRegistrySpecContents: vi.fn(async () => ({ bytes: Buffer.alloc(0) })),
+    listApigeeArchiveDeployments: vi.fn(async () => []),
+    generateApigeeArchiveDeploymentDownloadUrl: vi.fn(async () => ''),
+    downloadTrustedGcsSignedUrl: vi.fn(async () => Buffer.alloc(0)),
     probeApigeePortal: vi.fn(),
     listApigeePortalSites: vi.fn(async () => []),
     listApigeePortalApidocs: vi.fn(async () => []),
@@ -72,7 +78,8 @@ describe('Cloud Endpoints provider', () => {
       expect.objectContaining({
         id: 'services/payments.endpoints.sample-project-123.cloud.goog/configs/2026-07-18r0',
         providerType: 'cloud-endpoints',
-        supported: true
+        supported: true,
+        authority: 'stored-authoritative'
       })
     ]);
     expect(client.getEndpointConfig).toHaveBeenCalledWith('payments.endpoints.sample-project-123.cloud.goog', '2026-07-18r0');

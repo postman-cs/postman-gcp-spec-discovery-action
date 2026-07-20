@@ -54,6 +54,8 @@ function stubProvider(): SpecProvider {
     id: armId,
     name: 'payments',
     providerType: 'api-gateway',
+    sourceType: 'api-gateway-config',
+    authority: 'stored-authoritative',
     apiId: armId,
     projectId: 'sample-project-123',
     tags: { 'postman-repo': 'org--payments' },
