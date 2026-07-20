@@ -2027,14 +2027,14 @@ async function collectCliProbeStatuses({ runner, cliPath, env }) {
   }
 }
 
-export async function runMatrixCoverage({ runner, token, cliPath, env, fixtures, provisionedResults, slots = LIVE_COVERAGE_MATRIX, log }) {
+export async function runMatrixCoverage({ runner, token, cliPath, env, fixtures, provisionedResults, slots = LIVE_COVERAGE_MATRIX, cliProbes: cachedCliProbes, log }) {
   const results = [];
   const unsatisfied = slots.filter((slot) => !(slot.satisfiedBy ?? []).some((name) => (
     provisionedResults.some((result) => result.name === name && result.status === 'pass')
   )));
-  const cliProbes = unsatisfied.length
+  const cliProbes = cachedCliProbes ?? (unsatisfied.length
     ? await collectCliProbeStatuses({ runner, cliPath, env })
-    : new Map();
+    : new Map());
 
   for (const slot of slots) {
     const satisfiedBy = (slot.satisfiedBy ?? [])
@@ -2357,6 +2357,9 @@ export async function runPhaseValidate({
       fixtures,
       provisionedResults,
       slots: matrixSlots,
+      cliProbes: state.providerProbes
+        ? new Map(Object.entries(state.providerProbes))
+        : undefined,
       log
     });
     for (const result of coverage) {
