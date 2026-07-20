@@ -4,11 +4,16 @@ import type { ProviderProbeStatus } from '../../contracts.js';
 import type { ApigeeArchiveDeploymentSummary, GcpDiscoveryClient } from '../gcp/clients.js';
 import { inflateZip } from '../gcp/zip.js';
 import { probeFailureStatus } from './probe.js';
-import { decodeUtf8OpenApi, type DecodedSourceDocument } from './source-document.js';
+import { decodeUtf8NativeFamily, decodeUtf8OpenApi, type DecodedSourceDocument } from './source-document.js';
 import { withAuthority, type SpecCandidate, type SpecExportResult, type SpecProvider } from './types.js';
 
 const REVISION_PATTERN = /^organizations\/([^/]+)\/apis\/([^/]+)\/revisions\/([^/]+)$/;
 const ARCHIVE_PATTERN = /^organizations\/([^/]+)\/environments\/([^/]+)\/archiveDeployments\/([^/]+)$/;
+
+/** Documented OpenAPI resource seams on proxy revision bundles. */
+const PROXY_OPENAPI_PATH = /^apiproxy\/resources\/(?:oas|openapi)\//i;
+/** Documented WSDL resource seam on proxy revision bundles. */
+const PROXY_WSDL_PATH = /^apiproxy\/resources\/wsdl\//i;
 
 export function parseApigeeRevisionName(value: string): { org: string; proxyName: string; revision: string } | undefined {
   const match = REVISION_PATTERN.exec(value);
@@ -31,14 +36,33 @@ function isUnsafeZipEntryName(name: string): boolean {
   return normalized.split('/').some((segment) => segment === '..');
 }
 
+function decodeUtf8Text(bytes: Buffer): string {
+  return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+}
+
+/**
+ * Auto-resolve only documented contract locations:
+ * - apiproxy/resources/oas|openapi → OpenAPI
+ * - apiproxy/resources/wsdl → WSDL
+ * Unrelated resource JSON that merely parses as OpenAPI is not authoritative.
+ */
 function proxyDocuments(bundle: Buffer): Array<{ path: string; decoded: DecodedSourceDocument }> {
   const result: Array<{ path: string; decoded: DecodedSourceDocument }> = [];
   for (const [path, bytes] of inflateZip(bundle)) {
-    if (!/^apiproxy\/resources\/(?:oas|openapi)\//i.test(path) && !/^apiproxy\/resources\/.*\.(?:json|ya?ml)$/i.test(path)) continue;
-    try {
-      result.push({ path, decoded: decodeUtf8OpenApi(new TextDecoder('utf-8', { fatal: true }).decode(bytes)) });
-    } catch {
-      /* not OpenAPI */
+    if (PROXY_OPENAPI_PATH.test(path)) {
+      try {
+        result.push({ path, decoded: decodeUtf8OpenApi(decodeUtf8Text(bytes)) });
+      } catch {
+        /* not OpenAPI */
+      }
+      continue;
+    }
+    if (PROXY_WSDL_PATH.test(path)) {
+      try {
+        result.push({ path, decoded: decodeUtf8NativeFamily(decodeUtf8Text(bytes), 'wsdl') });
+      } catch {
+        /* not WSDL */
+      }
     }
   }
   return result;
@@ -52,12 +76,18 @@ function archiveDocuments(bundle: Buffer): Array<{ path: string; decoded: Decode
     }
     if (path.endsWith('/') || !/\.(?:json|ya?ml)$/i.test(path)) continue;
     try {
-      result.push({ path, decoded: decodeUtf8OpenApi(new TextDecoder('utf-8', { fatal: true }).decode(bytes)) });
+      result.push({ path, decoded: decodeUtf8OpenApi(decodeUtf8Text(bytes)) });
     } catch {
       /* not OpenAPI */
     }
   }
   return result;
+}
+
+function documentCountEvidence(kind: 'proxy revision' | 'archive deployment', count: number): string[] {
+  if (count === 1) return [`Apigee ${kind} has one contract source document`];
+  if (count === 0) return [`Apigee ${kind} has no contract source document`];
+  return [`Apigee ${kind} has ${count} contract source documents; refusing to merge or guess`];
 }
 
 export class ApigeeProvider implements SpecProvider {
@@ -107,12 +137,7 @@ export class ApigeeProvider implements SpecProvider {
       revisions.map(async ({ proxyName, revision, labels }) => {
         const id = `organizations/${this.scope.projectId}/apis/${proxyName}/revisions/${revision}`;
         const count = proxyDocuments(await this.client.downloadApigeeRevisionBundle(this.scope.projectId, proxyName, revision)).length;
-        const evidence =
-          count === 1
-            ? ['Apigee proxy revision has one OpenAPI source document']
-            : count === 0
-              ? ['Apigee proxy revision has no OpenAPI source document']
-              : [`Apigee proxy revision has ${count} OpenAPI source documents; refusing to merge or guess`];
+        const evidence = documentCountEvidence('proxy revision', count);
         return withAuthority({
           id,
           name: proxyName,
@@ -154,8 +179,8 @@ export class ApigeeProvider implements SpecProvider {
     if (found.length !== 1) {
       throw new Error(
         found.length
-          ? `Apigee proxy revision has ${found.length} OpenAPI source documents; refusing to merge or guess`
-          : 'Apigee proxy revision has no OpenAPI source document'
+          ? `Apigee proxy revision has ${found.length} contract source documents; refusing to merge or guess`
+          : 'Apigee proxy revision has no contract source document'
       );
     }
     return { ...found[0]!.decoded, evidence: [`Exported original Apigee source ${found[0]!.path}`] };

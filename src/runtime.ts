@@ -176,8 +176,8 @@ export function resolveInputs(env: NodeJS.ProcessEnv = process.env): ResolvedInp
   if (location !== 'global') throw new Error(`location must be global in v1.0.0, got: ${location}`);
   const apiId = getInput('api-id', env);
   if (apiId) {
-    const gateway = parseApiGatewayConfigName(apiId);
-    const endpoints = parseEndpointConfigName(apiId);
+    const gateway = parseApiGatewayConfigName(apiId); // accepts optional #protobuf variant
+    const endpoints = parseEndpointConfigName(apiId); // accepts optional #protobuf variant
     const apigee = parseApigeeRevisionName(apiId);
     const apigeeArchive = parseApigeeArchiveDeploymentName(apiId);
     const apiHub = parseApiHubSpecName(apiId);

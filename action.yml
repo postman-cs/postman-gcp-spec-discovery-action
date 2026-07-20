@@ -74,7 +74,7 @@ outputs:
   provider-type:
     description: 'Provider that produced the resolved spec: api-gateway, cloud-endpoints, apigee, api-hub, apigee-registry, app-integration, connectors-custom, apigee-portal, vertex-extensions, dialogflow-tools, ces-toolsets, or iac-local.'
   spec-format:
-    description: 'Format of the resolved spec: openapi-yaml or openapi-json.'
+    description: 'Format of the resolved spec: openapi-yaml, openapi-json, asyncapi-yaml, asyncapi-json, graphql-sdl, graphql-introspection-json, protobuf, wsdl, or mcp-json.'
   contract-origin:
     description: Compatibility output; always empty in v1.
   contract-metadata-path:

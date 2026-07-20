@@ -78,7 +78,21 @@ export type SourceAuthority =
   | 'metadata-only'
   | 'unsupported-format';
 
-export type SpecFormat = 'openapi-yaml' | 'openapi-json';
+/**
+ * Stable native specification format names used by repository and API Hub
+ * providers. Serialization is part of the name for YAML/JSON families so
+ * artifact writers can preserve native bytes without re-detecting.
+ */
+export type SpecFormat =
+  | 'openapi-yaml'
+  | 'openapi-json'
+  | 'asyncapi-yaml'
+  | 'asyncapi-json'
+  | 'graphql-sdl'
+  | 'graphql-introspection-json'
+  | 'protobuf'
+  | 'wsdl'
+  | 'mcp-json';
 
 /** Authorities that may set supported=true and participate in automatic resolution/export. */
 export function isResolvableAuthority(authority: SourceAuthority): boolean {
@@ -273,7 +287,8 @@ export const actionContract: GCPSpecDiscoveryActionContract = {
       description: 'Provider that produced the resolved spec: api-gateway, cloud-endpoints, apigee, api-hub, apigee-registry, app-integration, connectors-custom, apigee-portal, vertex-extensions, dialogflow-tools, ces-toolsets, or iac-local.'
     },
     'spec-format': {
-      description: 'Format of the resolved spec: openapi-yaml or openapi-json.'
+      description:
+        'Format of the resolved spec: openapi-yaml, openapi-json, asyncapi-yaml, asyncapi-json, graphql-sdl, graphql-introspection-json, protobuf, wsdl, or mcp-json.'
     },
     'contract-origin': {
       description: 'Compatibility output; always empty in v1.'

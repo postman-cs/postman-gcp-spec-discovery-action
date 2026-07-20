@@ -1,5 +1,6 @@
 import type { ProviderType, ProviderProbeStatus, SourceAuthority, SourceType, SpecFormat } from '../../contracts.js';
 import { isResolvableAuthority } from '../../contracts.js';
+import type { NativeExportFilename } from '../spec/native-formats.js';
 
 export interface SpecCandidate {
   id: string; // full Google resource name, or stable repo-relative IaC candidate ID
@@ -18,7 +19,7 @@ export interface SpecCandidate {
 export interface SpecExportResult {
   content: string;
   format: SpecFormat;
-  filename: 'index.json' | 'index.yaml';
+  filename: NativeExportFilename;
   evidence: string[];
 }
 

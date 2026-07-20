@@ -24,10 +24,11 @@ export class DialogflowToolsProvider implements SpecProvider {
     if (parsed) tools = (await this.client.listDialogflowTools(`projects/${parsed.projectId}/locations/${parsed.location}/agents/${parsed.agentId}`)).filter((tool) => tool.name === this.scope.apiId);
     else for (const agent of await this.client.listDialogflowAgents(this.scope.projectId)) tools.push(...await this.client.listDialogflowTools(agent.name));
     return tools.map((tool) => {
-      const schema = tool.textSchema?.trim();
-      let supported = Boolean(schema);
-      let authority: SourceAuthority = schema ? 'stored-authoritative' : 'metadata-only';
-      if (schema) {
+      const schema = tool.textSchema ?? '';
+      const hasSchema = Boolean(schema.trim());
+      let supported = hasSchema;
+      let authority: SourceAuthority = hasSchema ? 'stored-authoritative' : 'metadata-only';
+      if (hasSchema) {
         try { decodeUtf8OpenApi(schema); } catch { supported = false; authority = 'metadata-only'; }
       }
       return withAuthority({
@@ -40,8 +41,8 @@ export class DialogflowToolsProvider implements SpecProvider {
         projectId: this.scope.projectId,
         tags: {},
         supported,
-        evidence: [schema ? 'Dialogflow tool stores an OpenAPI text schema' : 'Dialogflow tool has no OpenAPI text schema; only OPEN_API_TOOL tools are exportable'],
-        meta: { textSchema: schema ?? '' }
+        evidence: [hasSchema ? 'Dialogflow tool stores an OpenAPI text schema' : 'Dialogflow tool has no OpenAPI text schema; only OPEN_API_TOOL tools are exportable'],
+        meta: { textSchema: schema }
       });
     });
   }

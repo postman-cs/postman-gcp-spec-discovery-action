@@ -4,6 +4,15 @@ import type { GcpDiscoveryClient } from '../src/lib/gcp/clients.js';
 import { ApigeePortalProvider } from '../src/lib/providers/apigee-portal.js';
 
 const OAS = 'openapi: 3.0.3\ninfo:\n  title: Portal\n  version: "1"\npaths:\n  /health:\n    get:\n      responses:\n        "200":\n          description: ok\n';
+const GRAPHQL = 'type Query { ping: String! }\n';
+const ASYNCAPI = JSON.stringify({
+  asyncapi: '2.6.0',
+  info: { title: 'Events', version: '1.0.0' },
+  channels: { ping: { publish: { message: { payload: { type: 'string' } } } } }
+});
+const INTROSPECTION = JSON.stringify({
+  __schema: { queryType: { name: 'Query' }, types: [{ kind: 'OBJECT', name: 'Query', fields: [] }] }
+});
 const ID = 'organizations/sample-project-123/sites/developer/apidocs/payments';
 
 function client(overrides: Partial<GcpDiscoveryClient> = {}): GcpDiscoveryClient {
@@ -11,7 +20,11 @@ function client(overrides: Partial<GcpDiscoveryClient> = {}): GcpDiscoveryClient
     probeApigeePortal: vi.fn(),
     listApigeePortalSites: vi.fn(async () => [{ id: 'developer' }]),
     listApigeePortalApidocs: vi.fn(async () => [{ id: 'payments', title: 'Payments' }]),
-    getApigeePortalDocumentation: vi.fn(async () => ({ type: 'oasDocumentation' as const, contents: OAS })),
+    getApigeePortalDocumentation: vi.fn(async () => ({
+      type: 'oasDocumentation' as const,
+      family: 'openapi' as const,
+      contents: OAS
+    })),
     ...overrides
   }, { get: (target, key) => key in target ? target[key as keyof typeof target] : vi.fn(async () => []) }) as GcpDiscoveryClient;
 }
@@ -29,10 +42,39 @@ describe('Apigee portal provider', () => {
     await expect(provider.exportSpec(candidate)).resolves.toMatchObject({ content: OAS, format: 'openapi-yaml' });
   });
 
-  it.each(['graphqlDocumentation', 'asyncapiDocumentation'] as const)('surfaces %s as unsupported with evidence', async (type) => {
-    const candidate = (await new ApigeePortalProvider(client({ getApigeePortalDocumentation: vi.fn(async () => ({ type })) }), { projectId: 'sample-project-123' }).listCandidates())[0]!;
-    expect(candidate.supported).toBe(false);
+  it.each([
+    ['graphqlDocumentation', 'graphql', GRAPHQL, 'graphql-sdl', 'schema.graphql'],
+    ['graphqlDocumentation', 'graphql', INTROSPECTION, 'graphql-introspection-json', 'introspection.json'],
+    ['asyncApiDocumentation', 'asyncapi', ASYNCAPI, 'asyncapi-json', 'asyncapi.json']
+  ] as const)('exports %s (%s) via shared native-family decoder', async (type, family, body, format, filename) => {
+    const provider = new ApigeePortalProvider(client({
+      getApigeePortalDocumentation: vi.fn(async () => ({ type, family, contents: body }))
+    }), { projectId: 'sample-project-123' });
+    const candidate = (await provider.listCandidates())[0]!;
+    expect(candidate).toMatchObject({ supported: true, authority: 'stored-authoritative' });
     expect(candidate.evidence.join(' ')).toContain(type);
+    await expect(provider.exportSpec(candidate)).resolves.toMatchObject({ content: body, format, filename });
+  });
+
+  it.each(['missing', 'malformed'] as const)('surfaces %s as unsupported with evidence', async (type) => {
+    const candidate = (await new ApigeePortalProvider(client({
+      getApigeePortalDocumentation: vi.fn(async () => ({ type }))
+    }), { projectId: 'sample-project-123' }).listCandidates())[0]!;
+    expect(candidate.supported).toBe(false);
+    expect(candidate.authority).toBe('unsupported-format');
+    expect(candidate.evidence.join(' ')).toContain(type);
+  });
+
+  it('keeps known arms with invalid contents metadata-only / unsupported', async () => {
+    const candidate = (await new ApigeePortalProvider(client({
+      getApigeePortalDocumentation: vi.fn(async () => ({
+        type: 'oasDocumentation' as const,
+        family: 'openapi' as const,
+        contents: 'not openapi'
+      }))
+    }), { projectId: 'sample-project-123' }).listCandidates())[0]!;
+    expect(candidate.supported).toBe(false);
+    expect(candidate.authority).toBe('metadata-only');
   });
 
   it('resolves an explicit api-id directly and rejects a foreign org', async () => {
