@@ -1,9 +1,8 @@
-import type { ProviderProbeStatus } from '../../contracts.js';
+import type { ProviderProbeStatus, SourceAuthority } from '../../contracts.js';
 import type { CustomConnectorVersionSummary, GcpDiscoveryClient } from '../gcp/clients.js';
 import { decodeUtf8OpenApi } from './source-document.js';
 import { probeFailureStatus } from './probe.js';
-import type { SpecCandidate, SpecExportResult, SpecProvider } from './types.js';
-import { parseAndValidateOpenApi } from '../spec/validate-openapi.js';
+import { withAuthority, type SpecCandidate, type SpecExportResult, type SpecProvider } from './types.js';
 
 const GCS_PATTERN = /^gs:\/\/([a-z0-9][a-z0-9._-]{1,220}[a-z0-9])\/(.+)$/;
 
@@ -47,29 +46,12 @@ export class ConnectorsCustomProvider implements SpecProvider {
 
   public async listCandidates(): Promise<SpecCandidate[]> {
     if (this.scope.apiId) return [];
-    const versions = await this.client.listCustomConnectorVersions(this.scope.projectId);
-    const candidates = versions.map((version) => this.toCandidate(version));
-    for (const connection of await this.client.listConnectorConnections(this.scope.projectId)) {
-      const schema = await this.client.getConnectorSchemaMetadata(connection.name);
-      if (!schema) continue;
-      const document = JSON.stringify(schemaToOpenApi(connection.name, schema));
-      let supported = true;
-      const evidence = ['OpenAPI generated from connector schema metadata; confidence is lower than stored specification sources'];
-      try {
-        parseAndValidateOpenApi(document);
-      } catch {
-        supported = false;
-        evidence.push('Generated spec has no operations; manual review');
-      }
-      candidates.push({ id: connection.name, apiId: connection.name, name: shortName(connection.name), providerType: this.type, sourceType: 'connectors-generated-spec', projectId: this.scope.projectId, tags: {}, supported, evidence, meta: { generatedOpenApi: document } });
-    }
-    return candidates;
+    // Connection schema metadata is retained on the client as metadata-only and is
+    // never synthesized into OpenAPI candidates.
+    return (await this.client.listCustomConnectorVersions(this.scope.projectId)).map((version) => this.toCandidate(version));
   }
 
   public async exportSpec(candidate: SpecCandidate): Promise<SpecExportResult> {
-    if (candidate.sourceType === 'connectors-generated-spec') {
-      return { ...decodeUtf8OpenApi(candidate.meta.generatedOpenApi ?? ''), evidence: ['OpenAPI generated from connector schema metadata'] };
-    }
     const location = candidate.meta.specLocation ?? '';
     const gcs = parseGcsSpecLocation(location);
     if (!gcs) throw new Error('Custom connector specLocation is not a gs:// object; v1.0.0 does not fetch remote URLs');
@@ -86,17 +68,22 @@ export class ConnectorsCustomProvider implements SpecProvider {
     const gcs = parseGcsSpecLocation(specLocation);
     const evidence = [`Custom connector version ${shortName(version.name)} records specLocation ${gcs ? '[gs-object]' : specLocation || '(none)'}`];
     let supported = true;
+    let authority: SourceAuthority = 'stored-authoritative';
     if (!specLocation) {
       supported = false;
+      authority = 'metadata-only';
       evidence.push('Custom connector version has no specLocation');
     } else if (!gcs) {
       supported = false;
+      authority = 'unsupported-format';
       evidence.push('Only gs:// specLocation objects are fetched in v1.0.0; remote URLs are manual review');
     }
-    return {
+    return withAuthority({
       id: version.name,
       name: version.name.split('/customConnectors/')[1]?.split('/')[0] ?? shortName(version.name),
       providerType: this.type,
+      sourceType: 'connectors-custom-spec',
+      authority,
       projectId: this.scope.projectId,
       tags: version.labels,
       supported,
@@ -107,24 +94,6 @@ export class ConnectorsCustomProvider implements SpecProvider {
         versionId: shortName(version.name),
         updateTime: version.updateTime ?? ''
       }
-    };
+    });
   }
-}
-
-function schemaToOpenApi(connectionName: string, schema: import('../gcp/clients.js').ConnectorSchemaMetadata): Record<string, unknown> {
-  const paths: Record<string, unknown> = {};
-  for (const [entity, metadata] of Object.entries(schema.entities ?? {})) {
-    const properties = Object.fromEntries((metadata.fields ?? []).filter((field) => field.name).map((field) => [field.name!, { type: connectorType(field.dataType), ...(field.description ? { description: field.description } : {}) }]));
-    paths[`/${entity}`] = { get: { operationId: `list_${entity}`, responses: { '200': { description: 'Connector schema-derived response', content: { 'application/json': { schema: { type: 'array', items: { type: 'object', properties } } } } } } } };
-  }
-  for (const action of schema.actions ?? []) if (action.name) paths[`/actions/${action.name}`] = { post: { operationId: action.name, description: action.description, responses: { '200': { description: 'Connector action response' } } } };
-  return { openapi: '3.0.3', info: { title: `${shortName(connectionName)} connector`, version: 'generated', description: 'Generated from connector schema metadata' }, paths };
-}
-
-function connectorType(value?: string): string {
-  if (/bool/i.test(value ?? '')) return 'boolean';
-  if (/int|number|decimal|double|float/i.test(value ?? '')) return 'number';
-  if (/array|list/i.test(value ?? '')) return 'array';
-  if (/object|json|struct/i.test(value ?? '')) return 'object';
-  return 'string';
 }

@@ -18,7 +18,18 @@ function candidate(id: string, overrides: Partial<NarrowingCandidate> = {}): Nar
 }
 
 function specCandidate(id: string, overrides: Partial<SpecCandidate> = {}): SpecCandidate {
-  return { id, name: id.split('/').pop() ?? id, providerType: 'api-gateway', projectId: 'sample-project-123', tags: {}, supported: true, evidence: [], meta: {}, ...overrides };
+  return {
+    id,
+    name: id.split('/').pop() ?? id,
+    providerType: 'api-gateway',
+    authority: 'stored-authoritative',
+    projectId: 'sample-project-123',
+    tags: {},
+    supported: true,
+    evidence: [],
+    meta: {},
+    ...overrides
+  };
 }
 
 const context = (overrides: Record<string, unknown> = {}) => ({

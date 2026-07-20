@@ -37,7 +37,12 @@ describe('Application Integration provider', () => {
     const provider = new AppIntegrationProvider(client({ generateAppIntegrationOpenApiSpec: generate }), { projectId: 'sample-project-123' });
     const candidates = await provider.listCandidates();
     expect(candidates).toHaveLength(1);
-    expect(candidates[0]).toMatchObject({ providerType: 'app-integration', supported: true });
+    expect(candidates[0]).toMatchObject({
+      providerType: 'app-integration',
+      sourceType: 'app-integration-trigger',
+      authority: 'google-generated',
+      supported: true
+    });
     const exported = await provider.exportSpec(candidates[0]!);
     expect(exported).toMatchObject({ format: 'openapi-yaml', filename: 'index.yaml' });
     expect(exported.evidence.join(' ')).toContain('generateOpenApiSpec');

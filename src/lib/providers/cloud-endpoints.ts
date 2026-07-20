@@ -1,8 +1,8 @@
-import type { ProviderProbeStatus } from '../../contracts.js';
+import type { ProviderProbeStatus, SourceAuthority } from '../../contracts.js';
 import type { EndpointServiceConfig, GcpDiscoveryClient, ManagedService } from '../gcp/clients.js';
 import { decodeSourceDocument } from './source-document.js';
 import { probeFailureStatus } from './probe.js';
-import type { SpecCandidate, SpecExportResult, SpecProvider } from './types.js';
+import { withAuthority, type SpecCandidate, type SpecExportResult, type SpecProvider } from './types.js';
 
 const ENDPOINT_CONFIG_PATTERN = /^services\/([^/]+)\/configs\/([^/]+)$/;
 const OPENAPI_FILE_TYPES = new Set(['OPEN_API_JSON', 'OPEN_API_YAML']);
@@ -21,14 +21,21 @@ function sourceFiles(config: EndpointServiceConfig) {
   return (config.sourceInfo?.sourceFiles ?? []).filter((file) => OPENAPI_FILE_TYPES.has(file.fileType ?? ''));
 }
 
-function supportEvidence(config: EndpointServiceConfig): { supported: boolean; evidence: string[] } {
+function supportEvidence(config: EndpointServiceConfig): { supported: boolean; authority: SourceAuthority; evidence: string[] } {
   const files = sourceFiles(config);
-  if (files.length === 1) return { supported: true, evidence: [`Cloud Endpoints config ${config.id} has one original OpenAPI source`] };
+  if (files.length === 1) {
+    return { supported: true, authority: 'stored-authoritative', evidence: [`Cloud Endpoints config ${config.id} has one original OpenAPI source`] };
+  }
   if (files.length === 0) {
-    return { supported: false, evidence: ['Cloud Endpoints config has no original OpenAPI sourceInfo file; normalized Service Config is not reverse-converted'] };
+    return {
+      supported: false,
+      authority: 'metadata-only',
+      evidence: ['Cloud Endpoints config has no original OpenAPI sourceInfo file; normalized Service Config is not reverse-converted']
+    };
   }
   return {
     supported: false,
+    authority: 'metadata-only',
     evidence: [`Cloud Endpoints config has ${files.length} OpenAPI source files; refusing to merge or guess`]
   };
 }
@@ -97,16 +104,18 @@ export class CloudEndpointsProvider implements SpecProvider {
   private toCandidate(config: EndpointServiceConfig, service: ManagedService): SpecCandidate {
     const support = supportEvidence(config);
     const id = `services/${service.serviceName}/configs/${config.id}`;
-    return {
+    return withAuthority({
       id,
       name: config.title || config.name || service.serviceName,
       providerType: this.type,
+      sourceType: 'cloud-endpoints-config',
+      authority: support.authority,
       apiId: id,
       projectId: this.scope.projectId,
       tags: {},
       supported: support.supported,
       evidence: support.evidence,
       meta: { serviceName: service.serviceName, configId: config.id }
-    };
+    });
   }
 }

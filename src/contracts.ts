@@ -24,6 +24,7 @@ export type ProviderType =
   | 'cloud-endpoints'
   | 'apigee'
   | 'api-hub'
+  | 'apigee-registry'
   | 'app-integration'
   | 'connectors-custom'
   | 'apigee-portal'
@@ -33,22 +34,73 @@ export type ProviderType =
   | 'ces-toolsets'
   | 'iac-local';
 
+/** Runtime provider registration order. Live coverage matrix tests must match. */
+export const RETAINED_PROVIDER_ORDER = [
+  'api-gateway',
+  'cloud-endpoints',
+  'apigee',
+  'api-hub',
+  'apigee-registry',
+  'app-integration',
+  'connectors-custom',
+  'apigee-portal',
+  'vertex-extensions',
+  'agent-engines',
+  'dialogflow-tools',
+  'ces-toolsets',
+  'iac-local'
+] as const satisfies readonly ProviderType[];
+
 export type SourceType =
   | 'repo-spec'
   | 'api-gateway-config'
   | 'cloud-endpoints-config'
   | 'apigee-proxy'
-  | 'apigee-env-oas'
+  | 'apigee-archive-deployment'
   | 'api-hub-spec'
+  | 'api-hub-boosted-spec'
+  | 'api-hub-gateway-openapi-spec'
+  | 'apigee-registry-spec'
   | 'app-integration-trigger'
   | 'connectors-custom-spec'
-  | 'connectors-generated-spec'
   | 'apigee-portal-doc' | 'vertex-extension-manifest' | 'agent-engine-generated-spec' | 'dialogflow-tool-schema' | 'ces-tool-schema' | 'ces-toolset-schema'
   | 'iac-embedded'
   | 'manual-review'
   | 'discover-many';
 
+/**
+ * Provenance of a discovered OpenAPI (or non-OpenAPI) candidate.
+ * Only `stored-authoritative` and `google-generated` may auto-resolve/export.
+ */
+export type SourceAuthority =
+  | 'stored-authoritative'
+  | 'google-generated'
+  | 'local-derived'
+  | 'metadata-only'
+  | 'unsupported-format';
+
 export type SpecFormat = 'openapi-yaml' | 'openapi-json';
+
+/** Authorities that may set supported=true and participate in automatic resolution/export. */
+export function isResolvableAuthority(authority: SourceAuthority): boolean {
+  return authority === 'stored-authoritative' || authority === 'google-generated';
+}
+
+/** Lower rank sorts first when confidence is otherwise tied (stored beats google-generated). */
+export function authorityRank(authority: SourceAuthority): number {
+  switch (authority) {
+    case 'stored-authoritative':
+      return 0;
+    case 'google-generated':
+      return 1;
+    case 'local-derived':
+      return 2;
+    case 'metadata-only':
+      return 3;
+    case 'unsupported-format':
+      return 4;
+  }
+}
 
 export type ProviderProbeStatus = 'available' | 'skipped:iam' | 'skipped:error';
 
@@ -70,6 +122,7 @@ export interface AmbiguousCandidateView {
   resourceId: string;
   apiId?: string;
   providerType: ProviderType;
+  authority: SourceAuthority;
   confidence: number;
   supported: boolean;
   evidence: string[];
@@ -86,6 +139,7 @@ export interface ResolutionResult {
   sourceType: SourceType;
   serviceName: string;
   confidence: number;
+  authority?: SourceAuthority;
   specPath?: string;
   apiId?: string;
   providerType?: ProviderType;
@@ -106,6 +160,7 @@ export interface DiscoveredService {
   specPath: string;
   apiId?: string;
   providerType: ProviderType;
+  authority: SourceAuthority;
   specFormat: SpecFormat;
   derivedOpenApiPath?: string;
   derivedOpenApiVersion?: '3.0.3' | '3.1.0';
@@ -141,7 +196,7 @@ export const actionContract: GCPSpecDiscoveryActionContract = {
       default: 'global'
     },
     'api-id': {
-      description: 'Optional full API Gateway config, Cloud Endpoints config, Apigee proxy revision, API Hub spec, Apigee portal apidoc, Vertex extension, Dialogflow tool, or CES tool/toolset resource name. Use this to bypass broader project discovery.',
+      description: 'Optional full API Gateway config, Cloud Endpoints config, Apigee proxy revision, Apigee archive deployment, API Hub spec, legacy Apigee Registry spec, Apigee portal apidoc, Vertex extension, Dialogflow tool, or CES tool/toolset resource name. Use this to bypass broader project discovery.',
       required: false,
       default: ''
     },
@@ -189,7 +244,7 @@ export const actionContract: GCPSpecDiscoveryActionContract = {
       description: 'Resolution status: resolved or unresolved.'
     },
     'source-type': {
-      description: 'Resolved source type: repo-spec, api-gateway-config, cloud-endpoints-config, apigee-proxy, apigee-env-oas, api-hub-spec, app-integration-trigger, connectors-custom-spec, connectors-generated-spec, apigee-portal-doc, vertex-extension-manifest, agent-engine-generated-spec, dialogflow-tool-schema, ces-tool-schema, ces-toolset-schema, iac-embedded, manual-review, or discover-many.'
+      description: 'Resolved source type: repo-spec, api-gateway-config, cloud-endpoints-config, apigee-proxy, apigee-archive-deployment, api-hub-spec, api-hub-boosted-spec, api-hub-gateway-openapi-spec, apigee-registry-spec, app-integration-trigger, connectors-custom-spec, apigee-portal-doc, vertex-extension-manifest, agent-engine-generated-spec, dialogflow-tool-schema, ces-tool-schema, ces-toolset-schema, iac-embedded, manual-review, or discover-many.'
     },
     'mapping-confidence': {
       description: 'Numeric confidence score for the selected service candidate.'
@@ -198,7 +253,7 @@ export const actionContract: GCPSpecDiscoveryActionContract = {
       description: 'Path to the resolved or generated specification when available.'
     },
     'api-id': {
-      description: 'Full resource name of the exported cloud source (API Gateway config, Cloud Endpoints config, Apigee proxy revision, API Hub spec, Apigee portal apidoc, Vertex extension, Agent Engine, Dialogflow tool, or CES tool/toolset); empty for repo, generated, or IaC-local resolutions.'
+      description: 'Full resource name of the exported cloud source (API Gateway config, Cloud Endpoints config, Apigee proxy revision, Apigee archive deployment, API Hub spec, legacy Apigee Registry spec, Apigee portal apidoc, Vertex extension, Agent Engine, Dialogflow tool, or CES tool/toolset); empty for repo, generated, or IaC-local resolutions.'
     },
     'service-name': {
       description: 'Resolved service name.'
@@ -216,7 +271,7 @@ export const actionContract: GCPSpecDiscoveryActionContract = {
       description: 'Ranked ambiguous candidates as JSON when resolution is unresolved with at least two candidates; empty otherwise.'
     },
     'provider-type': {
-      description: 'Provider that produced the resolved spec: api-gateway, cloud-endpoints, apigee, api-hub, app-integration, connectors-custom, apigee-portal, vertex-extensions, agent-engines, dialogflow-tools, ces-toolsets, or iac-local.'
+      description: 'Provider that produced the resolved spec: api-gateway, cloud-endpoints, apigee, api-hub, apigee-registry, app-integration, connectors-custom, apigee-portal, vertex-extensions, agent-engines, dialogflow-tools, ces-toolsets, or iac-local.'
     },
     'spec-format': {
       description: 'Format of the resolved spec: openapi-yaml or openapi-json.'

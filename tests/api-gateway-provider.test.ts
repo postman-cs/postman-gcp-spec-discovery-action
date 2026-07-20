@@ -37,12 +37,18 @@ function fakeClient(config = fullConfig()): GcpDiscoveryClient {
     listApigeeRevisions: vi.fn(async () => []),
     downloadApigeeRevisionBundle: vi.fn(),
     listApigeeEnvironments: vi.fn(async () => []),
-    listApigeeEnvironmentOasFiles: vi.fn(async () => []),
-    getApigeeEnvironmentOasFile: vi.fn(async () => ''),
     probeApiHub: vi.fn(),
     listApiHubSpecs: vi.fn(async () => []),
-    getApiHubSpec: vi.fn(async () => ({ name: '', specTypeIds: [], attributes: {} })),
+    getApiHubSpec: vi.fn(async () => ({ name: '', specTypeIds: [], attributes: {}, additionalSpecContentTypes: [] })),
     getApiHubSpecContents: vi.fn(async () => ({})),
+    fetchApiHubAdditionalSpecContent: vi.fn(async () => ({})),
+    probeApigeeRegistry: vi.fn(),
+    listApigeeRegistrySpecs: vi.fn(async () => []),
+    getApigeeRegistrySpec: vi.fn(async () => ({ name: '', labels: {} })),
+    getApigeeRegistrySpecContents: vi.fn(async () => ({ bytes: Buffer.alloc(0) })),
+    listApigeeArchiveDeployments: vi.fn(async () => []),
+    generateApigeeArchiveDeploymentDownloadUrl: vi.fn(async () => ''),
+    downloadTrustedGcsSignedUrl: vi.fn(async () => Buffer.alloc(0)),
     probeApigeePortal: vi.fn(),
     listApigeePortalSites: vi.fn(async () => []),
     listApigeePortalApidocs: vi.fn(async () => []),
@@ -76,12 +82,13 @@ describe('API Gateway provider', () => {
         id: 'projects/sample-project-123/locations/global/apis/payments/configs/v1',
         providerType: 'api-gateway',
         supported: true,
+        authority: 'stored-authoritative',
         tags: { 'postman-repo': 'postman--payments' }
       })
     ]);
 
     const inactive = new ApiGatewayProvider(fakeClient(fullConfig({ state: 'FAILED' })), { projectId: 'sample-project-123', location: 'global' });
-    expect((await inactive.listCandidates())[0]).toMatchObject({ supported: false });
+    expect((await inactive.listCandidates())[0]).toMatchObject({ supported: false, authority: 'metadata-only' });
     const grpc = new ApiGatewayProvider(fakeClient(fullConfig({ openapiDocuments: [], grpcServices: [{}] })), { projectId: 'sample-project-123', location: 'global' });
     expect((await grpc.listCandidates())[0]?.evidence.join(' ')).toContain('no OpenAPI source document');
   });
@@ -121,5 +128,56 @@ describe('API Gateway provider', () => {
     expect(client.listApiGatewayApis).not.toHaveBeenCalled();
     expect(client.listApiGatewayConfigs).not.toHaveBeenCalled();
     expect(client.getApiGatewayConfig).toHaveBeenCalledWith(id);
+  });
+
+  it('GCP-GATEWAY-005: automatic discovery keeps inactive configs unsupported', async () => {
+    const provider = new ApiGatewayProvider(fakeClient(fullConfig({ state: 'FAILED' })), {
+      projectId: 'sample-project-123',
+      location: 'global'
+    });
+    const candidate = (await provider.listCandidates())[0]!;
+    expect(candidate).toMatchObject({ supported: false, authority: 'metadata-only' });
+    await expect(provider.exportSpec(candidate)).rejects.toThrow(/Only ACTIVE/);
+  });
+
+  it('GCP-GATEWAY-006: explicit full config api-id can export inactive config with one OpenAPI and no gRPC', async () => {
+    const config = fullConfig({ state: 'FAILED' });
+    const provider = new ApiGatewayProvider(fakeClient(config), {
+      projectId: 'sample-project-123',
+      location: 'global',
+      apiId: config.name
+    });
+    const candidate = (await provider.listCandidates())[0]!;
+    expect(candidate).toMatchObject({
+      supported: true,
+      authority: 'stored-authoritative',
+      apiId: config.name
+    });
+    expect(candidate.evidence.join(' ')).toContain('inactive/historical');
+    await expect(provider.exportSpec(candidate)).resolves.toMatchObject({ format: 'openapi-json' });
+  });
+
+  it('GCP-GATEWAY-007: explicit inactive config with zero/multiple OpenAPI or gRPC stays unsupported', async () => {
+    const id = fullConfig().name;
+    for (const config of [
+      fullConfig({ state: 'FAILED', openapiDocuments: [] }),
+      fullConfig({
+        state: 'FAILED',
+        openapiDocuments: [
+          { document: { contents: Buffer.from(VALID_JSON).toString('base64') } },
+          { document: { contents: Buffer.from(VALID_JSON).toString('base64') } }
+        ]
+      }),
+      fullConfig({ state: 'FAILED', openapiDocuments: [], grpcServices: [{}] })
+    ]) {
+      const provider = new ApiGatewayProvider(fakeClient(config), {
+        projectId: 'sample-project-123',
+        location: 'global',
+        apiId: id
+      });
+      const candidate = (await provider.listCandidates())[0]!;
+      expect(candidate.supported).toBe(false);
+      await expect(provider.exportSpec(candidate)).rejects.toThrow();
+    }
   });
 });

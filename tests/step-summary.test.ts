@@ -15,6 +15,7 @@ describe('ambiguity step summary', () => {
           resourceId:
             '/subscriptions/aaaaaaaa-1111-2222-3333-444444444444/resourceGroups/payments-rg/providers/Microsoft.ApiManagement/service/svc/apis/payments-a',
           providerType: 'api-gateway',
+          authority: 'stored-authoritative',
           confidence: 30,
           supported: true,
           evidence: ['Display name matches']
@@ -25,8 +26,9 @@ describe('ambiguity step summary', () => {
           resourceId:
             '/subscriptions/aaaaaaaa-1111-2222-3333-444444444444/resourceGroups/payments-rg/providers/Microsoft.ApiManagement/service/svc/apis/payments-b',
           providerType: 'api-gateway',
+          authority: 'local-derived',
           confidence: 30,
-          supported: true,
+          supported: false,
           evidence: ['Display name matches']
         }
       ],
@@ -42,6 +44,8 @@ describe('ambiguity step summary', () => {
     expect(markdown).toContain('`manual-review`');
     expect(markdown).toContain('`naming-heuristic`');
     expect(markdown).toContain('`payments-a`');
+    expect(markdown).toContain('`stored-authoritative`');
+    expect(markdown).toContain('`local-derived`');
     expect(markdown).toContain('`available`');
     expect(markdown).toContain('`skipped:iam`');
     expect(markdown).toContain('`skipped:error`');

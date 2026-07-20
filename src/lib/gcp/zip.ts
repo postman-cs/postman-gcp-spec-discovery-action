@@ -2,8 +2,22 @@ import { inflateRawSync } from 'node:zlib';
 
 const MAX_EXTRACTED_BYTES = 10 * 1024 * 1024;
 
+function safeEntryName(name: string): string {
+  if (!name || name.includes('\0')) throw new Error('ZIP contains an unsafe entry name');
+  const normalized = name.replace(/\\/g, '/');
+  if (normalized.startsWith('/') || /^[A-Za-z]:/i.test(normalized)) {
+    throw new Error('ZIP contains an unsafe entry name');
+  }
+  if (normalized.split('/').some((segment) => segment === '..')) {
+    throw new Error('ZIP contains an unsafe entry name');
+  }
+  return normalized;
+}
+
 function addEntry(files: Map<string, Buffer>, total: number, name: string, method: number, compressed: Buffer): number {
+  name = safeEntryName(name);
   if (name.endsWith('/')) return total;
+  if (files.has(name)) throw new Error('ZIP contains duplicate entry names');
   const remaining = MAX_EXTRACTED_BYTES - total;
   if (method === 0 && compressed.length > remaining) throw new Error('ZIP extracted contents exceed 10 MiB');
   let content: Buffer | undefined;

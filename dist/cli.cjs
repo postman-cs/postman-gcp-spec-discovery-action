@@ -5032,23 +5032,23 @@ var require_formdata_parser = __commonJS({
             break;
           }
           case "content-type": {
-            let headerValue = collectASequenceOfBytes(
+            let headerValue2 = collectASequenceOfBytes(
               (char) => char !== 10 && char !== 13,
               input,
               position
             );
-            headerValue = removeChars(headerValue, false, true, (char) => char === 9 || char === 32);
-            contentType = isomorphicDecode(headerValue);
+            headerValue2 = removeChars(headerValue2, false, true, (char) => char === 9 || char === 32);
+            contentType = isomorphicDecode(headerValue2);
             break;
           }
           case "content-transfer-encoding": {
-            let headerValue = collectASequenceOfBytes(
+            let headerValue2 = collectASequenceOfBytes(
               (char) => char !== 10 && char !== 13,
               input,
               position
             );
-            headerValue = removeChars(headerValue, false, true, (char) => char === 9 || char === 32);
-            encoding = isomorphicDecode(headerValue);
+            headerValue2 = removeChars(headerValue2, false, true, (char) => char === 9 || char === 32);
+            encoding = isomorphicDecode(headerValue2);
             break;
           }
           default: {
@@ -10282,8 +10282,8 @@ var require_mock_utils = __commonJS({
     }
     function lowerCaseEntries(headers) {
       return Object.fromEntries(
-        Object.entries(headers).map(([headerName, headerValue]) => {
-          return [headerName.toLocaleLowerCase(), headerValue];
+        Object.entries(headers).map(([headerName, headerValue2]) => {
+          return [headerName.toLocaleLowerCase(), headerValue2];
         })
       );
     }
@@ -10323,8 +10323,8 @@ var require_mock_utils = __commonJS({
         return false;
       }
       for (const [matchHeaderName, matchHeaderValue] of Object.entries(mockDispatch2.headers)) {
-        const headerValue = getHeaderByName(headers, matchHeaderName);
-        if (!matchValue(matchHeaderValue, headerValue)) {
+        const headerValue2 = getHeaderByName(headers, matchHeaderName);
+        if (!matchValue(matchHeaderValue, headerValue2)) {
           return false;
         }
       }
@@ -25190,8 +25190,8 @@ var multipart_parser_exports = {};
 __export(multipart_parser_exports, {
   toFormData: () => toFormData
 });
-function _fileName(headerValue) {
-  const m2 = headerValue.match(/\bfilename=("(.*?)"|([^()<>@,;:\\"/[\]?={}\s\t]+))($|;\s)/i);
+function _fileName(headerValue2) {
+  const m2 = headerValue2.match(/\bfilename=("(.*?)"|([^()<>@,;:\\"/[\]?={}\s\t]+))($|;\s)/i);
   if (!m2) {
     return;
   }
@@ -25213,7 +25213,7 @@ async function toFormData(Body2, ct) {
   }
   const parser = new MultipartParser(m2[1] || m2[2]);
   let headerField;
-  let headerValue;
+  let headerValue2;
   let entryValue;
   let entryName;
   let contentType;
@@ -25239,7 +25239,7 @@ async function toFormData(Body2, ct) {
     parser.onPartData = onPartData;
     parser.onPartEnd = appendEntryToFormData;
     headerField = "";
-    headerValue = "";
+    headerValue2 = "";
     entryValue = "";
     entryName = "";
     contentType = "";
@@ -25250,25 +25250,25 @@ async function toFormData(Body2, ct) {
     headerField += decoder.decode(ui8a, { stream: true });
   };
   parser.onHeaderValue = function(ui8a) {
-    headerValue += decoder.decode(ui8a, { stream: true });
+    headerValue2 += decoder.decode(ui8a, { stream: true });
   };
   parser.onHeaderEnd = function() {
-    headerValue += decoder.decode();
+    headerValue2 += decoder.decode();
     headerField = headerField.toLowerCase();
     if (headerField === "content-disposition") {
-      const m3 = headerValue.match(/\bname=("([^"]*)"|([^()<>@,;:\\"/[\]?={}\s\t]+))/i);
+      const m3 = headerValue2.match(/\bname=("([^"]*)"|([^()<>@,;:\\"/[\]?={}\s\t]+))/i);
       if (m3) {
         entryName = m3[2] || m3[3] || "";
       }
-      filename = _fileName(headerValue);
+      filename = _fileName(headerValue2);
       if (filename) {
         parser.onPartData = appendToFile;
         parser.onPartEnd = appendFileToFormData;
       }
     } else if (headerField === "content-type") {
-      contentType = headerValue;
+      contentType = headerValue2;
     }
-    headerValue = "";
+    headerValue2 = "";
     headerField = "";
   };
   for await (const chunk of Body2) {
@@ -37016,12 +37016,12 @@ var require_identity = __commonJS({
     var SCALAR = /* @__PURE__ */ Symbol.for("yaml.scalar");
     var SEQ = /* @__PURE__ */ Symbol.for("yaml.seq");
     var NODE_TYPE = /* @__PURE__ */ Symbol.for("yaml.node.type");
-    var isAlias = (node) => !!node && typeof node === "object" && node[NODE_TYPE] === ALIAS;
+    var isAlias2 = (node) => !!node && typeof node === "object" && node[NODE_TYPE] === ALIAS;
     var isDocument = (node) => !!node && typeof node === "object" && node[NODE_TYPE] === DOC;
-    var isMap = (node) => !!node && typeof node === "object" && node[NODE_TYPE] === MAP;
-    var isPair = (node) => !!node && typeof node === "object" && node[NODE_TYPE] === PAIR;
-    var isScalar = (node) => !!node && typeof node === "object" && node[NODE_TYPE] === SCALAR;
-    var isSeq = (node) => !!node && typeof node === "object" && node[NODE_TYPE] === SEQ;
+    var isMap2 = (node) => !!node && typeof node === "object" && node[NODE_TYPE] === MAP;
+    var isPair2 = (node) => !!node && typeof node === "object" && node[NODE_TYPE] === PAIR;
+    var isScalar2 = (node) => !!node && typeof node === "object" && node[NODE_TYPE] === SCALAR;
+    var isSeq2 = (node) => !!node && typeof node === "object" && node[NODE_TYPE] === SEQ;
     function isCollection(node) {
       if (node && typeof node === "object")
         switch (node[NODE_TYPE]) {
@@ -37042,7 +37042,7 @@ var require_identity = __commonJS({
         }
       return false;
     }
-    var hasAnchor = (node) => (isScalar(node) || isCollection(node)) && !!node.anchor;
+    var hasAnchor = (node) => (isScalar2(node) || isCollection(node)) && !!node.anchor;
     exports2.ALIAS = ALIAS;
     exports2.DOC = DOC;
     exports2.MAP = MAP;
@@ -37051,14 +37051,14 @@ var require_identity = __commonJS({
     exports2.SCALAR = SCALAR;
     exports2.SEQ = SEQ;
     exports2.hasAnchor = hasAnchor;
-    exports2.isAlias = isAlias;
+    exports2.isAlias = isAlias2;
     exports2.isCollection = isCollection;
     exports2.isDocument = isDocument;
-    exports2.isMap = isMap;
+    exports2.isMap = isMap2;
     exports2.isNode = isNode;
-    exports2.isPair = isPair;
-    exports2.isScalar = isScalar;
-    exports2.isSeq = isSeq;
+    exports2.isPair = isPair2;
+    exports2.isScalar = isScalar2;
+    exports2.isSeq = isSeq2;
   }
 });
 
@@ -41164,9 +41164,9 @@ var require_resolve_flow_collection = __commonJS({
     var blockMsg = "Block collections are not allowed within flow collections";
     var isBlock = (token) => token && (token.type === "block-map" || token.type === "block-seq");
     function resolveFlowCollection({ composeNode, composeEmptyNode }, ctx, fc, onError, tag) {
-      const isMap = fc.start.source === "{";
-      const fcName = isMap ? "flow map" : "flow sequence";
-      const NodeClass = tag?.nodeClass ?? (isMap ? YAMLMap.YAMLMap : YAMLSeq.YAMLSeq);
+      const isMap2 = fc.start.source === "{";
+      const fcName = isMap2 ? "flow map" : "flow sequence";
+      const NodeClass = tag?.nodeClass ?? (isMap2 ? YAMLMap.YAMLMap : YAMLSeq.YAMLSeq);
       const coll = new NodeClass(ctx.schema);
       coll.flow = true;
       const atRoot = ctx.atRoot;
@@ -41202,7 +41202,7 @@ var require_resolve_flow_collection = __commonJS({
             offset = props.end;
             continue;
           }
-          if (!isMap && ctx.options.strict && utilContainsNewline.containsNewline(key))
+          if (!isMap2 && ctx.options.strict && utilContainsNewline.containsNewline(key))
             onError(
               key,
               // checked by containsNewline()
@@ -41242,7 +41242,7 @@ var require_resolve_flow_collection = __commonJS({
             }
           }
         }
-        if (!isMap && !sep && !props.found) {
+        if (!isMap2 && !sep && !props.found) {
           const valueNode = value ? composeNode(ctx, value, props, onError) : composeEmptyNode(ctx, props.end, sep, null, props, onError);
           coll.items.push(valueNode);
           offset = valueNode.range[2];
@@ -41265,7 +41265,7 @@ var require_resolve_flow_collection = __commonJS({
             startOnNewline: false
           });
           if (valueProps.found) {
-            if (!isMap && !props.found && ctx.options.strict) {
+            if (!isMap2 && !props.found && ctx.options.strict) {
               if (sep)
                 for (const st of sep) {
                   if (st === valueProps.found)
@@ -41297,7 +41297,7 @@ var require_resolve_flow_collection = __commonJS({
           const pair = new Pair.Pair(keyNode, valueNode);
           if (ctx.options.keepSourceTokens)
             pair.srcToken = collItem;
-          if (isMap) {
+          if (isMap2) {
             const map = coll;
             if (utilMapIncludes.mapIncludes(ctx, map.items, keyNode))
               onError(keyStart, "DUPLICATE_KEY", "Map keys must be unique");
@@ -41313,7 +41313,7 @@ var require_resolve_flow_collection = __commonJS({
           offset = valueNode ? valueNode.range[2] : valueProps.end;
         }
       }
-      const expectedEnd = isMap ? "}" : "]";
+      const expectedEnd = isMap2 ? "}" : "]";
       const [ce, ...ee] = fc.end;
       let cePos = offset;
       if (ce?.source === expectedEnd)
@@ -42599,7 +42599,7 @@ var require_cst = __commonJS({
     var FLOW_END = "";
     var SCALAR = "";
     var isCollection = (token) => !!token && "items" in token;
-    var isScalar = (token) => !!token && (token.type === "scalar" || token.type === "single-quoted-scalar" || token.type === "double-quoted-scalar" || token.type === "block-scalar");
+    var isScalar2 = (token) => !!token && (token.type === "scalar" || token.type === "single-quoted-scalar" || token.type === "double-quoted-scalar" || token.type === "block-scalar");
     function prettyToken(token) {
       switch (token) {
         case BOM:
@@ -42683,7 +42683,7 @@ var require_cst = __commonJS({
     exports2.FLOW_END = FLOW_END;
     exports2.SCALAR = SCALAR;
     exports2.isCollection = isCollection;
-    exports2.isScalar = isScalar;
+    exports2.isScalar = isScalar2;
     exports2.prettyToken = prettyToken;
     exports2.tokenType = tokenType;
   }
@@ -44199,7 +44199,7 @@ var require_public_api = __commonJS({
       const lineCounter$1 = options.lineCounter || prettyErrors && new lineCounter.LineCounter() || null;
       return { lineCounter: lineCounter$1, prettyErrors };
     }
-    function parseAllDocuments(source, options = {}) {
+    function parseAllDocuments2(source, options = {}) {
       const { lineCounter: lineCounter2, prettyErrors } = parseOptions(options);
       const parser$1 = new parser.Parser(lineCounter2?.addNewLine);
       const composer$1 = new composer.Composer(options);
@@ -44274,7 +44274,7 @@ var require_public_api = __commonJS({
       return new Document.Document(value, _replacer, options).toString(options);
     }
     exports2.parse = parse3;
-    exports2.parseAllDocuments = parseAllDocuments;
+    exports2.parseAllDocuments = parseAllDocuments2;
     exports2.parseDocument = parseDocument2;
     exports2.stringify = stringify;
   }
@@ -44764,9 +44764,67 @@ function resolveActionVersion2() {
 }
 
 // src/lib/gcp/clients.ts
+var import_node_crypto2 = require("node:crypto");
+var import_node_util4 = require("node:util");
 var import_google_auth_library = __toESM(require_src5(), 1);
+function safeUrlForErrors(url) {
+  return `${url.origin}${url.pathname}`;
+}
+function isTrustedGcsHost(hostname) {
+  const host = hostname.toLowerCase();
+  if (host === "storage.googleapis.com" || host === "storage.cloud.google.com") return true;
+  const suffix = ".storage.googleapis.com";
+  if (!host.endsWith(suffix)) return false;
+  const prefix = host.slice(0, -suffix.length);
+  return prefix.length > 0 && !prefix.includes(".");
+}
+function headerValue(headers, name) {
+  if (!headers || typeof headers !== "object") return void 0;
+  const wanted = name.toLowerCase();
+  if (typeof headers.get === "function") {
+    const value = headers.get(name) ?? headers.get(wanted);
+    return typeof value === "string" && value.length > 0 ? value : void 0;
+  }
+  for (const [key, value] of Object.entries(headers)) {
+    if (key.toLowerCase() !== wanted) continue;
+    if (typeof value === "string" && value.length > 0) return value;
+    if (Array.isArray(value) && typeof value[0] === "string" && value[0].length > 0) return value[0];
+  }
+  return void 0;
+}
+function parseApiHubAdditionalContentTypes(value) {
+  if (!Array.isArray(value)) return [];
+  const seen = /* @__PURE__ */ new Set();
+  for (const entry of value) {
+    const type = entry?.specContentType;
+    if (type === "BOOSTED_SPEC_CONTENT" || type === "GATEWAY_OPEN_API_SPEC") seen.add(type);
+  }
+  return [...seen];
+}
 var CLOUD_PLATFORM_SCOPE = "https://www.googleapis.com/auth/cloud-platform";
 var MAX_LIST_PAGES = 100;
+var MAX_STORAGE_OBJECT_BYTES = 10 * 1024 * 1024;
+var CRC32C_TABLE = (() => {
+  const polynomial = 2197175160;
+  const table = new Uint32Array(256);
+  for (let index = 0; index < 256; index += 1) {
+    let crc = index;
+    for (let bit = 0; bit < 8; bit += 1) {
+      crc = (crc & 1) === 1 ? polynomial ^ crc >>> 1 : crc >>> 1;
+    }
+    table[index] = crc >>> 0;
+  }
+  return table;
+})();
+function crc32cBase64(bytes) {
+  let crc = 4294967295;
+  for (let index = 0; index < bytes.byteLength; index += 1) {
+    crc = CRC32C_TABLE[(crc ^ bytes[index]) & 255] ^ crc >>> 8;
+  }
+  const value = Buffer.alloc(4);
+  value.writeUInt32BE((crc ^ 4294967295) >>> 0);
+  return value.toString("base64");
+}
 function createGcpAuth() {
   return new import_google_auth_library.GoogleAuth({ scopes: [CLOUD_PLATFORM_SCOPE] });
 }
@@ -44781,9 +44839,13 @@ function isTransient(error) {
   const message = error instanceof Error ? error.message : String(error);
   return /timeout|timed out|temporar(?:y|ily)|connection reset|socket hang up/i.test(message);
 }
-function resourceUrl(origin, resourceName) {
+function resourceUrl(origin, resourceName, apiVersion = "v1") {
   const encoded = resourceName.split("/").map((segment) => encodeURIComponent(segment)).join("/");
-  return new URL(`v1/${encoded}`, origin);
+  return new URL(`${apiVersion}/${encoded}`, origin);
+}
+function apiHubResourceUrl(resourceName) {
+  const encoded = resourceName.split("/").map((segment) => segment.replace(/%[0-9A-Fa-f]{2}|[^%]+|%/g, (part) => /^%[0-9A-Fa-f]{2}$/.test(part) ? part.toUpperCase() : encodeURIComponent(part))).join("/");
+  return new URL(`v1/${encoded}`, "https://apihub.googleapis.com/");
 }
 function normalizeLabels(value) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return {};
@@ -44812,7 +44874,7 @@ var GcpSdkClient = class {
   createRequester;
   options;
   constructor(auth, options, requester) {
-    this.createRequester = requester ? () => Promise.resolve(requester) : () => auth.getClient();
+    this.createRequester = requester ? () => Promise.resolve(requester) : async () => await auth.getClient();
     this.options = options;
   }
   requester() {
@@ -44923,15 +44985,60 @@ var GcpSdkClient = class {
     const body = await this.getJson(resourceUrl("https://apigee.googleapis.com/", `organizations/${org}/environments`), "Apigee environment list");
     return Array.isArray(body) ? body.map(String) : [];
   }
-  async listApigeeEnvironmentOasFiles(org, environment) {
-    const url = resourceUrl("https://apigee.googleapis.com/", `organizations/${org}/environments/${environment}/resourcefiles`);
-    url.searchParams.set("type", "oas");
-    const body = await this.getJson(url, "Apigee environment OAS resource list");
-    return (body.resourceFile ?? []).map((file) => file.name ?? "").filter(Boolean);
+  async listApigeeArchiveDeployments(org, environment) {
+    return this.collectPages(
+      () => resourceUrl("https://apigee.googleapis.com/", `organizations/${org}/environments/${environment}/archiveDeployments`),
+      "Apigee archive deployment list",
+      (body) => ({
+        items: (body.archiveDeployments ?? []).map((item) => this.toApigeeArchiveDeployment(item)).filter((item) => item.name),
+        nextPageToken: body.nextPageToken
+      }),
+      25
+    );
   }
-  async getApigeeEnvironmentOasFile(org, environment, name) {
-    const bytes = await this.getBinary(resourceUrl("https://apigee.googleapis.com/", `organizations/${org}/environments/${environment}/resourcefiles/oas/${name}`), "Apigee environment OAS resource download");
-    return bytes.toString("utf8");
+  async generateApigeeArchiveDeploymentDownloadUrl(archiveDeploymentName) {
+    const url = resourceUrl("https://apigee.googleapis.com/", archiveDeploymentName);
+    url.pathname = `${url.pathname}:generateDownloadUrl`;
+    const body = await this.postJson(url, "Apigee archive deployment download URL", {});
+    if (typeof body.downloadUri !== "string" || body.downloadUri.trim().length === 0) {
+      throw new Error("Apigee archive deployment download URL response omitted downloadUri");
+    }
+    return body.downloadUri;
+  }
+  async downloadTrustedGcsSignedUrl(downloadUri) {
+    let parsed;
+    try {
+      parsed = new URL(downloadUri);
+    } catch (error) {
+      throw new Error("Apigee archive download URI is not a valid URL", { cause: error });
+    }
+    if (parsed.protocol !== "https:") {
+      throw new Error(`Apigee archive download URI must use HTTPS (${safeUrlForErrors(parsed)})`);
+    }
+    if (!isTrustedGcsHost(parsed.hostname)) {
+      throw new Error(`Apigee archive download URI host is not a trusted GCS endpoint (${safeUrlForErrors(parsed)})`);
+    }
+    parsed.hash = "";
+    const response = await fetch(parsed, {
+      method: "GET",
+      redirect: "error",
+      signal: AbortSignal.timeout(this.options.requestTimeoutMs)
+    });
+    if (!response.ok) {
+      throw new Error(`Apigee archive download failed with HTTP ${response.status} (${safeUrlForErrors(parsed)})`);
+    }
+    const lengthHeader = response.headers.get("content-length");
+    if (lengthHeader !== null) {
+      const declared = Number(lengthHeader);
+      if (!Number.isFinite(declared) || declared < 0 || declared > MAX_STORAGE_OBJECT_BYTES) {
+        throw new Error(`Apigee archive download exceeds ${MAX_STORAGE_OBJECT_BYTES} bytes (${safeUrlForErrors(parsed)})`);
+      }
+    }
+    const bytes = Buffer.from(await response.arrayBuffer());
+    if (bytes.byteLength > MAX_STORAGE_OBJECT_BYTES) {
+      throw new Error(`Apigee archive download exceeds ${MAX_STORAGE_OBJECT_BYTES} bytes (${safeUrlForErrors(parsed)})`);
+    }
+    return bytes;
   }
   apigeeUrl(org, ...segments) {
     return resourceUrl("https://apigee.googleapis.com/", `organizations/${org}/apis/${segments.join("/")}`.replace(/\/$/, ""));
@@ -44982,13 +45089,80 @@ var GcpSdkClient = class {
     return specs;
   }
   async getApiHubSpec(specName) {
-    const url = resourceUrl("https://apihub.googleapis.com/", specName);
+    const url = apiHubResourceUrl(specName);
     return this.toApiHubSpec(await this.getJson(url, "API Hub spec get"), void 0);
   }
   async getApiHubSpecContents(specName) {
-    const url = resourceUrl("https://apihub.googleapis.com/", `${specName}:contents`);
+    const url = apiHubResourceUrl(specName);
+    url.href = `${url.href}:contents`;
     const body = await this.getJson(url, "API Hub spec contents");
     return { contents: body.contents, mimeType: body.mimeType };
+  }
+  async fetchApiHubAdditionalSpecContent(specName, specContentType) {
+    const url = apiHubResourceUrl(specName);
+    url.href = `${url.href}:fetchAdditionalSpecContent`;
+    url.searchParams.set("specContentType", specContentType);
+    const body = await this.getJson(url, "API Hub additional spec content");
+    return {
+      contents: body.additionalSpecContent?.specContents?.contents,
+      mimeType: body.additionalSpecContent?.specContents?.mimeType
+    };
+  }
+  async probeApigeeRegistry(projectId) {
+    const url = this.locationsUrl("https://apigeeregistry.googleapis.com/", projectId);
+    url.searchParams.set("pageSize", "1");
+    await this.getJson(url, "Apigee Registry probe");
+  }
+  async listApigeeRegistrySpecs(projectId) {
+    const specs = [];
+    for (const location of await this.listLocations("https://apigeeregistry.googleapis.com/", projectId, "Apigee Registry location list")) {
+      let apis;
+      try {
+        apis = await this.collectPages(
+          () => resourceUrl("https://apigeeregistry.googleapis.com/", `projects/${projectId}/locations/${location}/apis`),
+          "Apigee Registry api list",
+          (body) => ({
+            items: body.apis ?? [],
+            nextPageToken: body.nextPageToken
+          })
+        );
+      } catch {
+        continue;
+      }
+      for (const api of apis) {
+        if (!api.name) continue;
+        const versions = await this.collectPages(
+          () => resourceUrl("https://apigeeregistry.googleapis.com/", `${api.name}/versions`),
+          "Apigee Registry version list",
+          (body) => ({
+            items: body.versions ?? [],
+            nextPageToken: body.nextPageToken
+          })
+        );
+        for (const version of versions) {
+          if (!version.name) continue;
+          const raw = await this.collectPages(
+            () => resourceUrl("https://apigeeregistry.googleapis.com/", `${version.name}/specs`),
+            "Apigee Registry spec list",
+            (body) => ({
+              items: body.apiSpecs ?? body.specs ?? [],
+              nextPageToken: body.nextPageToken
+            })
+          );
+          specs.push(...raw.map((item) => this.toApigeeRegistrySpec(item)).filter((item) => item.name));
+        }
+      }
+    }
+    return specs;
+  }
+  async getApigeeRegistrySpec(specName) {
+    const url = resourceUrl("https://apigeeregistry.googleapis.com/", specName);
+    return this.toApigeeRegistrySpec(await this.getJson(url, "Apigee Registry spec get"));
+  }
+  async getApigeeRegistrySpecContents(specName) {
+    const url = resourceUrl("https://apigeeregistry.googleapis.com/", specName);
+    url.pathname = `${url.pathname}:getContents`;
+    return this.getBoundedBinary(url, "Apigee Registry spec contents");
   }
   async probeApigeePortal(org) {
     const url = resourceUrl("https://apigee.googleapis.com/", `organizations/${org}/sites`);
@@ -45010,7 +45184,11 @@ var GcpSdkClient = class {
     return { type: "missing" };
   }
   async probeVertexExtensions(projectId, location) {
-    const url = resourceUrl(`https://${location}-aiplatform.googleapis.com/`, `projects/${projectId}/locations/${location}/extensions`);
+    const url = resourceUrl(
+      `https://${location}-aiplatform.googleapis.com/`,
+      `projects/${projectId}/locations/${location}/extensions`,
+      "v1beta1"
+    );
     url.searchParams.set("pageSize", "1");
     await this.getJson(url, "Vertex Extensions probe");
   }
@@ -45018,33 +45196,93 @@ var GcpSdkClient = class {
     return this.listLocations("https://aiplatform.googleapis.com/", projectId, "Vertex AI location list");
   }
   async listVertexExtensions(projectId, location) {
-    return this.collectPages(() => resourceUrl(`https://${location}-aiplatform.googleapis.com/`, `projects/${projectId}/locations/${location}/extensions`), "Vertex Extensions list", (body) => ({ items: (body.extensions ?? []).filter((x2) => x2.name).map((x2) => ({ name: x2.name, displayName: x2.displayName, openApiYaml: x2.manifest?.apiSpec?.openApiYaml, openApiGcsUri: x2.manifest?.apiSpec?.openApiGcsUri })), nextPageToken: body.nextPageToken }));
+    return this.collectPages(
+      () => resourceUrl(
+        `https://${location}-aiplatform.googleapis.com/`,
+        `projects/${projectId}/locations/${location}/extensions`,
+        "v1beta1"
+      ),
+      "Vertex Extensions list",
+      (body) => ({
+        items: (body.extensions ?? []).filter((extension) => extension.name).map((extension) => ({
+          name: extension.name,
+          displayName: extension.displayName,
+          openApiYaml: extension.manifest?.apiSpec?.openApiYaml,
+          openApiGcsUri: extension.manifest?.apiSpec?.openApiGcsUri
+        })),
+        nextPageToken: body.nextPageToken
+      })
+    );
   }
   async probeAgentEngines(projectId, location) {
-    const url = resourceUrl(`https://${location}-aiplatform.googleapis.com/`, `projects/${projectId}/locations/${location}/reasoningEngines`);
+    const url = resourceUrl(
+      `https://${location}-aiplatform.googleapis.com/`,
+      `projects/${projectId}/locations/${location}/reasoningEngines`
+    );
     url.searchParams.set("pageSize", "1");
     await this.getJson(url, "Vertex Agent Engines probe");
   }
   async listAgentEngines(projectId, location) {
-    return this.collectPages(() => resourceUrl(`https://${location}-aiplatform.googleapis.com/`, `projects/${projectId}/locations/${location}/reasoningEngines`), "Vertex Agent Engines list", (body) => ({ items: (body.reasoningEngines ?? []).filter((x2) => x2.name).map((x2) => ({ name: x2.name, displayName: x2.displayName, classMethods: x2.spec?.classMethods ?? [] })), nextPageToken: body.nextPageToken }));
+    return this.collectPages(
+      () => resourceUrl(
+        `https://${location}-aiplatform.googleapis.com/`,
+        `projects/${projectId}/locations/${location}/reasoningEngines`
+      ),
+      "Vertex Agent Engines list",
+      (body) => ({
+        items: (body.reasoningEngines ?? []).filter((engine) => engine.name).map((engine) => ({
+          name: engine.name,
+          displayName: engine.displayName,
+          classMethods: engine.spec?.classMethods ?? []
+        })),
+        nextPageToken: body.nextPageToken
+      })
+    );
   }
   async probeDialogflow(projectId) {
-    const url = resourceUrl("https://dialogflow.googleapis.com/", `projects/${projectId}/locations/global/agents`);
+    const url = resourceUrl(
+      "https://dialogflow.googleapis.com/",
+      `projects/${projectId}/locations/global/agents`,
+      "v3"
+    );
     url.searchParams.set("pageSize", "1");
     await this.getJson(url, "Dialogflow probe");
   }
   async listDialogflowAgents(projectId) {
     const agents = [];
-    for (const location of await this.listLocations("https://dialogflow.googleapis.com/", projectId, "Dialogflow location list")) {
+    for (const location of await this.listLocations(
+      "https://dialogflow.googleapis.com/",
+      projectId,
+      "Dialogflow location list",
+      "v3"
+    )) {
       const origin = location === "global" ? "https://dialogflow.googleapis.com/" : `https://${location}-dialogflow.googleapis.com/`;
-      agents.push(...await this.collectPages(() => resourceUrl(origin, `projects/${projectId}/locations/${location}/agents`), "Dialogflow agent list", (body) => ({ items: body.agents ?? [], nextPageToken: body.nextPageToken })));
+      agents.push(...await this.collectPages(
+        () => resourceUrl(origin, `projects/${projectId}/locations/${location}/agents`, "v3"),
+        "Dialogflow agent list",
+        (body) => ({
+          items: body.agents ?? [],
+          nextPageToken: body.nextPageToken
+        })
+      ));
     }
     return agents;
   }
   async listDialogflowTools(agentName) {
     const location = /\/locations\/([^/]+)\//.exec(agentName)?.[1] ?? "global";
     const origin = location === "global" ? "https://dialogflow.googleapis.com/" : `https://${location}-dialogflow.googleapis.com/`;
-    return this.collectPages(() => resourceUrl(origin, `${agentName}/tools`), "Dialogflow tool list", (body) => ({ items: (body.tools ?? []).map((x2) => ({ name: x2.name, displayName: x2.displayName, textSchema: x2.openApiSpec?.textSchema })), nextPageToken: body.nextPageToken }));
+    return this.collectPages(
+      () => resourceUrl(origin, `${agentName}/tools`, "v3"),
+      "Dialogflow tool list",
+      (body) => ({
+        items: (body.tools ?? []).map((tool) => ({
+          name: tool.name,
+          displayName: tool.displayName,
+          textSchema: tool.openApiSpec?.textSchema
+        })),
+        nextPageToken: body.nextPageToken
+      })
+    );
   }
   async probeCes(projectId) {
     const url = resourceUrl("https://ces.googleapis.com/", `projects/${projectId}/locations/global/apps`);
@@ -45120,18 +45358,28 @@ var GcpSdkClient = class {
       }
       for (const integration of integrations) {
         if (!integration.name) continue;
-        const versionsUrl = resourceUrl("https://integrations.googleapis.com/", `${integration.name}/versions`);
-        versionsUrl.searchParams.set("filter", "state=ACTIVE");
-        versionsUrl.searchParams.set("pageSize", "1");
-        const versions = await this.getJson(versionsUrl, "Application Integration version list");
-        const active = versions.integrationVersions?.[0];
-        const triggerIds = (active?.triggerConfigs ?? []).map((config) => config.triggerId ?? "").filter((id) => id.startsWith("api_trigger/"));
-        if (triggerIds.length > 0) {
+        const versions = await this.collectPages(
+          () => {
+            const versionsUrl = resourceUrl("https://integrations.googleapis.com/", `${integration.name}/versions`);
+            versionsUrl.searchParams.set("filter", "state=ACTIVE");
+            return versionsUrl;
+          },
+          "Application Integration version list",
+          (body) => ({
+            items: body.integrationVersions ?? [],
+            nextPageToken: body.nextPageToken
+          })
+        );
+        const orderedVersions = [...versions].sort((left, right) => (left.name ?? "").localeCompare(right.name ?? ""));
+        for (const version of orderedVersions) {
+          const triggerIds = (version.triggerConfigs ?? []).map((config) => config.triggerId ?? "").filter((id) => id.startsWith("api_trigger/")).sort((left, right) => left.localeCompare(right));
+          if (triggerIds.length === 0) continue;
           triggers.push({
             integrationResource: integration.name,
             location,
             triggerIds,
-            updateTime: integration.updateTime
+            updateTime: version.updateTime ?? integration.updateTime,
+            versionName: version.name
           });
         }
       }
@@ -45195,33 +45443,74 @@ var GcpSdkClient = class {
     return connections.filter((connection) => Boolean(connection.name));
   }
   async getConnectorSchemaMetadata(connectionName) {
-    const url = resourceUrl("https://connectors.googleapis.com/", connectionName);
-    url.pathname = `${url.pathname}:getConnectionSchemaMetadata`;
+    const url = resourceUrl("https://connectors.googleapis.com/", `${connectionName}/connectionSchemaMetadata`);
     try {
-      const body = await this.postJson(url, "Integration Connectors schema metadata retrieval", {});
-      return Object.keys(body.entities ?? {}).length || (body.actions?.length ?? 0) ? body : void 0;
+      const body = await this.getJson(url, "Integration Connectors schema metadata retrieval");
+      const entities = Array.isArray(body.entities) ? body.entities.filter((entity) => typeof entity === "string") : void 0;
+      const actions = Array.isArray(body.actions) ? body.actions.filter((action) => typeof action === "string") : void 0;
+      const metadata = {
+        ...entities ? { entities } : {},
+        ...actions ? { actions } : {},
+        ...typeof body.name === "string" ? { name: body.name } : {},
+        ...typeof body.state === "string" ? { state: body.state } : {},
+        ...typeof body.updateTime === "string" ? { updateTime: body.updateTime } : {},
+        ...typeof body.refreshTime === "string" ? { refreshTime: body.refreshTime } : {},
+        ...typeof body.errorMessage === "string" ? { errorMessage: body.errorMessage } : {}
+      };
+      return Object.keys(metadata).length > 0 ? metadata : void 0;
     } catch (error) {
       if (/HTTP (?:400|404)/.test(error instanceof Error ? error.message : String(error))) return void 0;
       throw error;
     }
   }
   async getStorageObjectText(bucket, object) {
-    const url = new URL(
-      `storage/v1/b/${encodeURIComponent(bucket)}/o/${encodeURIComponent(object)}`,
-      "https://storage.googleapis.com/"
-    );
-    url.searchParams.set("alt", "media");
-    const bytes = await this.getBinary(url, "Cloud Storage spec object download");
-    return bytes.toString("utf8");
+    const objectPath = `storage/v1/b/${encodeURIComponent(bucket)}/o/${encodeURIComponent(object)}`;
+    const metadataUrl = new URL(objectPath, "https://storage.googleapis.com/");
+    const metadata = await this.getJson(metadataUrl, "Cloud Storage object metadata");
+    const generation = metadata.generation?.trim();
+    if (!generation) {
+      throw new Error("Cloud Storage object metadata omitted generation");
+    }
+    const size = Number(metadata.size);
+    if (!Number.isFinite(size) || size < 0) {
+      throw new Error("Cloud Storage object metadata omitted a valid size");
+    }
+    if (size > MAX_STORAGE_OBJECT_BYTES) {
+      throw new Error("Cloud Storage object exceeds 10 MiB");
+    }
+    void metadata.contentType;
+    const mediaUrl = new URL(objectPath, "https://storage.googleapis.com/");
+    mediaUrl.searchParams.set("alt", "media");
+    mediaUrl.searchParams.set("generation", generation);
+    const bytes = await this.getBinary(mediaUrl, "Cloud Storage spec object download");
+    if (bytes.byteLength > MAX_STORAGE_OBJECT_BYTES) {
+      throw new Error("Cloud Storage object exceeds 10 MiB");
+    }
+    if (metadata.crc32c) {
+      if (crc32cBase64(bytes) !== metadata.crc32c) {
+        throw new Error("Cloud Storage object CRC32C mismatch");
+      }
+    } else if (metadata.md5Hash) {
+      if ((0, import_node_crypto2.createHash)("md5").update(bytes).digest("base64") !== metadata.md5Hash) {
+        throw new Error("Cloud Storage object MD5 mismatch");
+      }
+    } else {
+      throw new Error("Cloud Storage object metadata omitted CRC32C and MD5 checksums");
+    }
+    try {
+      return new import_node_util4.TextDecoder("utf-8", { fatal: true }).decode(bytes);
+    } catch {
+      throw new Error("Cloud Storage object is not valid UTF-8");
+    }
   }
-  locationsUrl(origin, projectId) {
-    const url = resourceUrl(origin, `projects/${projectId}/locations`);
+  locationsUrl(origin, projectId, apiVersion = "v1") {
+    const url = resourceUrl(origin, `projects/${projectId}/locations`, apiVersion);
     url.searchParams.set("pageSize", "200");
     return url;
   }
-  async listLocations(origin, projectId, operation) {
+  async listLocations(origin, projectId, operation, apiVersion = "v1") {
     return this.collectPages(
-      () => this.locationsUrl(origin, projectId),
+      () => this.locationsUrl(origin, projectId, apiVersion),
       operation,
       (body) => ({
         items: (body.locations ?? []).map((location) => location.locationId ?? "").filter((locationId) => locationId.length > 0),
@@ -45240,7 +45529,29 @@ var GcpSdkClient = class {
       specTypeIds: (specType?.enumValues?.values ?? []).map((entry) => entry.id ?? "").filter((id) => id.length > 0),
       attributes: flattenApiHubAttributes(item.attributes),
       createTime: typeof item.createTime === "string" ? item.createTime : void 0,
-      sourceUri: typeof item.sourceUri === "string" ? item.sourceUri : void 0
+      sourceUri: typeof item.sourceUri === "string" ? item.sourceUri : void 0,
+      additionalSpecContentTypes: parseApiHubAdditionalContentTypes(item.additionalSpecContents)
+    };
+  }
+  toApigeeArchiveDeployment(value) {
+    const item = value ?? {};
+    return {
+      name: typeof item.name === "string" ? item.name : "",
+      labels: normalizeLabels(item.labels),
+      createdAt: typeof item.createdAt === "string" ? item.createdAt : void 0,
+      updatedAt: typeof item.updatedAt === "string" ? item.updatedAt : void 0
+    };
+  }
+  toApigeeRegistrySpec(value) {
+    const item = value ?? {};
+    return {
+      name: typeof item.name === "string" ? item.name : "",
+      filename: typeof item.filename === "string" ? item.filename : void 0,
+      description: typeof item.description === "string" ? item.description : void 0,
+      mimeType: typeof item.mimeType === "string" ? item.mimeType : void 0,
+      sizeBytes: typeof item.sizeBytes === "number" ? item.sizeBytes : void 0,
+      labels: normalizeLabels(item.labels),
+      createTime: typeof item.createTime === "string" ? item.createTime : void 0
     };
   }
   toCustomConnectorVersion(value) {
@@ -45275,13 +45586,27 @@ var GcpSdkClient = class {
     throw new Error(`${operation} exhausted its attempt limit`);
   }
   async getBinary(url, operation) {
+    return (await this.getBoundedBinary(url, operation)).bytes;
+  }
+  async getBoundedBinary(url, operation) {
     const requester = await this.requester();
     for (let attempt = 1; attempt <= this.options.maxAttempts; attempt += 1) {
       try {
-        const response = await requester.request({ url: url.toString(), method: "GET", timeout: this.options.requestTimeoutMs, retry: false, responseType: "arraybuffer" });
-        return Buffer.from(response.data);
+        const response = await requester.request({
+          url: url.toString(),
+          method: "GET",
+          timeout: this.options.requestTimeoutMs,
+          retry: false,
+          responseType: "arraybuffer"
+        });
+        const bytes = Buffer.from(response.data);
+        if (bytes.byteLength > MAX_STORAGE_OBJECT_BYTES) {
+          throw new Error(`${operation} exceeds ${MAX_STORAGE_OBJECT_BYTES} bytes`);
+        }
+        return { bytes, mimeType: headerValue(response.headers, "content-type") };
       } catch (error) {
         if (!isTransient(error) || attempt === this.options.maxAttempts) {
+          if (error instanceof Error && error.message.includes("exceeds")) throw error;
           const status = errorStatus(error);
           throw new Error(`${operation} failed${status === void 0 ? "" : ` with HTTP ${status}`} after ${attempt} attempt(s)`, { cause: error });
         }
@@ -45773,6 +46098,23 @@ var import_promises5 = require("node:fs/promises");
 var import_node_path8 = __toESM(require("node:path"), 1);
 
 // src/contracts.ts
+function isResolvableAuthority(authority) {
+  return authority === "stored-authoritative" || authority === "google-generated";
+}
+function authorityRank(authority) {
+  switch (authority) {
+    case "stored-authoritative":
+      return 0;
+    case "google-generated":
+      return 1;
+    case "local-derived":
+      return 2;
+    case "metadata-only":
+      return 3;
+    case "unsupported-format":
+      return 4;
+  }
+}
 var actionContract = {
   name: "Postman Onboarding: GCP Spec Discovery",
   description: "Discover GCP-hosted API specs and expose a spec path for Postman onboarding. Part of the Postman API Onboarding suite.",
@@ -45792,7 +46134,7 @@ var actionContract = {
       default: "global"
     },
     "api-id": {
-      description: "Optional full API Gateway config, Cloud Endpoints config, Apigee proxy revision, API Hub spec, Apigee portal apidoc, Vertex extension, Dialogflow tool, or CES tool/toolset resource name. Use this to bypass broader project discovery.",
+      description: "Optional full API Gateway config, Cloud Endpoints config, Apigee proxy revision, Apigee archive deployment, API Hub spec, legacy Apigee Registry spec, Apigee portal apidoc, Vertex extension, Dialogflow tool, or CES tool/toolset resource name. Use this to bypass broader project discovery.",
       required: false,
       default: ""
     },
@@ -45840,7 +46182,7 @@ var actionContract = {
       description: "Resolution status: resolved or unresolved."
     },
     "source-type": {
-      description: "Resolved source type: repo-spec, api-gateway-config, cloud-endpoints-config, apigee-proxy, apigee-env-oas, api-hub-spec, app-integration-trigger, connectors-custom-spec, connectors-generated-spec, apigee-portal-doc, vertex-extension-manifest, agent-engine-generated-spec, dialogflow-tool-schema, ces-tool-schema, ces-toolset-schema, iac-embedded, manual-review, or discover-many."
+      description: "Resolved source type: repo-spec, api-gateway-config, cloud-endpoints-config, apigee-proxy, apigee-archive-deployment, api-hub-spec, api-hub-boosted-spec, api-hub-gateway-openapi-spec, apigee-registry-spec, app-integration-trigger, connectors-custom-spec, apigee-portal-doc, vertex-extension-manifest, agent-engine-generated-spec, dialogflow-tool-schema, ces-tool-schema, ces-toolset-schema, iac-embedded, manual-review, or discover-many."
     },
     "mapping-confidence": {
       description: "Numeric confidence score for the selected service candidate."
@@ -45849,7 +46191,7 @@ var actionContract = {
       description: "Path to the resolved or generated specification when available."
     },
     "api-id": {
-      description: "Full resource name of the exported cloud source (API Gateway config, Cloud Endpoints config, Apigee proxy revision, API Hub spec, Apigee portal apidoc, Vertex extension, Agent Engine, Dialogflow tool, or CES tool/toolset); empty for repo, generated, or IaC-local resolutions."
+      description: "Full resource name of the exported cloud source (API Gateway config, Cloud Endpoints config, Apigee proxy revision, Apigee archive deployment, API Hub spec, legacy Apigee Registry spec, Apigee portal apidoc, Vertex extension, Agent Engine, Dialogflow tool, or CES tool/toolset); empty for repo, generated, or IaC-local resolutions."
     },
     "service-name": {
       description: "Resolved service name."
@@ -45867,7 +46209,7 @@ var actionContract = {
       description: "Ranked ambiguous candidates as JSON when resolution is unresolved with at least two candidates; empty otherwise."
     },
     "provider-type": {
-      description: "Provider that produced the resolved spec: api-gateway, cloud-endpoints, apigee, api-hub, app-integration, connectors-custom, apigee-portal, vertex-extensions, agent-engines, dialogflow-tools, ces-toolsets, or iac-local."
+      description: "Provider that produced the resolved spec: api-gateway, cloud-endpoints, apigee, api-hub, apigee-registry, app-integration, connectors-custom, apigee-portal, vertex-extensions, agent-engines, dialogflow-tools, ces-toolsets, or iac-local."
     },
     "spec-format": {
       description: "Format of the resolved spec: openapi-yaml or openapi-json."
@@ -45975,6 +46317,7 @@ var import_node_path4 = __toESM(require("node:path"), 1);
 
 // src/lib/spec/validate-openapi.ts
 var import_yaml = __toESM(require_dist3(), 1);
+var HTTP_OPERATIONS = /* @__PURE__ */ new Set(["get", "put", "post", "delete", "options", "head", "patch", "trace"]);
 function parseAndValidateOpenApi(content) {
   const trimmed = content.trim();
   if (!trimmed) {
@@ -46012,7 +46355,19 @@ function parseAndValidateOpenApi(content) {
   if (Object.keys(paths).length === 0) {
     throw new Error("Specification has an empty paths object");
   }
+  if (!hasRecognizedHttpOperation(paths)) {
+    throw new Error("Specification has no recognized HTTP operation under paths");
+  }
   return { document: document2, version, isJson };
+}
+function hasRecognizedHttpOperation(paths) {
+  for (const pathItem of Object.values(paths)) {
+    if (!pathItem || typeof pathItem !== "object" || Array.isArray(pathItem)) continue;
+    for (const key of Object.keys(pathItem)) {
+      if (HTTP_OPERATIONS.has(key.toLowerCase())) return true;
+    }
+  }
+  return false;
 }
 
 // src/lib/repo/specs.ts
@@ -46274,10 +46629,46 @@ async function collectRepoSignals(input) {
 // src/lib/repo/gcp-iac-scanner.ts
 var import_promises4 = require("node:fs/promises");
 var import_node_path7 = __toESM(require("node:path"), 1);
+var import_yaml2 = __toESM(require_dist3(), 1);
+
+// src/lib/providers/source-document.ts
+var import_node_util5 = require("node:util");
+var MAX_SOURCE_BYTES = 10 * 1024 * 1024;
+var MAX_BASE64_CHARS = Math.ceil(MAX_SOURCE_BYTES / 3) * 4 + 4;
+function decodeUtf8OpenApi(text) {
+  if (Buffer.byteLength(text) > MAX_SOURCE_BYTES) throw new Error("Configuration source file exceeds 10 MiB");
+  const parsed = parseAndValidateOpenApi(text);
+  return { content: `${text.replace(/(?:\r?\n)+$/, "")}
+`, format: parsed.isJson ? "openapi-json" : "openapi-yaml", filename: parsed.isJson ? "index.json" : "index.yaml" };
+}
+function decodeSourceDocument(contents) {
+  if (!contents) throw new Error("Configuration source file has no contents");
+  if (contents.length > MAX_BASE64_CHARS || !/^[A-Za-z0-9+/]*={0,2}$/.test(contents)) {
+    throw new Error("Configuration source file is not valid base64 or exceeds 10 MiB");
+  }
+  const bytes = Buffer.from(contents, "base64");
+  const expected = contents.replace(/=+$/, "");
+  if (bytes.toString("base64").replace(/=+$/, "") !== expected) {
+    throw new Error("Configuration source file is not valid base64");
+  }
+  if (bytes.byteLength > MAX_SOURCE_BYTES) {
+    throw new Error("Configuration source file exceeds 10 MiB");
+  }
+  let text;
+  try {
+    text = new import_node_util5.TextDecoder("utf-8", { fatal: true }).decode(bytes);
+  } catch (error) {
+    throw new Error("Configuration source file is not valid UTF-8", { cause: error });
+  }
+  return decodeUtf8OpenApi(text);
+}
+
+// src/lib/repo/gcp-iac-scanner.ts
 var MAX_SCAN_FILES = 200;
 var MAX_SCAN_DEPTH = 6;
 var SKIP_DIRS3 = /* @__PURE__ */ new Set([".git", "node_modules", "dist"]);
 var CANDIDATE_EXTENSIONS = /* @__PURE__ */ new Set([".tf", ".json", ".yaml", ".yml"]);
+var PULUMI_API_CONFIG_TYPES = /* @__PURE__ */ new Set(["gcp:apigateway:ApiConfig", "google-native:apigateway/v1:Config"]);
 async function scanGCPIac(repoRoot, outputDir) {
   const resolvedRoot = await (0, import_promises4.realpath)(import_node_path7.default.resolve(repoRoot)).catch(() => import_node_path7.default.resolve(repoRoot));
   const outputRoot = import_node_path7.default.resolve(resolvedRoot, outputDir);
@@ -46285,28 +46676,34 @@ async function scanGCPIac(repoRoot, outputDir) {
   const candidates = /* @__PURE__ */ new Map();
   const fingerprint = { resourceIds: [], serviceNames: [], projectIds: [], evidence: [] };
   for (const relativePath of scannedFiles) {
-    if (import_node_path7.default.extname(relativePath).toLowerCase() !== ".tf") continue;
+    const extension = import_node_path7.default.extname(relativePath).toLowerCase();
     const content = await (0, import_promises4.readFile)(import_node_path7.default.join(resolvedRoot, relativePath), "utf8").catch(() => void 0);
     if (!content) continue;
-    for (const block of extractTerraformResourceBlocks(content)) {
-      if (block.type === "google_api_gateway_api_config") {
-        const apiName = literalAssignment(block.body, "api");
-        if (apiName) fingerprint.serviceNames.push(apiName);
-        for (const reference of literalAssignments(block.body, "path")) {
-          await addReferencedDocument(resolvedRoot, relativePath, block, reference, candidates, fingerprint);
+    if (extension === ".tf") {
+      for (const block of extractTerraformResourceBlocks(content)) {
+        if (block.type === "google_api_gateway_api_config") {
+          const apiName = literalAssignment(block.body, "api");
+          if (apiName) fingerprint.serviceNames.push(apiName);
+          for (const reference of gatewayOpenApiDocumentPaths(block.body)) {
+            await addReferencedDocument(resolvedRoot, relativePath, block, reference, candidates, fingerprint);
+          }
         }
-      }
-      if (block.type === "google_endpoints_service") {
-        const serviceName = literalAssignment(block.body, "service_name");
-        if (serviceName) fingerprint.serviceNames.push(serviceName);
-        for (const reference of fileFunctionAssignments(block.body, "openapi_config")) {
-          await addReferencedDocument(resolvedRoot, relativePath, block, reference, candidates, fingerprint);
+        if (block.type === "google_endpoints_service") {
+          const serviceName = literalAssignment(block.body, "service_name");
+          if (serviceName) fingerprint.serviceNames.push(serviceName);
+          for (const reference of fileFunctionAssignments(block.body, "openapi_config")) {
+            await addReferencedDocument(resolvedRoot, relativePath, block, reference, candidates, fingerprint);
+          }
+          const inline = heredocAssignment(block.body, "openapi_config");
+          if (inline) addInlineDocument(relativePath, block, inline, candidates, fingerprint);
         }
-        const inline = heredocAssignment(block.body, "openapi_config");
-        if (inline) addInlineDocument(relativePath, block, inline, candidates, fingerprint);
+        const project = literalAssignment(block.body, "project");
+        if (project) fingerprint.projectIds.push(project);
       }
-      const project = literalAssignment(block.body, "project");
-      if (project) fingerprint.projectIds.push(project);
+      continue;
+    }
+    if (extension === ".yaml" || extension === ".yml") {
+      extractPulumiYamlDocuments(relativePath, content, candidates, fingerprint);
     }
   }
   return {
@@ -46353,6 +46750,116 @@ function extractTerraformResourceBlocks(content) {
   }
   return blocks;
 }
+function gatewayOpenApiDocumentPaths(body) {
+  const paths = [];
+  for (const openapiDocumentsBody of namedBlocks(body, "openapi_documents")) {
+    for (const documentBody of namedBlocks(openapiDocumentsBody, "document")) {
+      paths.push(...literalAssignments(documentBody, "path"));
+    }
+  }
+  return paths;
+}
+function namedBlocks(content, blockName) {
+  const bodies = [];
+  let index = 0;
+  while (index < content.length) {
+    const header = findBlockHeader(content, blockName, index);
+    if (!header) break;
+    const end = matchingBrace(content, header.bodyStart);
+    if (end === void 0) {
+      index = header.bodyStart;
+      continue;
+    }
+    bodies.push(content.slice(header.bodyStart, end));
+    index = end + 1;
+  }
+  return bodies;
+}
+function findBlockHeader(content, blockName, from) {
+  let index = from;
+  while (index < content.length) {
+    const skipped = skipTrivia(content, index);
+    if (skipped !== index) {
+      index = skipped;
+      continue;
+    }
+    if (isIdentifierAt(content, index, blockName)) {
+      const afterName = index + blockName.length;
+      if (isIdentifierChar(content[afterName])) {
+        index += 1;
+        continue;
+      }
+      const afterTrivia = skipTrivia(content, afterName);
+      if (content[afterTrivia] === "{") {
+        return { bodyStart: afterTrivia + 1 };
+      }
+    }
+    if (content[index] === '"' || content[index] === "'") {
+      index = skipString(content, index);
+      continue;
+    }
+    index += 1;
+  }
+  return void 0;
+}
+function isIdentifierAt(content, index, name) {
+  if (!content.startsWith(name, index)) return false;
+  if (index > 0 && isIdentifierChar(content[index - 1])) return false;
+  return true;
+}
+function isIdentifierChar(char) {
+  return char !== void 0 && /[A-Za-z0-9_]/.test(char);
+}
+function skipTrivia(content, start) {
+  let index = start;
+  while (index < content.length) {
+    const char = content[index];
+    if (char === " " || char === "	" || char === "\r" || char === "\n") {
+      index += 1;
+      continue;
+    }
+    if (char === "#" || char === "/" && content[index + 1] === "/") {
+      index = skipLineComment(content, index);
+      continue;
+    }
+    if (char === "/" && content[index + 1] === "*") {
+      index = skipBlockComment(content, index);
+      continue;
+    }
+    break;
+  }
+  return index;
+}
+function skipLineComment(content, start) {
+  let index = start;
+  while (index < content.length && content[index] !== "\n") index += 1;
+  return index;
+}
+function skipBlockComment(content, start) {
+  let index = start + 2;
+  while (index < content.length) {
+    if (content[index] === "*" && content[index + 1] === "/") return index + 2;
+    index += 1;
+  }
+  return content.length;
+}
+function skipString(content, start) {
+  const quote = content[start];
+  let index = start + 1;
+  let escaped = false;
+  while (index < content.length) {
+    const char = content[index];
+    if (escaped) {
+      escaped = false;
+    } else if (char === "\\") {
+      escaped = true;
+    } else if (char === quote) {
+      return index + 1;
+    }
+    index += 1;
+  }
+  return content.length;
+}
 function matchingBrace(content, start) {
   let depth = 1;
   let quote;
@@ -46363,6 +46870,14 @@ function matchingBrace(content, start) {
       if (escaped) escaped = false;
       else if (char === "\\") escaped = true;
       else if (char === quote) quote = void 0;
+      continue;
+    }
+    if (char === "#" || char === "/" && content[index + 1] === "/") {
+      index = skipLineComment(content, index) - 1;
+      continue;
+    }
+    if (char === "/" && content[index + 1] === "*") {
+      index = skipBlockComment(content, index) - 1;
       continue;
     }
     if (char === '"' || char === "'") {
@@ -46406,6 +46921,8 @@ async function addReferencedDocument(root, terraformPath, block, reference, cand
       id,
       name: block.name,
       providerType: "iac-local",
+      sourceType: "iac-embedded",
+      authority: "stored-authoritative",
       tags: {},
       supported: true,
       evidence: [`Terraform ${block.type}.${block.name} references confined OpenAPI file ${relative}`],
@@ -46431,6 +46948,8 @@ function addInlineDocument(terraformPath, block, content, candidates, fingerprin
       id: key,
       name: block.name,
       providerType: "iac-local",
+      sourceType: "iac-embedded",
+      authority: "stored-authoritative",
       tags: {},
       supported: true,
       evidence: [`Terraform ${block.type}.${block.name} contains literal OpenAPI configuration`],
@@ -46447,11 +46966,155 @@ function addInlineDocument(terraformPath, block, content, candidates, fingerprin
     fingerprint.evidence.push(`Terraform ${block.type}.${block.name} inline config is not valid OpenAPI`);
   }
 }
+function extractPulumiYamlDocuments(relativePath, content, candidates, fingerprint) {
+  let documents;
+  try {
+    documents = (0, import_yaml2.parseAllDocuments)(content, { merge: false, prettyErrors: false });
+  } catch {
+    return;
+  }
+  const nonEmpty = documents.filter((document3) => document3.contents != null);
+  if (nonEmpty.length === 0) return;
+  if (nonEmpty.length > 1) {
+    fingerprint.evidence.push(`Pulumi YAML ${relativePath} has multiple documents; refusing ambiguous parse`);
+    return;
+  }
+  const document2 = nonEmpty[0];
+  if (document2.errors.length > 0) return;
+  const root = document2.contents;
+  if (!(0, import_yaml2.isMap)(root) || mapHasMergeKey(root) || mapHasFnKey(root)) return;
+  if (!isYamlRuntime(mapGet(root, "runtime"))) return;
+  const resourcesNode = mapGet(root, "resources");
+  if (!(0, import_yaml2.isMap)(resourcesNode) || mapHasMergeKey(resourcesNode) || mapHasFnKey(resourcesNode)) return;
+  for (const item of resourcesNode.items) {
+    if (!(0, import_yaml2.isPair)(item)) continue;
+    const resourceName = scalarString(item.key);
+    if (!resourceName || !(0, import_yaml2.isMap)(item.value) || mapHasMergeKey(item.value) || mapHasFnKey(item.value)) continue;
+    const resourceType = scalarString(mapGet(item.value, "type"));
+    if (!resourceType || !PULUMI_API_CONFIG_TYPES.has(resourceType)) continue;
+    const properties = mapGet(item.value, "properties");
+    if (!(0, import_yaml2.isMap)(properties) || mapHasMergeKey(properties) || mapHasFnKey(properties)) continue;
+    const project = literalFingerprintString(mapGet(properties, "project"));
+    if (project) fingerprint.projectIds.push(project);
+    const api = literalFingerprintString(mapGet(properties, "api")) ?? literalFingerprintString(mapGet(properties, "apiId"));
+    if (api) fingerprint.serviceNames.push(api);
+    fingerprint.serviceNames.push(resourceName);
+    const openapiDocuments = mapGet(properties, "openapiDocuments");
+    if (!(0, import_yaml2.isSeq)(openapiDocuments)) continue;
+    if (seqHasFnOrMerge(openapiDocuments)) continue;
+    openapiDocuments.items.forEach((entry, index) => {
+      addPulumiOpenApiDocument(
+        relativePath,
+        resourceType,
+        resourceName,
+        index,
+        entry,
+        candidates,
+        fingerprint
+      );
+    });
+  }
+}
+function addPulumiOpenApiDocument(relativePath, resourceType, resourceName, index, entry, candidates, fingerprint) {
+  if (!(0, import_yaml2.isMap)(entry) || mapHasMergeKey(entry) || mapHasFnKey(entry)) return;
+  const documentNode = mapGet(entry, "document");
+  if (!(0, import_yaml2.isMap)(documentNode) || mapHasMergeKey(documentNode) || mapHasFnKey(documentNode)) return;
+  const pathNode = mapGet(documentNode, "path");
+  const contentsNode = mapGet(documentNode, "contents");
+  if (contentsNode == null) return;
+  if ((0, import_yaml2.isAlias)(contentsNode) || (0, import_yaml2.isAlias)(pathNode)) {
+    fingerprint.evidence.push(
+      `Pulumi ${resourceType}.${resourceName} openapiDocuments/${index} uses YAML alias; ignored`
+    );
+    return;
+  }
+  if (!(0, import_yaml2.isScalar)(contentsNode) || typeof contentsNode.value !== "string") {
+    fingerprint.evidence.push(
+      `Pulumi ${resourceType}.${resourceName} openapiDocuments/${index} contents is not a literal scalar; ignored`
+    );
+    return;
+  }
+  const encoded = contentsNode.value;
+  if (encoded.includes("${") || /^[a-z][a-z0-9+.-]*:\/\//i.test(encoded) || encoded.includes("fn::")) {
+    fingerprint.evidence.push(
+      `Pulumi ${resourceType}.${resourceName} openapiDocuments/${index} contents is nonliteral; ignored`
+    );
+    return;
+  }
+  const id = `${relativePath}#${resourceType}.${resourceName}:openapiDocuments/${index}`;
+  try {
+    const decoded = decodeSourceDocument(encoded);
+    candidates.set(id, {
+      id,
+      name: resourceName,
+      providerType: "iac-local",
+      sourceType: "iac-embedded",
+      authority: "stored-authoritative",
+      tags: {},
+      supported: true,
+      evidence: [`Pulumi ${resourceType}.${resourceName} contains literal OpenAPI document`],
+      meta: {
+        relativePath,
+        inlineContent: decoded.content,
+        inlineFormat: decoded.format
+      }
+    });
+    fingerprint.resourceIds.push(id);
+    fingerprint.evidence.push(`GCP IaC embeds OpenAPI from ${relativePath}#${resourceName}`);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "invalid OpenAPI contents";
+    if (/base64|exceeds|UTF-8/i.test(message)) {
+      fingerprint.evidence.push(
+        `Pulumi ${resourceType}.${resourceName} openapiDocuments/${index} contents is not valid base64 or exceeds size limit`
+      );
+    } else {
+      fingerprint.evidence.push(
+        `Pulumi ${resourceType}.${resourceName} openapiDocuments/${index} contents is not a valid OpenAPI document`
+      );
+    }
+  }
+}
+function isYamlRuntime(node) {
+  if ((0, import_yaml2.isScalar)(node) && node.value === "yaml") return true;
+  if (!(0, import_yaml2.isMap)(node) || mapHasMergeKey(node) || mapHasFnKey(node)) return false;
+  return scalarString(mapGet(node, "name")) === "yaml";
+}
+function literalFingerprintString(node) {
+  const value = scalarString(node);
+  if (!value || value.includes("${") || /^[a-z][a-z0-9+.-]*:\/\//i.test(value)) return void 0;
+  return value;
+}
+function scalarString(node) {
+  if ((0, import_yaml2.isAlias)(node) || !(0, import_yaml2.isScalar)(node) || typeof node.value !== "string") return void 0;
+  return node.value;
+}
+function mapGet(map, key) {
+  for (const item of map.items) {
+    if (!(0, import_yaml2.isPair)(item)) continue;
+    if (scalarString(item.key) === key) return item.value;
+  }
+  return void 0;
+}
+function mapHasMergeKey(map) {
+  return map.items.some((item) => (0, import_yaml2.isPair)(item) && scalarString(item.key) === "<<");
+}
+function mapHasFnKey(map) {
+  return map.items.some((item) => {
+    if (!(0, import_yaml2.isPair)(item)) return false;
+    const key = scalarString(item.key);
+    return Boolean(key?.startsWith("fn::"));
+  });
+}
+function seqHasFnOrMerge(seq) {
+  return seq.items.some((item) => (0, import_yaml2.isMap)(item) && (mapHasFnKey(item) || mapHasMergeKey(item)));
+}
 
 // src/lib/resolve/source-selector.ts
 var MINIMUM_RESOLVED_CONFIDENCE = 40;
 function isResolvedCandidate(candidate) {
-  return Boolean(candidate && !candidate.ambiguous && candidate.supported && candidate.confidence >= MINIMUM_RESOLVED_CONFIDENCE);
+  return Boolean(
+    candidate && !candidate.ambiguous && candidate.supported && isResolvableAuthority(candidate.authority) && candidate.confidence >= MINIMUM_RESOLVED_CONFIDENCE
+  );
 }
 function sourceTypeFor(providerType) {
   switch (providerType) {
@@ -46463,6 +47126,8 @@ function sourceTypeFor(providerType) {
       return "apigee-proxy";
     case "api-hub":
       return "api-hub-spec";
+    case "apigee-registry":
+      return "apigee-registry-spec";
     case "app-integration":
       return "app-integration-trigger";
     case "connectors-custom":
@@ -46493,6 +47158,7 @@ function chooseSource(input) {
       sourceType: "repo-spec",
       serviceName: input.candidate?.serviceName ?? input.fallbackServiceName ?? "unknown-service",
       confidence: input.candidate ? Math.max(80, bestObservedConfidence) : 70,
+      authority: "stored-authoritative",
       specPath: input.existingSpecPath,
       ...input.candidate?.apiId ? { apiId: input.candidate.apiId } : {},
       specFormat: input.existingSpecFormat,
@@ -46509,6 +47175,7 @@ function chooseSource(input) {
       sourceType: resolved.sourceType ?? sourceTypeFor(resolved.providerType),
       serviceName: resolved.serviceName,
       confidence: resolved.confidence,
+      authority: resolved.authority,
       ...resolved.apiId ? { apiId: resolved.apiId } : {},
       providerType: resolved.providerType,
       evidence: resolved.evidence
@@ -46519,6 +47186,7 @@ function chooseSource(input) {
     sourceType: "manual-review",
     serviceName: input.fallbackServiceName ?? "unknown-service",
     confidence: bestObservedConfidence,
+    ...input.candidate ? { authority: input.candidate.authority } : {},
     ...input.candidate?.apiId ? { apiId: input.candidate.apiId } : {},
     evidence: manualReviewEvidence(input)
   };
@@ -46561,23 +47229,26 @@ function scoreCandidate(candidate, signals) {
     score += 39;
     evidence.push("Resource tags match service hint");
   }
-  if (candidate.sourceType?.endsWith("-generated-spec")) {
-    score = Math.max(0, score - 1);
-    evidence.push("Generated specification ranks below stored specification sources");
+  if (!isResolvableAuthority(candidate.authority)) {
+    evidence.push(`Authority ${candidate.authority} is visible for manual review but cannot auto-resolve`);
+  } else if (candidate.authority === "google-generated") {
+    evidence.push("Google-generated specification ranks below stored-authoritative sources when otherwise tied");
   }
   return { score, evidence };
 }
 function toRanked(candidate, signals, score, evidence) {
   const mergedEvidence = [...signals.evidence, ...candidate.evidence ?? [], ...evidence];
   const serviceName = (candidate.tags["postman-project-name"] ?? "").trim() || (candidate.tags.name ?? "").trim() || candidate.name;
+  const supported = candidate.supported && isResolvableAuthority(candidate.authority);
   return {
     serviceName,
     resourceId: candidate.id,
     apiId: candidate.apiId,
     providerType: candidate.providerType,
     sourceType: candidate.sourceType,
+    authority: candidate.authority,
     confidence: score,
-    supported: candidate.supported,
+    supported,
     evidence: mergedEvidence.length > 0 ? mergedEvidence : ["No strong resolver evidence found"]
   };
 }
@@ -46587,7 +47258,7 @@ function rankServiceCandidates(candidates, signals) {
     return toRanked(candidate, signals, scored.score, scored.evidence);
   });
   ranked.sort(
-    (left, right) => right.confidence - left.confidence || (left.resourceId < right.resourceId ? -1 : left.resourceId > right.resourceId ? 1 : 0)
+    (left, right) => right.confidence - left.confidence || authorityRank(left.authority) - authorityRank(right.authority) || (left.resourceId < right.resourceId ? -1 : left.resourceId > right.resourceId ? 1 : 0)
   );
   return ranked;
 }
@@ -46595,7 +47266,9 @@ function resolveServiceCandidate(candidates, signals) {
   const ranked = rankServiceCandidates(candidates, signals);
   if (ranked.length === 0) return void 0;
   const best = ranked[0];
-  const tied = ranked.filter((candidate) => candidate.confidence === best.confidence);
+  const tied = ranked.filter(
+    (candidate) => candidate.confidence === best.confidence && authorityRank(candidate.authority) === authorityRank(best.authority)
+  );
   if (tied.length > 1 && best.confidence > 0) {
     best.ambiguous = true;
     best.evidence = [
@@ -46612,6 +47285,7 @@ function toAmbiguousViews(ranked) {
     resourceId: summarizeResourceName(candidate.resourceId),
     ...candidate.apiId ? { apiId: summarizeResourceName(candidate.apiId) } : {},
     providerType: candidate.providerType,
+    authority: candidate.authority,
     confidence: candidate.confidence,
     supported: candidate.supported,
     evidence: candidate.evidence.map(sanitizeLogMessage)
@@ -46698,10 +47372,10 @@ async function runNarrowingPipeline(context, candidates) {
 }
 
 // src/lib/spec/oas-derivation.ts
-var import_yaml2 = __toESM(require_dist3(), 1);
+var import_yaml3 = __toESM(require_dist3(), 1);
 function parseDocument(content) {
   try {
-    const parsed = content.trim().startsWith("{") ? JSON.parse(content) : (0, import_yaml2.parse)(content);
+    const parsed = content.trim().startsWith("{") ? JSON.parse(content) : (0, import_yaml3.parse)(content);
     return parsed && typeof parsed === "object" ? parsed : void 0;
   } catch {
     return void 0;
@@ -46761,42 +47435,21 @@ function swaggerToOpenApi(parsed, title) {
   return document2;
 }
 
-// src/lib/providers/source-document.ts
-var import_node_util4 = require("node:util");
-var MAX_SOURCE_BYTES = 10 * 1024 * 1024;
-var MAX_BASE64_CHARS = Math.ceil(MAX_SOURCE_BYTES / 3) * 4 + 4;
-function decodeUtf8OpenApi(text) {
-  if (Buffer.byteLength(text) > MAX_SOURCE_BYTES) throw new Error("Configuration source file exceeds 10 MiB");
-  const parsed = parseAndValidateOpenApi(text);
-  return { content: `${text.replace(/(?:\r?\n)+$/, "")}
-`, format: parsed.isJson ? "openapi-json" : "openapi-yaml", filename: parsed.isJson ? "index.json" : "index.yaml" };
-}
-function decodeSourceDocument(contents) {
-  if (!contents) throw new Error("Configuration source file has no contents");
-  if (contents.length > MAX_BASE64_CHARS || !/^[A-Za-z0-9+/]*={0,2}$/.test(contents)) {
-    throw new Error("Configuration source file is not valid base64 or exceeds 10 MiB");
-  }
-  const bytes = Buffer.from(contents, "base64");
-  const expected = contents.replace(/=+$/, "");
-  if (bytes.toString("base64").replace(/=+$/, "") !== expected) {
-    throw new Error("Configuration source file is not valid base64");
-  }
-  if (bytes.byteLength > MAX_SOURCE_BYTES) {
-    throw new Error("Configuration source file exceeds 10 MiB");
-  }
-  let text;
-  try {
-    text = new import_node_util4.TextDecoder("utf-8", { fatal: true }).decode(bytes);
-  } catch (error) {
-    throw new Error("Configuration source file is not valid UTF-8", { cause: error });
-  }
-  return decodeUtf8OpenApi(text);
-}
-
 // src/lib/providers/probe.ts
 function probeFailureStatus(error) {
   const message = error instanceof Error ? error.message : String(error);
   return /\b(?:401|403)\b|permission[_ -]?denied|forbidden|unauthenticated/i.test(message) ? "skipped:iam" : "skipped:error";
+}
+
+// src/lib/providers/types.ts
+function resolveCandidateAuthority(candidate) {
+  return candidate.authority;
+}
+function withAuthority(candidate) {
+  return {
+    ...candidate,
+    supported: candidate.supported && isResolvableAuthority(candidate.authority)
+  };
 }
 
 // src/lib/providers/api-gateway.ts
@@ -46808,19 +47461,30 @@ function parseApiGatewayConfigName(value) {
 function shortName(value) {
   return value.split("/").pop() ?? value;
 }
-function supportEvidence(config) {
+function supportEvidence(config, options = {}) {
   const evidence = [`API Gateway config ${shortName(config.name)} is ${config.state ?? "STATE_UNSPECIFIED"}`];
   if (config.state !== "ACTIVE") {
-    return { supported: false, evidence: [...evidence, "Only ACTIVE API Gateway configs are exportable"] };
+    if (!options.allowInactive) {
+      return {
+        supported: false,
+        authority: "metadata-only",
+        evidence: [...evidence, "Only ACTIVE API Gateway configs are exportable"]
+      };
+    }
+    evidence.push("Explicit api-id requested inactive/historical API Gateway config export");
   }
   if (config.openapiDocuments.length !== 1) {
     const detail = config.openapiDocuments.length === 0 ? "API Gateway config has no OpenAPI source document" : `API Gateway config has ${config.openapiDocuments.length} OpenAPI source documents; refusing to merge or guess`;
-    return { supported: false, evidence: [...evidence, detail] };
+    return { supported: false, authority: "metadata-only", evidence: [...evidence, detail] };
   }
   if (config.grpcServices.length > 0) {
-    return { supported: false, evidence: [...evidence, "gRPC API Gateway configs are not converted in v1.0.0"] };
+    return {
+      supported: false,
+      authority: "unsupported-format",
+      evidence: [...evidence, "gRPC API Gateway configs are not converted in v1.0.0"]
+    };
   }
-  return { supported: true, evidence };
+  return { supported: true, authority: "stored-authoritative", evidence };
 }
 var ApiGatewayProvider = class {
   constructor(client, scope) {
@@ -46844,7 +47508,9 @@ var ApiGatewayProvider = class {
       if (explicit.projectId !== this.scope.projectId || explicit.location !== this.scope.location) {
         throw new Error("api-id must belong to the configured project-id and global location");
       }
-      const candidate = this.toCandidate(await this.client.getApiGatewayConfig(this.scope.apiId), void 0);
+      const candidate = this.toCandidate(await this.client.getApiGatewayConfig(this.scope.apiId), void 0, {
+        allowInactive: true
+      });
       return [{ ...candidate, apiId: this.scope.apiId }];
     }
     if (this.scope.apiId) return [];
@@ -46856,14 +47522,16 @@ var ApiGatewayProvider = class {
       for (const summary of configs) {
         if (!summary.name) continue;
         const full = await this.client.getApiGatewayConfig(summary.name);
-        candidates.push(this.toCandidate(full, api));
+        candidates.push(this.toCandidate(full, api, { allowInactive: false }));
       }
     }
     return candidates;
   }
   async exportSpec(candidate) {
-    const config = await this.client.getApiGatewayConfig(candidate.id);
-    const support = supportEvidence(config);
+    const configName = candidate.apiId && parseApiGatewayConfigName(candidate.apiId) ? candidate.apiId : candidate.id;
+    const config = await this.client.getApiGatewayConfig(configName);
+    const allowInactive = candidate.meta.allowInactiveExport === "true" || Boolean(this.scope.apiId && parseApiGatewayConfigName(this.scope.apiId));
+    const support = supportEvidence(config, { allowInactive });
     if (!support.supported) throw new Error(support.evidence.at(-1));
     const decoded = decodeSourceDocument(config.openapiDocuments[0]?.document?.contents);
     return {
@@ -46871,13 +47539,15 @@ var ApiGatewayProvider = class {
       evidence: [`Exported original API Gateway source ${config.openapiDocuments[0]?.document?.path ?? "openapi source"}`]
     };
   }
-  toCandidate(config, api) {
-    const support = supportEvidence(config);
+  toCandidate(config, api, options) {
+    const support = supportEvidence(config, options);
     const apiName = config.name.split("/configs/")[0] ?? config.name;
-    return {
+    return withAuthority({
       id: config.name,
       name: config.displayName || api?.displayName || shortName(apiName),
       providerType: this.type,
+      sourceType: "api-gateway-config",
+      authority: support.authority,
       apiId: config.name,
       projectId: this.scope.projectId,
       tags: { ...api?.labels ?? {}, ...config.labels },
@@ -46887,9 +47557,11 @@ var ApiGatewayProvider = class {
         apiName,
         configId: shortName(config.name),
         createTime: config.createTime ?? "",
-        updateTime: config.updateTime ?? ""
+        updateTime: config.updateTime ?? "",
+        state: config.state ?? "",
+        allowInactiveExport: options.allowInactive && config.state !== "ACTIVE" && support.supported ? "true" : "false"
       }
-    };
+    });
   }
 };
 
@@ -46905,12 +47577,19 @@ function sourceFiles(config) {
 }
 function supportEvidence2(config) {
   const files = sourceFiles(config);
-  if (files.length === 1) return { supported: true, evidence: [`Cloud Endpoints config ${config.id} has one original OpenAPI source`] };
+  if (files.length === 1) {
+    return { supported: true, authority: "stored-authoritative", evidence: [`Cloud Endpoints config ${config.id} has one original OpenAPI source`] };
+  }
   if (files.length === 0) {
-    return { supported: false, evidence: ["Cloud Endpoints config has no original OpenAPI sourceInfo file; normalized Service Config is not reverse-converted"] };
+    return {
+      supported: false,
+      authority: "metadata-only",
+      evidence: ["Cloud Endpoints config has no original OpenAPI sourceInfo file; normalized Service Config is not reverse-converted"]
+    };
   }
   return {
     supported: false,
+    authority: "metadata-only",
     evidence: [`Cloud Endpoints config has ${files.length} OpenAPI source files; refusing to merge or guess`]
   };
 }
@@ -46970,28 +47649,43 @@ var CloudEndpointsProvider = class {
   toCandidate(config, service) {
     const support = supportEvidence2(config);
     const id = `services/${service.serviceName}/configs/${config.id}`;
-    return {
+    return withAuthority({
       id,
       name: config.title || config.name || service.serviceName,
       providerType: this.type,
+      sourceType: "cloud-endpoints-config",
+      authority: support.authority,
       apiId: id,
       projectId: this.scope.projectId,
       tags: {},
       supported: support.supported,
       evidence: support.evidence,
       meta: { serviceName: service.serviceName, configId: config.id }
-    };
+    });
   }
 };
 
 // src/lib/providers/apigee.ts
-var import_node_util5 = require("node:util");
+var import_node_util6 = require("node:util");
 
 // src/lib/gcp/zip.ts
 var import_node_zlib2 = require("node:zlib");
 var MAX_EXTRACTED_BYTES = 10 * 1024 * 1024;
+function safeEntryName(name) {
+  if (!name || name.includes("\0")) throw new Error("ZIP contains an unsafe entry name");
+  const normalized = name.replace(/\\/g, "/");
+  if (normalized.startsWith("/") || /^[A-Za-z]:/i.test(normalized)) {
+    throw new Error("ZIP contains an unsafe entry name");
+  }
+  if (normalized.split("/").some((segment) => segment === "..")) {
+    throw new Error("ZIP contains an unsafe entry name");
+  }
+  return normalized;
+}
 function addEntry(files, total, name, method, compressed) {
+  name = safeEntryName(name);
   if (name.endsWith("/")) return total;
+  if (files.has(name)) throw new Error("ZIP contains duplicate entry names");
   const remaining = MAX_EXTRACTED_BYTES - total;
   if (method === 0 && compressed.length > remaining) throw new Error("ZIP extracted contents exceed 10 MiB");
   let content;
@@ -47075,18 +47769,42 @@ function inflateZip(bytes) {
 }
 
 // src/lib/providers/apigee.ts
-var PATTERN = /^organizations\/([^/]+)\/apis\/([^/]+)\/revisions\/([^/]+)$/;
-var ENV_OAS_PATTERN = /^organizations\/([^/]+)\/environments\/([^/]+)\/resourcefiles\/oas\/(.+)$/;
+var REVISION_PATTERN = /^organizations\/([^/]+)\/apis\/([^/]+)\/revisions\/([^/]+)$/;
+var ARCHIVE_PATTERN = /^organizations\/([^/]+)\/environments\/([^/]+)\/archiveDeployments\/([^/]+)$/;
 function parseApigeeRevisionName(value) {
-  const match = PATTERN.exec(value);
+  const match = REVISION_PATTERN.exec(value);
   return match ? { org: match[1], proxyName: match[2], revision: match[3] } : void 0;
 }
-function documents(bundle) {
+function parseApigeeArchiveDeploymentName(value) {
+  const match = ARCHIVE_PATTERN.exec(value);
+  return match ? { org: match[1], environment: match[2], archiveDeploymentId: match[3] } : void 0;
+}
+function isUnsafeZipEntryName(name) {
+  if (!name || name.includes("\0")) return true;
+  const normalized = name.replace(/\\/g, "/");
+  if (normalized.startsWith("/") || /^[A-Za-z]:/.test(normalized)) return true;
+  return normalized.split("/").some((segment) => segment === "..");
+}
+function proxyDocuments(bundle) {
   const result = [];
   for (const [path8, bytes] of inflateZip(bundle)) {
     if (!/^apiproxy\/resources\/(?:oas|openapi)\//i.test(path8) && !/^apiproxy\/resources\/.*\.(?:json|ya?ml)$/i.test(path8)) continue;
     try {
-      result.push({ path: path8, decoded: decodeUtf8OpenApi(new import_node_util5.TextDecoder("utf-8", { fatal: true }).decode(bytes)) });
+      result.push({ path: path8, decoded: decodeUtf8OpenApi(new import_node_util6.TextDecoder("utf-8", { fatal: true }).decode(bytes)) });
+    } catch {
+    }
+  }
+  return result;
+}
+function archiveDocuments(bundle) {
+  const result = [];
+  for (const [path8, bytes] of inflateZip(bundle)) {
+    if (isUnsafeZipEntryName(path8)) {
+      throw new Error("Apigee archive deployment zip contains an unsafe entry name");
+    }
+    if (path8.endsWith("/") || !/\.(?:json|ya?ml)$/i.test(path8)) continue;
+    try {
+      result.push({ path: path8, decoded: decodeUtf8OpenApi(new import_node_util6.TextDecoder("utf-8", { fatal: true }).decode(bytes)) });
     } catch {
     }
   }
@@ -47109,43 +47827,69 @@ var ApigeeProvider = class {
     }
   }
   async listCandidates() {
-    const explicit = this.scope.apiId ? parseApigeeRevisionName(this.scope.apiId) : void 0;
-    if (this.scope.apiId && !explicit) return [];
-    if (explicit && explicit.org !== this.scope.projectId) throw new Error("api-id Apigee revision does not belong to the configured project-id org");
-    const revisions = explicit ? [{ proxyName: explicit.proxyName, revision: explicit.revision, labels: {} }] : await this.latestRevisions();
-    const proxies = await Promise.all(revisions.map(async ({ proxyName, revision, labels }) => {
-      const id = `organizations/${this.scope.projectId}/apis/${proxyName}/revisions/${revision}`;
-      const count = documents(await this.client.downloadApigeeRevisionBundle(this.scope.projectId, proxyName, revision)).length;
-      const evidence = count === 1 ? [`Apigee proxy revision has one OpenAPI source document`] : count === 0 ? ["Apigee proxy revision has no OpenAPI source document"] : [`Apigee proxy revision has ${count} OpenAPI source documents; refusing to merge or guess`];
-      return { id, name: proxyName, providerType: this.type, apiId: id, projectId: this.scope.projectId, tags: labels, supported: count === 1, evidence, meta: { proxyName, revision } };
-    }));
-    if (explicit) return proxies;
-    const resources = [];
-    for (const environment of await this.client.listApigeeEnvironments(this.scope.projectId)) {
-      for (const name of await this.client.listApigeeEnvironmentOasFiles(this.scope.projectId, environment)) {
-        const id = `organizations/${this.scope.projectId}/environments/${environment}/resourcefiles/oas/${name}`;
-        let supported = false;
-        try {
-          decodeUtf8OpenApi(await this.client.getApigeeEnvironmentOasFile(this.scope.projectId, environment, name));
-          supported = true;
-        } catch {
-        }
-        resources.push({ id, apiId: id, name, providerType: this.type, sourceType: "apigee-env-oas", projectId: this.scope.projectId, tags: {}, supported, evidence: [supported ? "Apigee environment stores one validated OpenAPI OAS resource file" : "Apigee environment OAS resource file is not valid OpenAPI"], meta: { environment, resourceName: name } });
+    const archiveExplicit = this.scope.apiId ? parseApigeeArchiveDeploymentName(this.scope.apiId) : void 0;
+    const revisionExplicit = this.scope.apiId ? parseApigeeRevisionName(this.scope.apiId) : void 0;
+    if (this.scope.apiId && !archiveExplicit && !revisionExplicit) return [];
+    if (archiveExplicit) {
+      if (archiveExplicit.org !== this.scope.projectId) {
+        throw new Error("api-id Apigee archive deployment does not belong to the configured project-id org");
       }
+      return [
+        await this.toArchiveCandidate({
+          name: this.scope.apiId,
+          labels: {},
+          createdAt: void 0,
+          updatedAt: void 0
+        })
+      ];
     }
-    return [...proxies, ...resources];
+    const revisions = revisionExplicit ? [{ proxyName: revisionExplicit.proxyName, revision: revisionExplicit.revision, labels: {} }] : await this.latestRevisions();
+    if (revisionExplicit && revisionExplicit.org !== this.scope.projectId) {
+      throw new Error("api-id Apigee revision does not belong to the configured project-id org");
+    }
+    const proxyCandidates = await Promise.all(
+      revisions.map(async ({ proxyName, revision, labels }) => {
+        const id = `organizations/${this.scope.projectId}/apis/${proxyName}/revisions/${revision}`;
+        const count = proxyDocuments(await this.client.downloadApigeeRevisionBundle(this.scope.projectId, proxyName, revision)).length;
+        const evidence = count === 1 ? ["Apigee proxy revision has one OpenAPI source document"] : count === 0 ? ["Apigee proxy revision has no OpenAPI source document"] : [`Apigee proxy revision has ${count} OpenAPI source documents; refusing to merge or guess`];
+        return withAuthority({
+          id,
+          name: proxyName,
+          providerType: this.type,
+          sourceType: "apigee-proxy",
+          authority: count === 1 ? "stored-authoritative" : "metadata-only",
+          apiId: id,
+          projectId: this.scope.projectId,
+          tags: labels,
+          supported: count === 1,
+          evidence,
+          meta: { proxyName, revision }
+        });
+      })
+    );
+    if (revisionExplicit) return proxyCandidates;
+    return [...proxyCandidates, ...await this.listArchiveCandidates()];
   }
   async exportSpec(candidate) {
-    const environmentResource = ENV_OAS_PATTERN.exec(candidate.id);
-    if (environmentResource) {
-      if (environmentResource[1] !== this.scope.projectId) throw new Error("Apigee environment OAS candidate belongs to another organization");
-      const decoded = decodeUtf8OpenApi(await this.client.getApigeeEnvironmentOasFile(environmentResource[1], environmentResource[2], environmentResource[3]));
-      return { ...decoded, evidence: ["Exported original validated Apigee environment OAS resource file"] };
+    const archive = parseApigeeArchiveDeploymentName(candidate.id);
+    if (archive) {
+      if (archive.org !== this.scope.projectId) throw new Error("Apigee archive candidate has an invalid resource name");
+      const found2 = archiveDocuments(await this.downloadArchiveZip(candidate.id));
+      if (found2.length !== 1) {
+        throw new Error(
+          found2.length ? `Apigee archive deployment has ${found2.length} OpenAPI source documents; refusing to merge or guess` : "Apigee archive deployment has no OpenAPI source document"
+        );
+      }
+      return { ...found2[0].decoded, evidence: [`Exported original Apigee archive deployment source ${found2[0].path}`] };
     }
     const parsed = parseApigeeRevisionName(candidate.id);
     if (!parsed || parsed.org !== this.scope.projectId) throw new Error("Apigee candidate has an invalid revision resource name");
-    const found = documents(await this.client.downloadApigeeRevisionBundle(parsed.org, parsed.proxyName, parsed.revision));
-    if (found.length !== 1) throw new Error(found.length ? `Apigee proxy revision has ${found.length} OpenAPI source documents; refusing to merge or guess` : "Apigee proxy revision has no OpenAPI source document");
+    const found = proxyDocuments(await this.client.downloadApigeeRevisionBundle(parsed.org, parsed.proxyName, parsed.revision));
+    if (found.length !== 1) {
+      throw new Error(
+        found.length ? `Apigee proxy revision has ${found.length} OpenAPI source documents; refusing to merge or guess` : "Apigee proxy revision has no OpenAPI source document"
+      );
+    }
     return { ...found[0].decoded, evidence: [`Exported original Apigee source ${found[0].path}`] };
   }
   async latestRevisions() {
@@ -47155,6 +47899,63 @@ var ApigeeProvider = class {
       if (revision) result.push({ proxyName: proxy.name, revision, labels: proxy.labels ?? {} });
     }
     return result;
+  }
+  async listArchiveCandidates() {
+    const candidates = [];
+    let environments;
+    try {
+      environments = await this.client.listApigeeEnvironments(this.scope.projectId);
+    } catch {
+      return [];
+    }
+    for (const environment of environments) {
+      let deployments;
+      try {
+        deployments = await this.client.listApigeeArchiveDeployments(this.scope.projectId, environment);
+      } catch {
+        continue;
+      }
+      for (const deployment of deployments) {
+        if (!deployment.name) continue;
+        candidates.push(await this.toArchiveCandidate(deployment));
+      }
+    }
+    return candidates;
+  }
+  async toArchiveCandidate(deployment) {
+    let count = 0;
+    let evidence;
+    try {
+      count = archiveDocuments(await this.downloadArchiveZip(deployment.name)).length;
+      evidence = count === 1 ? ["Apigee archive deployment has one OpenAPI source document"] : count === 0 ? ["Apigee archive deployment has no OpenAPI source document"] : [`Apigee archive deployment has ${count} OpenAPI source documents; refusing to merge or guess`];
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      evidence = [`Apigee archive deployment OpenAPI inspection failed: ${detail}`];
+      count = 0;
+    }
+    const short = deployment.name.split("/").pop() ?? deployment.name;
+    return withAuthority({
+      id: deployment.name,
+      name: short,
+      providerType: this.type,
+      sourceType: "apigee-archive-deployment",
+      authority: count === 1 ? "stored-authoritative" : "metadata-only",
+      apiId: deployment.name,
+      projectId: this.scope.projectId,
+      tags: deployment.labels,
+      supported: count === 1,
+      evidence,
+      meta: {
+        environment: deployment.name.split("/environments/")[1]?.split("/")[0] ?? "",
+        archiveDeploymentId: short,
+        createdAt: deployment.createdAt ?? "",
+        updatedAt: deployment.updatedAt ?? ""
+      }
+    });
+  }
+  async downloadArchiveZip(archiveDeploymentName) {
+    const downloadUri = await this.client.generateApigeeArchiveDeploymentDownloadUrl(archiveDeploymentName);
+    return this.client.downloadTrustedGcsSignedUrl(downloadUri);
   }
 };
 
@@ -47185,28 +47986,9 @@ var ConnectorsCustomProvider = class {
   }
   async listCandidates() {
     if (this.scope.apiId) return [];
-    const versions = await this.client.listCustomConnectorVersions(this.scope.projectId);
-    const candidates = versions.map((version) => this.toCandidate(version));
-    for (const connection of await this.client.listConnectorConnections(this.scope.projectId)) {
-      const schema = await this.client.getConnectorSchemaMetadata(connection.name);
-      if (!schema) continue;
-      const document2 = JSON.stringify(schemaToOpenApi(connection.name, schema));
-      let supported = true;
-      const evidence = ["OpenAPI generated from connector schema metadata; confidence is lower than stored specification sources"];
-      try {
-        parseAndValidateOpenApi(document2);
-      } catch {
-        supported = false;
-        evidence.push("Generated spec has no operations; manual review");
-      }
-      candidates.push({ id: connection.name, apiId: connection.name, name: shortName2(connection.name), providerType: this.type, sourceType: "connectors-generated-spec", projectId: this.scope.projectId, tags: {}, supported, evidence, meta: { generatedOpenApi: document2 } });
-    }
-    return candidates;
+    return (await this.client.listCustomConnectorVersions(this.scope.projectId)).map((version) => this.toCandidate(version));
   }
   async exportSpec(candidate) {
-    if (candidate.sourceType === "connectors-generated-spec") {
-      return { ...decodeUtf8OpenApi(candidate.meta.generatedOpenApi ?? ""), evidence: ["OpenAPI generated from connector schema metadata"] };
-    }
     const location = candidate.meta.specLocation ?? "";
     const gcs = parseGcsSpecLocation(location);
     if (!gcs) throw new Error("Custom connector specLocation is not a gs:// object; v1.0.0 does not fetch remote URLs");
@@ -47222,17 +48004,22 @@ var ConnectorsCustomProvider = class {
     const gcs = parseGcsSpecLocation(specLocation);
     const evidence = [`Custom connector version ${shortName2(version.name)} records specLocation ${gcs ? "[gs-object]" : specLocation || "(none)"}`];
     let supported = true;
+    let authority = "stored-authoritative";
     if (!specLocation) {
       supported = false;
+      authority = "metadata-only";
       evidence.push("Custom connector version has no specLocation");
     } else if (!gcs) {
       supported = false;
+      authority = "unsupported-format";
       evidence.push("Only gs:// specLocation objects are fetched in v1.0.0; remote URLs are manual review");
     }
-    return {
+    return withAuthority({
       id: version.name,
       name: version.name.split("/customConnectors/")[1]?.split("/")[0] ?? shortName2(version.name),
       providerType: this.type,
+      sourceType: "connectors-custom-spec",
+      authority,
       projectId: this.scope.projectId,
       tags: version.labels,
       supported,
@@ -47243,34 +48030,31 @@ var ConnectorsCustomProvider = class {
         versionId: shortName2(version.name),
         updateTime: version.updateTime ?? ""
       }
-    };
+    });
   }
 };
-function schemaToOpenApi(connectionName, schema) {
-  const paths = {};
-  for (const [entity, metadata] of Object.entries(schema.entities ?? {})) {
-    const properties = Object.fromEntries((metadata.fields ?? []).filter((field) => field.name).map((field) => [field.name, { type: connectorType(field.dataType), ...field.description ? { description: field.description } : {} }]));
-    paths[`/${entity}`] = { get: { operationId: `list_${entity}`, responses: { "200": { description: "Connector schema-derived response", content: { "application/json": { schema: { type: "array", items: { type: "object", properties } } } } } } } };
-  }
-  for (const action of schema.actions ?? []) if (action.name) paths[`/actions/${action.name}`] = { post: { operationId: action.name, description: action.description, responses: { "200": { description: "Connector action response" } } } };
-  return { openapi: "3.0.3", info: { title: `${shortName2(connectionName)} connector`, version: "generated", description: "Generated from connector schema metadata" }, paths };
-}
-function connectorType(value) {
-  if (/bool/i.test(value ?? "")) return "boolean";
-  if (/int|number|decimal|double|float/i.test(value ?? "")) return "number";
-  if (/array|list/i.test(value ?? "")) return "array";
-  if (/object|json|struct/i.test(value ?? "")) return "object";
-  return "string";
-}
 
 // src/lib/providers/api-hub.ts
 var SPEC_PATTERN = /^projects\/([^/]+)\/locations\/([^/]+)\/apis\/([^/]+)\/versions\/([^/]+)\/specs\/([^/]+)$/;
+var ADDITIONAL_VARIANT_PATTERN = /^(projects\/[^/]+\/locations\/[^/]+\/apis\/[^/]+\/versions\/[^/]+\/specs\/[^/]+)#(BOOSTED_SPEC_CONTENT|GATEWAY_OPEN_API_SPEC)$/;
 function parseApiHubSpecName(value) {
   const match = SPEC_PATTERN.exec(value);
   return match ? { projectId: match[1], location: match[2], apiName: match[3], versionId: match[4], specId: match[5] } : void 0;
 }
+function parseApiHubAdditionalSpecName(value) {
+  const match = ADDITIONAL_VARIANT_PATTERN.exec(value);
+  if (!match) return void 0;
+  const specName = match[1];
+  const contentType = match[2];
+  const parsed = parseApiHubSpecName(specName);
+  if (!parsed) return void 0;
+  return { ...parsed, specName, contentType };
+}
 function shortName3(value) {
   return value.split("/").pop() ?? value;
+}
+function additionalSourceType(type) {
+  return type === "BOOSTED_SPEC_CONTENT" ? "api-hub-boosted-spec" : "api-hub-gateway-openapi-spec";
 }
 function supportEvidence3(spec) {
   const specTypes = spec.specTypeIds;
@@ -47280,10 +48064,11 @@ function supportEvidence3(spec) {
   if (specTypes.length > 0 && !specTypes.some((id) => /openapi|oas|swagger/i.test(id))) {
     return {
       supported: false,
+      authority: "unsupported-format",
       evidence: [...evidence, "Only OpenAPI-typed API Hub specs are exportable in v1.0.0"]
     };
   }
-  return { supported: true, evidence };
+  return { supported: true, authority: "stored-authoritative", evidence };
 }
 var ApiHubProvider = class {
   constructor(client, scope) {
@@ -47302,40 +48087,146 @@ var ApiHubProvider = class {
     }
   }
   async listCandidates() {
+    const additional = this.scope.apiId ? parseApiHubAdditionalSpecName(this.scope.apiId) : void 0;
+    if (additional) {
+      if (additional.projectId !== this.scope.projectId) {
+        throw new Error("api-id must belong to the configured project-id API Hub instance");
+      }
+      const spec = await this.client.getApiHubSpec(additional.specName);
+      return this.candidatesForAdditionalVariant(spec, additional.contentType);
+    }
     const explicit = this.scope.apiId ? parseApiHubSpecName(this.scope.apiId) : void 0;
     if (explicit) {
       if (explicit.projectId !== this.scope.projectId) {
         throw new Error("api-id must belong to the configured project-id API Hub instance");
       }
       const spec = await this.client.getApiHubSpec(this.scope.apiId);
-      return [this.toCandidate(spec)];
+      return [this.toOriginalCandidate(spec)];
     }
     if (this.scope.apiId) return [];
     const specs = await this.client.listApiHubSpecs(this.scope.projectId);
-    return specs.map((spec) => this.toCandidate(spec));
+    const candidates = [];
+    for (const spec of specs) {
+      candidates.push(...await this.candidatesForSpec(spec));
+    }
+    return candidates;
   }
   async exportSpec(candidate) {
-    const contents = await this.client.getApiHubSpecContents(candidate.id);
+    const contentType = candidate.meta.specContentType;
+    const specName = candidate.meta.specName || candidate.id.split("#")[0];
+    if (contentType === "BOOSTED_SPEC_CONTENT" || contentType === "GATEWAY_OPEN_API_SPEC") {
+      const contents2 = await this.client.fetchApiHubAdditionalSpecContent(specName, contentType);
+      if (!contents2.contents) throw new Error(`API Hub additional ${contentType} is absent`);
+      return {
+        ...decodeSourceDocument(contents2.contents),
+        evidence: [
+          `Exported API Hub additional ${contentType} for ${shortName3(specName)}`,
+          "Google-generated additional content never replaces original stored :contents bytes"
+        ]
+      };
+    }
+    const contents = await this.client.getApiHubSpecContents(specName);
     let decoded;
-    const evidence = [`Exported API Hub spec contents for ${shortName3(candidate.id)}`];
-    if (contents.contents) decoded = decodeSourceDocument(contents.contents);
-    else {
+    const evidence = [`Exported API Hub spec contents for ${shortName3(specName)}`];
+    if (contents.contents) {
+      decoded = decodeSourceDocument(contents.contents);
+    } else {
       const gcs = parseGcsSpecLocation(candidate.meta.sourceUri ?? "");
-      if (!gcs) return { ...decodeSourceDocument(contents.contents), evidence };
+      if (!gcs) {
+        throw new Error("API Hub spec contents are absent and sourceUri is not a trusted gs:// object reference");
+      }
       decoded = decodeUtf8OpenApi(await this.client.getStorageObjectText(gcs.bucket, gcs.object));
       evidence.push("Fetched original spec bytes from registered Cloud Storage source_uri");
     }
-    return {
-      ...decoded,
-      evidence
-    };
+    return { ...decoded, evidence };
   }
-  toCandidate(spec) {
+  async candidatesForSpec(spec) {
+    const original = this.toOriginalCandidate(spec);
+    const result = [original];
+    if (!original.supported) return result;
+    const types3 = spec.additionalSpecContentTypes ?? [];
+    for (const type of types3) {
+      result.push(...await this.candidatesForAdditionalVariant(spec, type, { includeOriginalBytesGuard: true }));
+    }
+    return result;
+  }
+  /**
+   * Build only the additional-content candidate for an explicit `#VARIANT` selector.
+   * Never returns the stored original, so generated content cannot overwrite it.
+   */
+  async candidatesForAdditionalVariant(spec, type, options = {}) {
+    const originalSupport = supportEvidence3(spec);
+    if (!originalSupport.supported) {
+      return [
+        this.toAdditionalCandidate(spec, type, {
+          supported: false,
+          authority: "unsupported-format",
+          evidence: [...originalSupport.evidence, `API Hub additional ${type} requires an OpenAPI-typed base spec`]
+        })
+      ];
+    }
+    let originalContents;
+    if (options.includeOriginalBytesGuard) {
+      try {
+        originalContents = (await this.client.getApiHubSpecContents(spec.name)).contents;
+      } catch {
+        originalContents = void 0;
+      }
+    }
+    try {
+      const fetched = await this.client.fetchApiHubAdditionalSpecContent(spec.name, type);
+      if (!fetched.contents) {
+        return [
+          this.toAdditionalCandidate(spec, type, {
+            supported: false,
+            authority: "metadata-only",
+            evidence: [`API Hub additional ${type} is absent`]
+          })
+        ];
+      }
+      try {
+        decodeSourceDocument(fetched.contents);
+      } catch {
+        return [
+          this.toAdditionalCandidate(spec, type, {
+            supported: false,
+            authority: "unsupported-format",
+            evidence: [`API Hub additional ${type} is not valid OpenAPI`]
+          })
+        ];
+      }
+      if (originalContents !== void 0 && fetched.contents === originalContents) {
+        return [];
+      }
+      return [
+        this.toAdditionalCandidate(spec, type, {
+          supported: true,
+          authority: "google-generated",
+          evidence: [
+            `API Hub ${type} is a Google-generated OpenAPI representation`,
+            "Stored original :contents remains authoritative and ranks first"
+          ]
+        })
+      ];
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      return [
+        this.toAdditionalCandidate(spec, type, {
+          supported: false,
+          authority: "metadata-only",
+          evidence: [`API Hub additional ${type} fetch failed: ${detail}`]
+        })
+      ];
+    }
+  }
+  toOriginalCandidate(spec) {
     const support = supportEvidence3(spec);
-    return {
+    return withAuthority({
       id: spec.name,
       name: spec.displayName || spec.apiDisplayName || shortName3(spec.name),
       providerType: this.type,
+      sourceType: "api-hub-spec",
+      authority: support.authority,
       apiId: spec.name,
       projectId: this.scope.projectId,
       tags: spec.attributes,
@@ -47346,14 +48237,189 @@ var ApiHubProvider = class {
         versionId: spec.name.split("/versions/")[1]?.split("/")[0] ?? "",
         specId: shortName3(spec.name),
         createTime: spec.createTime ?? "",
-        sourceUri: spec.sourceUri ?? ""
+        sourceUri: spec.sourceUri ?? "",
+        specName: spec.name
       }
+    });
+  }
+  toAdditionalCandidate(spec, type, support) {
+    return withAuthority({
+      id: `${spec.name}#${type}`,
+      name: `${spec.displayName || spec.apiDisplayName || shortName3(spec.name)} (${type})`,
+      providerType: this.type,
+      sourceType: additionalSourceType(type),
+      authority: support.authority,
+      apiId: `${spec.name}#${type}`,
+      projectId: this.scope.projectId,
+      tags: spec.attributes,
+      supported: support.supported,
+      evidence: support.evidence,
+      meta: {
+        apiName: spec.name.split("/versions/")[0] ?? spec.name,
+        versionId: spec.name.split("/versions/")[1]?.split("/")[0] ?? "",
+        specId: shortName3(spec.name),
+        createTime: spec.createTime ?? "",
+        sourceUri: spec.sourceUri ?? "",
+        specName: spec.name,
+        specContentType: type
+      }
+    });
+  }
+};
+
+// src/lib/providers/apigee-registry.ts
+var import_node_zlib3 = require("node:zlib");
+var import_node_util7 = require("node:util");
+var SPEC_PATTERN2 = /^projects\/([^/]+)\/locations\/([^/]+)\/apis\/([^/]+)\/versions\/([^/]+)\/specs\/([^/]+)$/;
+function parseApigeeRegistrySpecName(value) {
+  const match = SPEC_PATTERN2.exec(value);
+  return match ? { projectId: match[1], location: match[2], apiName: match[3], versionId: match[4], specId: match[5] } : void 0;
+}
+function shortName4(value) {
+  return value.split("/").pop() ?? value;
+}
+function mimeBase(mimeType) {
+  return (mimeType ?? "").split(";")[0]?.trim().toLowerCase() ?? "";
+}
+function isNonOpenApiMime(mimeType) {
+  const base = mimeBase(mimeType);
+  if (!base) return false;
+  return /(?:^|[+/.-])(?:proto|protobuf|graphql|wsdl|asyncapi)(?:$|[+/.-])/.test(base) || base.includes("vnd.apigee.proto") || base.includes("vnd.apigee.graphql");
+}
+function isGzipMime(mimeType) {
+  const base = mimeBase(mimeType);
+  return base.endsWith("+gzip") || base === "application/gzip" || base === "application/x-gzip";
+}
+function supportFromMime(spec) {
+  const evidence = [
+    `Legacy Apigee Registry spec ${shortName4(spec.name)} declares mimeType ${spec.mimeType ?? "unspecified"} (no-longer-supported surface; not a replacement for API Hub)`
+  ];
+  if (isNonOpenApiMime(spec.mimeType)) {
+    return {
+      supported: false,
+      authority: "unsupported-format",
+      evidence: [...evidence, "Only OpenAPI/Swagger Apigee Registry specs are exportable"]
     };
+  }
+  return { supported: true, authority: "stored-authoritative", evidence };
+}
+function tryDecodeOpenApiBytes(bytes) {
+  try {
+    return decodeUtf8OpenApi(new import_node_util7.TextDecoder("utf-8", { fatal: true }).decode(bytes));
+  } catch {
+    return void 0;
+  }
+}
+function decodeRegistryContents(bytes, mimeType) {
+  if (bytes.byteLength >= 2 && bytes[0] === 31 && bytes[1] === 138) {
+    let inflated;
+    try {
+      inflated = (0, import_node_zlib3.gunzipSync)(bytes, { maxOutputLength: 10 * 1024 * 1024 });
+    } catch {
+      throw new Error("Legacy Apigee Registry spec contents are gzip-compressed and could not be inflated within bounds");
+    }
+    const decoded2 = tryDecodeOpenApiBytes(inflated);
+    if (!decoded2) throw new Error("Legacy Apigee Registry gzip contents are not a valid OpenAPI document");
+    return decoded2;
+  }
+  if (bytes.byteLength >= 4 && bytes.readUInt32LE(0) === 67324752) {
+    const found = [];
+    for (const [path8, entry] of inflateZip(bytes)) {
+      if (path8.includes("\0") || path8.startsWith("/") || path8.includes("..") || /^[A-Za-z]:/.test(path8)) {
+        throw new Error("Legacy Apigee Registry multi-file bundle contains an unsafe entry name");
+      }
+      if (!/\.(?:json|ya?ml)$/i.test(path8)) continue;
+      const decoded2 = tryDecodeOpenApiBytes(entry);
+      if (decoded2) found.push(decoded2);
+    }
+    if (found.length === 1) return found[0];
+    if (found.length === 0) {
+      throw new Error("Legacy Apigee Registry multi-file bundle has no OpenAPI document");
+    }
+    throw new Error(`Legacy Apigee Registry multi-file bundle has ${found.length} OpenAPI documents; refusing to merge or guess`);
+  }
+  if (isGzipMime(mimeType)) {
+    throw new Error("Legacy Apigee Registry spec mimeType indicates compression that remains unsupported without a single OpenAPI document");
+  }
+  if (isNonOpenApiMime(mimeType)) {
+    throw new Error("Legacy Apigee Registry spec contents are a non-OpenAPI mime type");
+  }
+  const decoded = tryDecodeOpenApiBytes(bytes);
+  if (!decoded) throw new Error("Legacy Apigee Registry spec contents are not a valid OpenAPI document");
+  return decoded;
+}
+var ApigeeRegistryProvider = class {
+  constructor(client, scope) {
+    this.client = client;
+    this.scope = scope;
+  }
+  client;
+  scope;
+  type = "apigee-registry";
+  async probe() {
+    try {
+      await this.client.probeApigeeRegistry(this.scope.projectId);
+      return "available";
+    } catch (error) {
+      return probeFailureStatus(error);
+    }
+  }
+  async listCandidates() {
+    const explicit = this.scope.apiId ? parseApigeeRegistrySpecName(this.scope.apiId) : void 0;
+    if (explicit) {
+      if (explicit.projectId !== this.scope.projectId) {
+        throw new Error("api-id must belong to the configured project-id Apigee Registry instance");
+      }
+      const spec = await this.client.getApigeeRegistrySpec(this.scope.apiId);
+      return [this.toCandidate(spec)];
+    }
+    if (this.scope.apiId) return [];
+    const specs = await this.client.listApigeeRegistrySpecs(this.scope.projectId);
+    return specs.map((spec) => this.toCandidate(spec));
+  }
+  async exportSpec(candidate) {
+    const parsed = parseApigeeRegistrySpecName(candidate.id);
+    if (!parsed || parsed.projectId !== this.scope.projectId) {
+      throw new Error("Apigee Registry candidate has an invalid spec resource name");
+    }
+    const { bytes, mimeType } = await this.client.getApigeeRegistrySpecContents(candidate.id);
+    const decoded = decodeRegistryContents(bytes, mimeType ?? candidate.meta.mimeType);
+    return {
+      ...decoded,
+      evidence: [
+        `Exported legacy Apigee Registry spec contents for ${shortName4(candidate.id)}`,
+        "Legacy Apigee Registry is no longer supported; prefer API Hub for new registrations"
+      ]
+    };
+  }
+  toCandidate(spec) {
+    const support = supportFromMime(spec);
+    const sourceType = "apigee-registry-spec";
+    return withAuthority({
+      id: spec.name,
+      name: spec.filename || shortName4(spec.name),
+      providerType: this.type,
+      sourceType,
+      authority: support.authority,
+      apiId: spec.name,
+      projectId: this.scope.projectId,
+      tags: spec.labels,
+      supported: support.supported,
+      evidence: support.evidence,
+      meta: {
+        location: spec.name.split("/")[3] ?? "",
+        apiName: spec.name.split("/apis/")[1]?.split("/")[0] ?? "",
+        versionId: spec.name.split("/versions/")[1]?.split("/")[0] ?? "",
+        specId: shortName4(spec.name),
+        mimeType: spec.mimeType ?? "",
+        createTime: spec.createTime ?? ""
+      }
+    });
   }
 };
 
 // src/lib/providers/app-integration.ts
-function shortName4(value) {
+function shortName5(value) {
   return value.split("/").pop() ?? value;
 }
 var AppIntegrationProvider = class {
@@ -47395,29 +48461,33 @@ var AppIntegrationProvider = class {
     };
   }
   toCandidate(trigger) {
-    return {
+    const hasTriggers = trigger.triggerIds.length > 0;
+    return withAuthority({
       id: trigger.integrationResource,
-      name: shortName4(trigger.integrationResource),
+      name: shortName5(trigger.integrationResource),
       providerType: this.type,
+      sourceType: "app-integration-trigger",
+      authority: hasTriggers ? "google-generated" : "metadata-only",
       projectId: this.scope.projectId,
       tags: {},
-      supported: trigger.triggerIds.length > 0,
+      supported: hasTriggers,
       evidence: [
-        `Application Integration ${shortName4(trigger.integrationResource)} exposes ${trigger.triggerIds.length} API trigger${trigger.triggerIds.length === 1 ? "" : "s"} in ${trigger.location}`
+        `Application Integration ${shortName5(trigger.integrationResource)} exposes ${trigger.triggerIds.length} API trigger${trigger.triggerIds.length === 1 ? "" : "s"} in ${trigger.location}`,
+        ...hasTriggers ? ["Contract is generated by Google generateOpenApiSpec"] : []
       ],
       meta: {
         location: trigger.location,
         triggerIds: trigger.triggerIds.join("\0"),
         updateTime: trigger.updateTime ?? ""
       }
-    };
+    });
   }
 };
 
 // src/lib/providers/apigee-portal.ts
-var PATTERN2 = /^organizations\/([^/]+)\/sites\/([^/]+)\/apidocs\/([^/]+)$/;
+var PATTERN = /^organizations\/([^/]+)\/sites\/([^/]+)\/apidocs\/([^/]+)$/;
 function parseApigeePortalApidocName(value) {
-  const m2 = PATTERN2.exec(value);
+  const m2 = PATTERN.exec(value);
   return m2 ? { org: m2[1], siteId: m2[2], apidocId: m2[3] } : void 0;
 }
 var ApigeePortalProvider = class {
@@ -47439,36 +48509,63 @@ var ApigeePortalProvider = class {
   async listCandidates() {
     const explicit = this.scope.apiId ? parseApigeePortalApidocName(this.scope.apiId) : void 0;
     if (this.scope.apiId && !explicit) return [];
-    if (explicit?.org !== void 0 && explicit.org !== this.scope.projectId) throw new Error("api-id Apigee portal document does not belong to the configured project-id org");
+    if (explicit?.org !== void 0 && explicit.org !== this.scope.projectId) {
+      throw new Error("api-id Apigee portal document does not belong to the configured project-id org");
+    }
     const docs = [];
     if (explicit) docs.push({ siteId: explicit.siteId, doc: { id: explicit.apidocId } });
-    else for (const site of await this.client.listApigeePortalSites(this.scope.projectId)) for (const doc of await this.client.listApigeePortalApidocs(this.scope.projectId, site.id)) docs.push({ siteId: site.id, doc });
+    else {
+      for (const site of await this.client.listApigeePortalSites(this.scope.projectId)) {
+        for (const doc of await this.client.listApigeePortalApidocs(this.scope.projectId, site.id)) {
+          docs.push({ siteId: site.id, doc });
+        }
+      }
+    }
     return Promise.all(docs.map(async ({ siteId, doc }) => {
       const id = `organizations/${this.scope.projectId}/sites/${siteId}/apidocs/${doc.id}`;
       const found = await this.client.getApigeePortalDocumentation(this.scope.projectId, siteId, doc.id);
       let supported = false;
-      if (found.type === "oasDocumentation" && found.contents?.trim()) try {
-        decodeUtf8OpenApi(found.contents);
-        supported = true;
-      } catch {
-        supported = false;
+      let authority = found.type === "oasDocumentation" ? "metadata-only" : "unsupported-format";
+      if (found.type === "oasDocumentation" && found.contents?.trim()) {
+        try {
+          decodeUtf8OpenApi(found.contents);
+          supported = true;
+          authority = "stored-authoritative";
+        } catch {
+          supported = false;
+          authority = "metadata-only";
+        }
       }
-      return { id, apiId: id, name: doc.title || doc.id, providerType: this.type, projectId: this.scope.projectId, tags: {}, supported, evidence: [`Apigee portal documentation type: ${found.type}`], meta: { siteId, apidocId: doc.id, documentationType: found.type } };
+      return withAuthority({
+        id,
+        apiId: id,
+        name: doc.title || doc.id,
+        providerType: this.type,
+        sourceType: "apigee-portal-doc",
+        authority,
+        projectId: this.scope.projectId,
+        tags: {},
+        supported,
+        evidence: [`Apigee portal documentation type: ${found.type}`],
+        meta: { siteId, apidocId: doc.id, documentationType: found.type }
+      });
     }));
   }
   async exportSpec(candidate) {
     const p = parseApigeePortalApidocName(candidate.id);
     if (!p || p.org !== this.scope.projectId) throw new Error("Invalid Apigee portal document resource name");
     const doc = await this.client.getApigeePortalDocumentation(p.org, p.siteId, p.apidocId);
-    if (doc.type !== "oasDocumentation" || !doc.contents?.trim()) throw new Error(`Apigee portal documentation type ${doc.type} is unsupported`);
+    if (doc.type !== "oasDocumentation" || !doc.contents?.trim()) {
+      throw new Error(`Apigee portal documentation type ${doc.type} is unsupported`);
+    }
     return { ...decodeUtf8OpenApi(doc.contents), evidence: ["Exported original Apigee portal OpenAPI documentation"] };
   }
 };
 
 // src/lib/providers/dialogflow-tools.ts
-var PATTERN3 = /^projects\/([^/]+)\/locations\/([^/]+)\/agents\/([^/]+)\/tools\/([^/]+)$/;
+var PATTERN2 = /^projects\/([^/]+)\/locations\/([^/]+)\/agents\/([^/]+)\/tools\/([^/]+)$/;
 function parseDialogflowToolName(value) {
-  const match = PATTERN3.exec(value);
+  const match = PATTERN2.exec(value);
   return match ? { projectId: match[1], location: match[2], agentId: match[3], toolId: match[4] } : void 0;
 }
 var DialogflowToolsProvider = class {
@@ -47497,12 +48594,28 @@ var DialogflowToolsProvider = class {
     return tools.map((tool) => {
       const schema = tool.textSchema?.trim();
       let supported = Boolean(schema);
-      if (schema) try {
-        decodeUtf8OpenApi(schema);
-      } catch {
-        supported = false;
+      let authority = schema ? "stored-authoritative" : "metadata-only";
+      if (schema) {
+        try {
+          decodeUtf8OpenApi(schema);
+        } catch {
+          supported = false;
+          authority = "metadata-only";
+        }
       }
-      return { id: tool.name, apiId: tool.name, name: tool.displayName || tool.name.split("/").pop(), providerType: this.type, projectId: this.scope.projectId, tags: {}, supported, evidence: [schema ? "Dialogflow tool stores an OpenAPI text schema" : "Dialogflow tool has no OpenAPI text schema; only OPEN_API_TOOL tools are exportable"], meta: { textSchema: schema ?? "" } };
+      return withAuthority({
+        id: tool.name,
+        apiId: tool.name,
+        name: tool.displayName || tool.name.split("/").pop(),
+        providerType: this.type,
+        sourceType: "dialogflow-tool-schema",
+        authority,
+        projectId: this.scope.projectId,
+        tags: {},
+        supported,
+        evidence: [schema ? "Dialogflow tool stores an OpenAPI text schema" : "Dialogflow tool has no OpenAPI text schema; only OPEN_API_TOOL tools are exportable"],
+        meta: { textSchema: schema ?? "" }
+      });
     });
   }
   async exportSpec(candidate) {
@@ -47511,9 +48624,9 @@ var DialogflowToolsProvider = class {
 };
 
 // src/lib/providers/vertex-extensions.ts
-var PATTERN4 = /^projects\/([^/]+)\/locations\/([^/]+)\/extensions\/([^/]+)$/;
+var PATTERN3 = /^projects\/([^/]+)\/locations\/([^/]+)\/extensions\/([^/]+)$/;
 function parseVertexExtensionName(value) {
-  const match = PATTERN4.exec(value);
+  const match = PATTERN3.exec(value);
   return match ? { projectId: match[1], location: match[2], extensionId: match[3] } : void 0;
 }
 var VertexExtensionsProvider = class {
@@ -47569,13 +48682,32 @@ var VertexExtensionsProvider = class {
   toCandidate(extension) {
     const count = Number(Boolean(extension.openApiYaml?.trim())) + Number(Boolean(extension.openApiGcsUri));
     let supported = count === 1;
-    if (extension.openApiYaml?.trim()) try {
-      decodeUtf8OpenApi(extension.openApiYaml);
-    } catch {
-      supported = false;
+    let authority = count === 1 ? "stored-authoritative" : "metadata-only";
+    if (extension.openApiYaml?.trim()) {
+      try {
+        decodeUtf8OpenApi(extension.openApiYaml);
+      } catch {
+        supported = false;
+        authority = "metadata-only";
+      }
     }
-    if (extension.openApiGcsUri && !parseGcsSpecLocation(extension.openApiGcsUri)) supported = false;
-    return { id: extension.name, apiId: extension.name, name: extension.displayName || extension.name.split("/").pop(), providerType: this.type, projectId: this.scope.projectId, tags: {}, supported, evidence: [count === 0 ? "Vertex extension manifest has no OpenAPI source" : count > 1 ? "Vertex extension manifest has multiple OpenAPI sources" : "Vertex extension manifest has one OpenAPI source"], meta: { openApiYaml: extension.openApiYaml ?? "", openApiGcsUri: extension.openApiGcsUri ?? "" } };
+    if (extension.openApiGcsUri && !parseGcsSpecLocation(extension.openApiGcsUri)) {
+      supported = false;
+      authority = "unsupported-format";
+    }
+    return withAuthority({
+      id: extension.name,
+      apiId: extension.name,
+      name: extension.displayName || extension.name.split("/").pop(),
+      providerType: this.type,
+      sourceType: "vertex-extension-manifest",
+      authority,
+      projectId: this.scope.projectId,
+      tags: {},
+      supported,
+      evidence: [count === 0 ? "Vertex extension manifest has no OpenAPI source" : count > 1 ? "Vertex extension manifest has multiple OpenAPI sources" : "Vertex extension manifest has one OpenAPI source"],
+      meta: { openApiYaml: extension.openApiYaml ?? "", openApiGcsUri: extension.openApiGcsUri ?? "" }
+    });
   }
   async exportSpec(candidate) {
     let text = candidate.meta.openApiYaml ?? "";
@@ -47630,23 +48762,35 @@ var AgentEnginesProvider = class {
   }
   toCandidate(engine) {
     const document2 = JSON.stringify(assembleAgentEngineOpenApi(engine));
-    let supported = true;
-    const evidence = ["OpenAPI assembled from Agent Engine classMethods declarations; confidence is lower than stored specification sources"];
+    const evidence = [
+      "OpenAPI assembled from Agent Engine classMethods declarations; local-derived and manual-review only",
+      "Authority local-derived cannot auto-resolve or auto-export"
+    ];
     try {
       for (const declaration of engine.classMethods) {
         if (typeof declaration.name !== "string") throw new Error("Invalid classMethod declaration");
       }
       const unsupportedModes = unsupportedAgentEngineModes(engine);
       if (unsupportedModes.length > 0) {
-        supported = false;
         evidence.push(`Unsupported Agent Engine api_mode(s) ${unsupportedModes.join(", ")}; manual review`);
       }
       parseAndValidateOpenApi(document2);
     } catch {
-      supported = false;
       evidence.push("Generated spec has no operations or is invalid; manual review");
     }
-    return { id: engine.name, apiId: engine.name, name: engine.displayName || engine.name.split("/").pop(), providerType: this.type, sourceType: "agent-engine-generated-spec", projectId: this.scope.projectId, tags: {}, supported, evidence, meta: { generatedOpenApi: document2 } };
+    return withAuthority({
+      id: engine.name,
+      apiId: engine.name,
+      name: engine.displayName || engine.name.split("/").pop(),
+      providerType: this.type,
+      sourceType: "agent-engine-generated-spec",
+      authority: "local-derived",
+      projectId: this.scope.projectId,
+      tags: {},
+      supported: false,
+      evidence,
+      meta: { generatedOpenApi: document2 }
+    });
   }
   async exportSpec(candidate) {
     return { ...decodeUtf8OpenApi(candidate.meta.generatedOpenApi ?? ""), evidence: ["OpenAPI assembled from Agent Engine classMethods declarations"] };
@@ -47718,7 +48862,7 @@ function isRecord(value) {
 }
 
 // src/lib/providers/ces-toolsets.ts
-var PATTERN5 = /^projects\/([^/]+)\/locations\/global\/apps\/[^/]+\/(?:tools\/[^/]+|toolsets\/[^/]+(?:\/tools\/[^/]+)?)$/;
+var PATTERN4 = /^projects\/([^/]+)\/locations\/global\/apps\/[^/]+\/(?:tools\/[^/]+|toolsets\/[^/]+(?:\/tools\/[^/]+)?)$/;
 var CesToolsetsProvider = class {
   constructor(client, scope) {
     this.client = client;
@@ -47736,7 +48880,7 @@ var CesToolsetsProvider = class {
     }
   }
   async listCandidates() {
-    const parsed = this.scope.apiId ? PATTERN5.exec(this.scope.apiId) : void 0;
+    const parsed = this.scope.apiId ? PATTERN4.exec(this.scope.apiId) : void 0;
     if (this.scope.apiId && !parsed) return [];
     if (parsed?.[1] !== void 0 && parsed[1] !== this.scope.projectId) throw new Error("api-id CES resource does not belong to configured project-id");
     let toolsets = await this.client.listCesToolsets(this.scope.projectId);
@@ -47749,12 +48893,28 @@ var CesToolsetsProvider = class {
     const standaloneTool = /\/apps\/[^/]+\/tools\/[^/]+$/.test(toolset.name);
     const resourceKind = toolsetScopedTool ? "toolset-scoped tool" : standaloneTool ? "tool" : "toolset";
     let supported = Boolean(schema);
-    if (schema) try {
-      decodeUtf8OpenApi(schema);
-    } catch {
-      supported = false;
+    let authority = schema ? "stored-authoritative" : "metadata-only";
+    if (schema) {
+      try {
+        decodeUtf8OpenApi(schema);
+      } catch {
+        supported = false;
+        authority = "metadata-only";
+      }
     }
-    return { id: toolset.name, apiId: toolset.name, name: toolset.displayName || toolset.name.split("/").pop(), providerType: this.type, sourceType: standaloneTool ? "ces-tool-schema" : "ces-toolset-schema", projectId: this.scope.projectId, tags: {}, supported, evidence: [schema ? `CES ${resourceKind} stores an OpenAPI schema` : `CES ${resourceKind} has no OpenAPI schema`], meta: { openApiSchema: schema ?? "", resourceKind } };
+    return withAuthority({
+      id: toolset.name,
+      apiId: toolset.name,
+      name: toolset.displayName || toolset.name.split("/").pop(),
+      providerType: this.type,
+      sourceType: standaloneTool ? "ces-tool-schema" : "ces-toolset-schema",
+      authority,
+      projectId: this.scope.projectId,
+      tags: {},
+      supported,
+      evidence: [schema ? `CES ${resourceKind} stores an OpenAPI schema` : `CES ${resourceKind} has no OpenAPI schema`],
+      meta: { openApiSchema: schema ?? "", resourceKind }
+    });
   }
   async exportSpec(candidate) {
     return { ...decodeUtf8OpenApi(candidate.meta.openApiSchema ?? ""), evidence: [`Exported original CES ${candidate.meta.resourceKind ?? "toolset"} OpenAPI schema`] };
@@ -47870,18 +49030,28 @@ function resolveInputs(env = process.env) {
     const gateway = parseApiGatewayConfigName(apiId);
     const endpoints = parseEndpointConfigName(apiId);
     const apigee = parseApigeeRevisionName(apiId);
+    const apigeeArchive = parseApigeeArchiveDeploymentName(apiId);
     const apiHub = parseApiHubSpecName(apiId);
+    const apiHubAdditional = parseApiHubAdditionalSpecName(apiId);
+    const apigeeRegistry = parseApigeeRegistrySpecName(apiId);
     const portal = parseApigeePortalApidocName(apiId);
     const dialogflow = parseDialogflowToolName(apiId);
     const vertex = parseVertexExtensionName(apiId);
     const ces = /^projects\/([^/]+)\/locations\/global\/apps\/[^/]+\/(?:tools\/[^/]+|toolsets\/[^/]+(?:\/tools\/[^/]+)?)$/.exec(apiId);
-    if (!gateway && !endpoints && !apigee && !apiHub && !portal && !dialogflow && !vertex && !ces) {
-      throw new Error("api-id must be a full API Gateway config, Cloud Endpoints config, Apigee proxy revision, API Hub spec, Apigee portal apidoc, Vertex extension, Dialogflow tool, or CES tool/toolset resource name");
+    if (!gateway && !endpoints && !apigee && !apigeeArchive && !apiHub && !apiHubAdditional && !apigeeRegistry && !portal && !dialogflow && !vertex && !ces) {
+      throw new Error("api-id must be a full API Gateway config, Cloud Endpoints config, Apigee proxy revision, Apigee archive deployment, API Hub spec, API Hub additional spec variant, legacy Apigee Registry spec, Apigee portal apidoc, Vertex extension, Dialogflow tool, or CES tool/toolset resource name");
     }
     if (apiHub && apiHub.projectId !== projectId) {
       throw new Error("api-id must belong to the configured project-id API Hub instance");
     }
+    if (apiHubAdditional && apiHubAdditional.projectId !== projectId) {
+      throw new Error("api-id must belong to the configured project-id API Hub instance");
+    }
+    if (apigeeRegistry && apigeeRegistry.projectId !== projectId) {
+      throw new Error("api-id must belong to the configured project-id Apigee Registry instance");
+    }
     if (apigee && apigee.org !== projectId) throw new Error("api-id must belong to the configured project-id Apigee org");
+    if (apigeeArchive && apigeeArchive.org !== projectId) throw new Error("api-id must belong to the configured project-id Apigee org");
     if (portal && portal.org !== projectId) throw new Error("api-id must belong to the configured project-id Apigee portal org");
     if (dialogflow && dialogflow.projectId !== projectId) throw new Error("api-id must belong to the configured project-id Dialogflow agent");
     if (vertex && vertex.projectId !== projectId) throw new Error("api-id must belong to the configured project-id Vertex extension registry");
@@ -47962,6 +49132,7 @@ function sourceTypeForProvider(provider, candidateSourceType) {
   if (provider === "cloud-endpoints") return "cloud-endpoints-config";
   if (provider === "apigee") return "apigee-proxy";
   if (provider === "api-hub") return "api-hub-spec";
+  if (provider === "apigee-registry") return "apigee-registry-spec";
   if (provider === "app-integration") return "app-integration-trigger";
   if (provider === "connectors-custom") return "connectors-custom-spec";
   if (provider === "apigee-portal") return "apigee-portal-doc";
@@ -48007,16 +49178,22 @@ async function writeSpecExport(inputs, serviceName, exportResult, writeSpecFile)
   return written;
 }
 function toCandidateInput(candidate) {
+  const authority = resolveCandidateAuthority(candidate);
   return {
     id: candidate.id,
     name: candidate.name,
     providerType: candidate.providerType,
     sourceType: candidate.sourceType,
+    authority,
     apiId: candidate.apiId,
     tags: candidate.tags,
-    supported: candidate.supported,
+    supported: candidate.supported && isResolvableAuthority(authority),
     evidence: candidate.evidence
   };
+}
+function isExportableCandidate(candidate) {
+  const authority = resolveCandidateAuthority(candidate);
+  return candidate.supported && isResolvableAuthority(authority);
 }
 async function probeProviders(providers, core) {
   const available = [];
@@ -48047,6 +49224,7 @@ function buildProviders(inputs, dependencies, iacScan) {
     }),
     new ApigeeProvider(dependencies.client, { projectId: inputs.projectId, apiId: inputs.apiId }),
     new ApiHubProvider(dependencies.client, { projectId: inputs.projectId, apiId: inputs.apiId }),
+    new ApigeeRegistryProvider(dependencies.client, { projectId: inputs.projectId, apiId: inputs.apiId }),
     new AppIntegrationProvider(dependencies.client, { projectId: inputs.projectId, apiId: inputs.apiId }),
     new ConnectorsCustomProvider(dependencies.client, { projectId: inputs.projectId, apiId: inputs.apiId }),
     new ApigeePortalProvider(dependencies.client, { projectId: inputs.projectId, apiId: inputs.apiId }),
@@ -48133,6 +49311,7 @@ async function runResolveOne(inputs, dependencies) {
       sourceType: "iac-embedded",
       serviceName,
       confidence: 100,
+      authority: "stored-authoritative",
       specPath: written.specPath,
       providerType: "iac-local",
       specFormat: written.specFormat,
@@ -48190,15 +49369,20 @@ async function runResolveOne(inputs, dependencies) {
   if (inputs.apiId) {
     const requestedApiId = inputs.apiId;
     const target = enumerated.find((candidate) => candidate.apiId === requestedApiId || candidate.id === requestedApiId);
-    if (target && !target.supported) {
+    if (target && !isExportableCandidate(target)) {
+      const authority = resolveCandidateAuthority(target);
       const resolution3 = {
         status: "unresolved",
         sourceType: "manual-review",
         serviceName: resolveServiceName(target, inputs.serviceMapping),
         confidence: 100,
+        authority,
         providerProbes: probes,
         rankedCandidates: toAmbiguousViews(rankServiceCandidates([toCandidateInput(target)], signals)),
-        evidence: target.evidence
+        evidence: [
+          ...target.evidence,
+          `Authority ${authority} cannot auto-resolve even with explicit api-id`
+        ]
       };
       return {
         mode: inputs.mode,
@@ -48218,6 +49402,7 @@ async function runResolveOne(inputs, dependencies) {
           sourceType: sourceTypeForProvider(target.providerType, target.sourceType),
           serviceName,
           confidence: 100,
+          authority: resolveCandidateAuthority(target),
           specPath: written.specPath,
           ...target.apiId ? { apiId: target.apiId } : {},
           providerType: target.providerType,
@@ -48289,10 +49474,10 @@ async function runResolveOne(inputs, dependencies) {
     }
   }
   const narrowingMetadata = narrowing ? { tier: narrowing.tier, mode: narrowing.mode, droppedCount: narrowing.droppedCount } : void 0;
-  if (best && !best.ambiguous && !narrowing?.conflict && best.supported && best.confidence >= MINIMUM_RESOLVED_CONFIDENCE2) {
+  if (best && !best.ambiguous && !narrowing?.conflict && best.supported && isResolvableAuthority(best.authority) && best.confidence >= MINIMUM_RESOLVED_CONFIDENCE2) {
     const target = partitioned.find((candidate) => candidate.id === best?.resourceId);
     const provider = target ? availableProviders.find((p) => p.type === target.providerType) : void 0;
-    if (target && provider) {
+    if (target && provider && isExportableCandidate(target)) {
       try {
         const exportResult = await provider.exportSpec(target);
         const serviceName = resolveServiceName(target, inputs.serviceMapping);
@@ -48302,6 +49487,7 @@ async function runResolveOne(inputs, dependencies) {
           sourceType: sourceTypeForProvider(target.providerType, target.sourceType),
           serviceName,
           confidence: best.confidence,
+          authority: best.authority,
           specPath: written.specPath,
           ...target.apiId ? { apiId: target.apiId } : {},
           providerType: target.providerType,
@@ -48334,6 +49520,7 @@ async function runResolveOne(inputs, dependencies) {
     sourceType: "manual-review",
     serviceName: inputs.expectedServiceName ?? best?.serviceName ?? "unknown-service",
     confidence: best?.confidence ?? 0,
+    ...best ? { authority: best.authority } : {},
     ...narrowingMetadata ? { narrowing: narrowingMetadata } : {},
     providerProbes: probes,
     rankedCandidates: toAmbiguousViews(ranked.slice(0, inputs.maxCandidates)),
@@ -48384,7 +49571,7 @@ async function runDiscoverMany(inputs, dependencies) {
   const discovered = [];
   const writtenPaths = /* @__PURE__ */ new Map();
   for (const candidate of capped) {
-    if (!candidate.supported) {
+    if (!isExportableCandidate(candidate)) {
       summary.skipped += 1;
       continue;
     }
@@ -48409,6 +49596,7 @@ async function runDiscoverMany(inputs, dependencies) {
         specPath: written.specPath,
         ...candidate.apiId ? { apiId: candidate.apiId } : {},
         providerType: candidate.providerType,
+        authority: resolveCandidateAuthority(candidate),
         specFormat: written.specFormat,
         ...written.derived ? {
           derivedOpenApiPath: written.derived.path,

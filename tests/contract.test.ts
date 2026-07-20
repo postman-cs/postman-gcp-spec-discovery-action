@@ -89,7 +89,10 @@ describe('action contract', () => {
       'projects/sample-project-123/locations/global/apis/payments/configs/v1',
       'services/payments.endpoints.sample-project-123.cloud.goog/configs/2026-01-01r0',
       'organizations/sample-project-123/apis/payments/revisions/3',
+      'organizations/sample-project-123/environments/test/archiveDeployments/archive-1',
       'projects/sample-project-123/locations/global/apis/payments/versions/v1/specs/main',
+      'projects/sample-project-123/locations/global/apis/payments/versions/v1/specs/main#BOOSTED_SPEC_CONTENT',
+      'projects/sample-project-123/locations/global/apis/payments/versions/v1/specs/main#GATEWAY_OPEN_API_SPEC',
       'organizations/sample-project-123/sites/dev-portal/apidocs/12345',
       'projects/sample-project-123/locations/global/agents/support/tools/lookup',
       'projects/sample-project-123/locations/us-central1/extensions/ext-1',
@@ -139,6 +142,7 @@ describe('action contract', () => {
           serviceName: 'payments',
           specPath: 'discovered-specs/payments/index.json',
           providerType: 'api-gateway',
+          authority: 'stored-authoritative',
           specFormat: 'openapi-json'
         }
       ],
@@ -169,8 +173,8 @@ describe('action contract', () => {
         serviceName: 'unknown-service',
         confidence: 30,
         rankedCandidates: [
-          { rank: 1, serviceName: 'a', resourceId: 'projects/p/locations/global/apis/a/configs/v1', providerType: 'api-gateway', confidence: 30, supported: true, evidence: [] },
-          { rank: 2, serviceName: 'b', resourceId: 'projects/p/locations/global/apis/b/configs/v1', providerType: 'api-gateway', confidence: 30, supported: true, evidence: [] }
+          { rank: 1, serviceName: 'a', resourceId: 'projects/p/locations/global/apis/a/configs/v1', providerType: 'api-gateway', authority: 'stored-authoritative', confidence: 30, supported: true, evidence: [] },
+          { rank: 2, serviceName: 'b', resourceId: 'projects/p/locations/global/apis/b/configs/v1', providerType: 'api-gateway', authority: 'stored-authoritative', confidence: 30, supported: true, evidence: [] }
         ],
         evidence: []
       }

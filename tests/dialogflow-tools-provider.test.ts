@@ -15,7 +15,12 @@ describe('Dialogflow tools provider', () => {
   it('lists and exports tools with openApiSpec.textSchema', async () => {
     const provider = new DialogflowToolsProvider(client(), { projectId: 'sample-project-123' });
     const candidate = (await provider.listCandidates())[0]!;
-    expect(candidate).toMatchObject({ id: ID, supported: true, providerType: 'dialogflow-tools' });
+    expect(candidate).toMatchObject({
+      id: ID,
+      supported: true,
+      providerType: 'dialogflow-tools',
+      authority: 'stored-authoritative'
+    });
     await expect(provider.exportSpec(candidate)).resolves.toMatchObject({ content: OAS, format: 'openapi-yaml' });
   });
 
@@ -23,8 +28,13 @@ describe('Dialogflow tools provider', () => {
     const datastoreId = `${AGENT}/tools/datastore`;
     const provider = new DialogflowToolsProvider(client({ listDialogflowTools: vi.fn(async () => [{ name: ID, textSchema: OAS }, { name: datastoreId }]) }), { projectId: 'sample-project-123' });
     await expect(provider.listCandidates()).resolves.toEqual([
-      expect.objectContaining({ id: ID, supported: true }),
-      expect.objectContaining({ id: datastoreId, supported: false, evidence: ['Dialogflow tool has no OpenAPI text schema; only OPEN_API_TOOL tools are exportable'] })
+      expect.objectContaining({ id: ID, supported: true, authority: 'stored-authoritative' }),
+      expect.objectContaining({
+        id: datastoreId,
+        supported: false,
+        authority: 'metadata-only',
+        evidence: ['Dialogflow tool has no OpenAPI text schema; only OPEN_API_TOOL tools are exportable']
+      })
     ]);
   });
 

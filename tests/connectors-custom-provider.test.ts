@@ -43,7 +43,12 @@ describe('Integration Connectors custom connector provider', () => {
     const provider = new ConnectorsCustomProvider(client({ getStorageObjectText: getObject }), { projectId: 'sample-project-123' });
     const candidates = await provider.listCandidates();
     expect(candidates).toHaveLength(1);
-    expect(candidates[0]).toMatchObject({ providerType: 'connectors-custom', supported: true });
+    expect(candidates[0]).toMatchObject({
+      providerType: 'connectors-custom',
+      sourceType: 'connectors-custom-spec',
+      authority: 'stored-authoritative',
+      supported: true
+    });
     expect(candidates[0]?.evidence.join(' ')).toContain('[gs-object]');
     expect(candidates[0]?.evidence.join(' ')).not.toContain('gs://');
     await expect(provider.exportSpec(candidates[0]!)).resolves.toMatchObject({ format: 'openapi-json', filename: 'index.json', evidence: ['Fetched custom connector source spec from [gs-object]'] });
@@ -60,33 +65,31 @@ describe('Integration Connectors custom connector provider', () => {
       { projectId: 'sample-project-123' }
     );
     const candidates = await provider.listCandidates();
-    expect(candidates[0]).toMatchObject({ supported: false });
+    expect(candidates[0]).toMatchObject({
+      supported: false,
+      authority: 'unsupported-format',
+      sourceType: 'connectors-custom-spec'
+    });
     await expect(provider.exportSpec(candidates[0]!)).rejects.toThrow('not a gs:// object');
     expect(getObject).not.toHaveBeenCalled();
   });
-  it('generates OpenAPI from connection schema metadata and skips absent schemas', async () => {
+  it('never synthesizes OpenAPI from connection schema metadata', async () => {
+    const listConnections = vi.fn(async () => [{
+      name: 'projects/sample-project-123/locations/us-central1/connections/salesforce'
+    }]);
+    const getSchema = vi.fn(async () => ({
+      name: 'projects/sample-project-123/locations/us-central1/connections/salesforce/connectionSchemaMetadata',
+      entities: ['Account', 'Contact'],
+      actions: ['ExecuteQuery'],
+      state: 'UPDATED'
+    }));
     const provider = new ConnectorsCustomProvider(client({
       listCustomConnectorVersions: vi.fn(async () => []),
-      listConnectorConnections: vi.fn(async () => [{ name: 'projects/sample-project-123/locations/us-central1/connections/salesforce' }, { name: 'projects/sample-project-123/locations/us-central1/connections/empty' }]),
-      getConnectorSchemaMetadata: vi.fn(async (name) => name.endsWith('/empty') ? undefined : { entities: { Account: { fields: [{ name: 'id', dataType: 'STRING' }] } } })
+      listConnectorConnections: listConnections,
+      getConnectorSchemaMetadata: getSchema
     }), { projectId: 'sample-project-123' });
-    const candidates = await provider.listCandidates();
-    expect(candidates).toHaveLength(1);
-    expect(candidates[0]).toMatchObject({ sourceType: 'connectors-generated-spec', supported: true });
-    const exported = await provider.exportSpec(candidates[0]!);
-    expect(exported.evidence.join(' ')).toContain('generated from connector schema metadata');
-    expect(JSON.parse(exported.content)).toMatchObject({ openapi: '3.0.3', paths: { '/Account': {} } });
-  });
-
-  it('marks an operation-less generated document unsupported so it cannot be auto-exported', async () => {
-    const provider = new ConnectorsCustomProvider(client({
-      listCustomConnectorVersions: vi.fn(async () => []),
-      listConnectorConnections: vi.fn(async () => [{ name: 'projects/sample-project-123/locations/us-central1/connections/empty' }]),
-      getConnectorSchemaMetadata: vi.fn(async () => ({ entities: {} }))
-    }), { projectId: 'sample-project-123' });
-    const candidates = await provider.listCandidates();
-    expect(candidates).toHaveLength(1);
-    expect(candidates[0]).toMatchObject({ sourceType: 'connectors-generated-spec', supported: false });
-    expect(candidates[0]?.evidence.join(' ')).toContain('Generated spec has no operations; manual review');
+    await expect(provider.listCandidates()).resolves.toEqual([]);
+    expect(listConnections).not.toHaveBeenCalled();
+    expect(getSchema).not.toHaveBeenCalled();
   });
 });

@@ -17,7 +17,20 @@ function configId(name: string): string {
 
 function candidate(name: string, overrides: Partial<SpecCandidate> = {}): SpecCandidate {
   const id = configId(name);
-  return { id, name, providerType: 'api-gateway', apiId: id, projectId: 'sample-project-123', tags: {}, supported: true, evidence: [], meta: {}, ...overrides };
+  return {
+    id,
+    name,
+    providerType: 'api-gateway',
+    sourceType: 'api-gateway-config',
+    authority: 'stored-authoritative',
+    apiId: id,
+    projectId: 'sample-project-123',
+    tags: {},
+    supported: true,
+    evidence: [],
+    meta: {},
+    ...overrides
+  };
 }
 
 function provider(candidates: SpecCandidate[], content = VALID_OPENAPI): SpecProvider {
@@ -60,11 +73,15 @@ describe('GCP runtime execute', () => {
   }
 
   it('GCP-RESOLVE-001: a direct repo spec wins before preflight or providers', async () => {
-    await writeFile(path.join(repoRoot, 'openapi.yaml'), 'openapi: 3.0.3\ninfo:\n  title: x\n  version: "1"\npaths:\n  /a: {}\n');
+    await writeFile(
+      path.join(repoRoot, 'openapi.yaml'),
+      'openapi: 3.0.3\ninfo:\n  title: x\n  version: "1"\npaths:\n  /a:\n    get:\n      responses:\n        "200":\n          description: ok\n'
+    );
     const specProvider = provider([candidate('payments')]);
     const deps = dependencies(specProvider);
     const result = await execute(inputs(), deps);
     expect(result.resolution?.sourceType).toBe('repo-spec');
+    expect(result.resolution?.authority).toBe('stored-authoritative');
     expect(specProvider.listCandidates).not.toHaveBeenCalled();
     expect(deps.client.preflightProject).not.toHaveBeenCalled();
   });
@@ -91,22 +108,55 @@ describe('GCP runtime execute', () => {
   });
 
   it('GCP-RESOLVE-001: unsupported exact candidate remains manual review and writes nothing', async () => {
-    const unsupported = candidate('grpc', { supported: false, evidence: ['gRPC config is not converted'] });
+    const unsupported = candidate('grpc', {
+      supported: false,
+      authority: 'unsupported-format',
+      evidence: ['gRPC config is not converted']
+    });
     const specProvider = provider([unsupported]);
     const result = await execute(inputs({ apiId: unsupported.id }), dependencies(specProvider));
-    expect(result.resolution).toMatchObject({ status: 'unresolved', sourceType: 'manual-review', confidence: 100 });
+    expect(result.resolution).toMatchObject({
+      status: 'unresolved',
+      sourceType: 'manual-review',
+      confidence: 100,
+      authority: 'unsupported-format'
+    });
     expect(specProvider.exportSpec).not.toHaveBeenCalled();
+  });
+
+  it('GCP-RESOLVE-001: local-derived cannot resolve via explicit api-id or discover-many', async () => {
+    const local = candidate('agent', {
+      providerType: 'agent-engines',
+      sourceType: 'agent-engine-generated-spec',
+      authority: 'local-derived',
+      supported: false,
+      evidence: ['local-derived assembly']
+    });
+    const resolveOne = await execute(inputs({ apiId: local.id }), dependencies(provider([local])));
+    expect(resolveOne.resolution).toMatchObject({
+      status: 'unresolved',
+      sourceType: 'manual-review',
+      authority: 'local-derived'
+    });
+    expect(resolveOne.resolution?.rankedCandidates?.[0]?.authority).toBe('local-derived');
+
+    const many = await execute(inputs({ mode: 'discover-many' }), dependencies(provider([local])));
+    expect(many.discovered).toHaveLength(0);
+    expect(many.exportSummary).toMatchObject({ exported: 0, skipped: 1 });
   });
 
   it('GCP-RESOLVE-001: discover-many exports supported candidates and reports skipped unsupported candidates', async () => {
     const result = await execute(inputs({ mode: 'discover-many' }), dependencies(provider([
       candidate('payments', { tags: { 'postman-project-name': 'payments' } }),
       candidate('orders'),
-      candidate('grpc', { supported: false })
+      candidate('grpc', { supported: false, authority: 'unsupported-format' })
     ])));
     expect(result.discovered).toHaveLength(2);
+    expect(result.discovered.every((service) => service.authority === 'stored-authoritative')).toBe(true);
     expect(result.exportSummary).toEqual({ attempted: 2, exported: 2, failed: 0, skipped: 1 });
     expect(result.outputs).toMatchObject({ 'source-type': 'discover-many', 'resolution-status': 'resolved', 'service-count': '2' });
+    const services = JSON.parse(result.outputs['services-json']!);
+    expect(services[0].authority).toBe('stored-authoritative');
   });
 
   it('GCP-NARROW-001: a canonical match at position 70 survives the 50-candidate cap', async () => {
@@ -136,10 +186,19 @@ describe('GCP runtime execute', () => {
   it('GCP-RESOLVE-001: explicit api-id overrides a committed repo spec (precedence: api-id wins)', async () => {
     // A repo that both carries a committed spec AND passes api-id must resolve
     // the caller-selected cloud resource, not the local file.
-    await writeFile(path.join(repoRoot, 'openapi.yaml'), 'openapi: 3.0.3\ninfo:\n  title: local\n  version: "1"\npaths:\n  /a: {}\n');
+    await writeFile(
+      path.join(repoRoot, 'openapi.yaml'),
+      'openapi: 3.0.3\ninfo:\n  title: local\n  version: "1"\npaths:\n  /a:\n    get:\n      responses:\n        "200":\n          description: ok\n'
+    );
     const id = configId('payments');
     const result = await execute(inputs({ apiId: id }), dependencies(provider([candidate('payments'), candidate('orders')])));
-    expect(result.resolution).toMatchObject({ status: 'resolved', sourceType: 'api-gateway-config', confidence: 100, apiId: id });
+    expect(result.resolution).toMatchObject({
+      status: 'resolved',
+      sourceType: 'api-gateway-config',
+      confidence: 100,
+      apiId: id,
+      authority: 'stored-authoritative'
+    });
     expect(result.resolution?.evidence?.[0]).toContain('Caller-selected API ID');
   });
 

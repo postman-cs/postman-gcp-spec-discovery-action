@@ -41,12 +41,12 @@ export function renderAmbiguityStepSummary(input: AmbiguityStepSummaryInput): st
     '',
     '### Ranked candidates',
     '',
-    '| Rank | Service | Resource | Provider | Confidence | Supported |',
-    '| ---: | --- | --- | --- | ---: | --- |'
+    '| Rank | Service | Resource | Provider | Authority | Confidence | Supported |',
+    '| ---: | --- | --- | --- | --- | ---: | --- |'
   ];
   for (const candidate of input.candidates) {
     lines.push(
-      `| ${tableCell(candidate.rank)} | \`${tableCell(candidate.serviceName)}\` | \`${tableCell(redactResourceId(candidate.resourceId))}\` | \`${tableCell(candidate.providerType)}\` | \`${tableCell(candidate.confidence)}\` | \`${tableCell(candidate.supported)}\` |`
+      `| ${tableCell(candidate.rank)} | \`${tableCell(candidate.serviceName)}\` | \`${tableCell(redactResourceId(candidate.resourceId))}\` | \`${tableCell(candidate.providerType)}\` | \`${tableCell(candidate.authority)}\` | \`${tableCell(candidate.confidence)}\` | \`${tableCell(candidate.supported)}\` |`
     );
   }
   if (input.probes.length > 0) {
