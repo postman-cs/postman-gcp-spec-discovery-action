@@ -5,6 +5,11 @@ import { inflateZip } from '../src/lib/gcp/zip.js';
 import type { GcpDiscoveryClient } from '../src/lib/gcp/clients.js';
 
 const OAS = 'openapi: 3.0.3\ninfo:\n  title: Apigee\n  version: "1"\npaths:\n  /health:\n    get:\n      responses:\n        "200":\n          description: ok\n';
+const WSDL = `<?xml version="1.0"?>
+<definitions xmlns="http://schemas.xmlsoap.org/wsdl/" name="Orders">
+  <portType name="OrdersPort"/>
+</definitions>
+`;
 
 function zip(entries: Record<string, string>, deflate = true): Buffer {
   const locals: Buffer[] = [];
@@ -152,6 +157,26 @@ describe('Apigee provider', () => {
     await expect(
       new ApigeeProvider(fake, { projectId: 'sample-project-123', apiId: 'organizations/other/environments/test/archiveDeployments/a' }).listCandidates()
     ).rejects.toThrow('api-id Apigee archive deployment does not belong to the configured project-id org');
+  });
+
+  it('exports documented proxy WSDL resource seam and rejects unrelated resource OpenAPI-looking JSON', async () => {
+    const wsdlBundle = zip({ 'apiproxy/resources/wsdl/orders.wsdl': WSDL });
+    const wsdlProvider = new ApigeeProvider(client(wsdlBundle), { projectId: 'sample-project-123' });
+    const wsdlCandidate = (await wsdlProvider.listCandidates())[0]!;
+    expect(wsdlCandidate).toMatchObject({ supported: true, authority: 'stored-authoritative' });
+    await expect(wsdlProvider.exportSpec(wsdlCandidate)).resolves.toMatchObject({
+      content: WSDL,
+      format: 'wsdl',
+      filename: 'service.wsdl'
+    });
+
+    const unrelated = zip({ 'apiproxy/resources/properties/looks-like-openapi.json': OAS });
+    const unrelatedCandidate = (await new ApigeeProvider(client(unrelated), { projectId: 'sample-project-123' }).listCandidates())[0]!;
+    expect(unrelatedCandidate.supported).toBe(false);
+    expect(unrelatedCandidate.authority).toBe('metadata-only');
+    await expect(
+      new ApigeeProvider(client(unrelated), { projectId: 'sample-project-123' }).exportSpec(unrelatedCandidate)
+    ).rejects.toThrow(/no contract source document/i);
   });
 
   it('GCP-APIGEE-ARCHIVE-003: rejects traversal entry names and classifies zero/multiple OpenAPI', async () => {

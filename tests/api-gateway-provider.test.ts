@@ -89,8 +89,12 @@ describe('API Gateway provider', () => {
 
     const inactive = new ApiGatewayProvider(fakeClient(fullConfig({ state: 'FAILED' })), { projectId: 'sample-project-123', location: 'global' });
     expect((await inactive.listCandidates())[0]).toMatchObject({ supported: false, authority: 'metadata-only' });
-    const grpc = new ApiGatewayProvider(fakeClient(fullConfig({ openapiDocuments: [], grpcServices: [{}] })), { projectId: 'sample-project-123', location: 'global' });
-    expect((await grpc.listCandidates())[0]?.evidence.join(' ')).toContain('no OpenAPI source document');
+    const grpc = new ApiGatewayProvider(
+      fakeClient(fullConfig({ openapiDocuments: [], grpcServices: [{ source: [] }] })),
+      { projectId: 'sample-project-123', location: 'global' }
+    );
+    expect((await grpc.listCandidates())[0]?.supported).toBe(false);
+    expect((await grpc.listCandidates())[0]?.evidence.join(' ')).toMatch(/protobuf|No protobuf|descriptor/i);
   });
 
   it('GCP-GATEWAY-002: FULL export decodes and preserves original JSON/YAML bytes and format', async () => {
@@ -100,7 +104,7 @@ describe('API Gateway provider', () => {
       const candidate = (await provider.listCandidates())[0]!;
       const exported = await provider.exportSpec(candidate);
       expect(exported.format).toBe(expected);
-      expect(exported.content).toBe(`${text.replace(/(?:\r?\n)+$/, '')}\n`);
+      expect(exported.content).toBe(text);
     }
   });
 
@@ -111,7 +115,7 @@ describe('API Gateway provider', () => {
       fullConfig({ openapiDocuments: [{ document: { contents: Buffer.from('{}').toString('base64') } }] }),
       fullConfig({ openapiDocuments: [] }),
       fullConfig({ openapiDocuments: [{ document: { contents: Buffer.from(VALID_JSON).toString('base64') } }, { document: { contents: Buffer.from(VALID_JSON).toString('base64') } }] }),
-      fullConfig({ openapiDocuments: [], grpcServices: [{}] })
+      fullConfig({ openapiDocuments: [], grpcServices: [{ source: [] }] })
     ];
     for (const config of variants) {
       const provider = new ApiGatewayProvider(fakeClient(config), { projectId: 'sample-project-123', location: 'global' });
@@ -168,7 +172,7 @@ describe('API Gateway provider', () => {
           { document: { contents: Buffer.from(VALID_JSON).toString('base64') } }
         ]
       }),
-      fullConfig({ state: 'FAILED', openapiDocuments: [], grpcServices: [{}] })
+      fullConfig({ state: 'FAILED', openapiDocuments: [], grpcServices: [{ source: [] }] })
     ]) {
       const provider = new ApiGatewayProvider(fakeClient(config), {
         projectId: 'sample-project-123',
@@ -211,5 +215,115 @@ describe('API Gateway provider', () => {
       supported: true,
       authority: 'stored-authoritative'
     });
+  });
+
+  it('GCP-GATEWAY-009: single service/rpc protobuf source exports exact bytes as service.proto', async () => {
+    const proto = 'syntax = "proto3";\n\nservice Payments {\n  rpc Get(GetReq) returns (GetRes);\n}\nmessage GetReq { string id = 1; }\nmessage GetRes { string id = 1; }\n';
+    const config = fullConfig({
+      openapiDocuments: [],
+      grpcServices: [
+        {
+          source: [{ path: 'payments/v1/api.proto', contents: Buffer.from(proto).toString('base64') }]
+        }
+      ],
+      managedServiceConfigs: [{ path: 'service.yaml', contents: Buffer.from('type: google.api.Service\n').toString('base64') }]
+    });
+    const provider = new ApiGatewayProvider(fakeClient(config), {
+      projectId: 'sample-project-123',
+      location: 'global'
+    });
+    const candidate = (await provider.listCandidates())[0]!;
+    expect(candidate).toMatchObject({
+      id: config.name,
+      supported: true,
+      authority: 'stored-authoritative',
+      meta: expect.objectContaining({
+        exportFamily: 'protobuf',
+        originalProtoPath: 'payments/v1/api.proto'
+      })
+    });
+    const exported = await provider.exportSpec(candidate);
+    expect(exported).toEqual({
+      content: proto,
+      format: 'protobuf',
+      filename: 'service.proto',
+      evidence: expect.arrayContaining([
+        'Exported original API Gateway protobuf source payments/v1/api.proto'
+      ])
+    });
+  });
+
+  it('GCP-GATEWAY-010: descriptor-only / message-only / multi-entrypoint / imported protobuf stay unsupported', async () => {
+    const service = 'syntax = "proto3";\nservice A { rpc X(M) returns (M); }\nmessage M { string id = 1; }\n';
+    const variants = [
+      fullConfig({
+        openapiDocuments: [],
+        grpcServices: [{ fileDescriptorSet: { path: 'api.pb', contents: Buffer.from([1, 2, 3]).toString('base64') }, source: [] }]
+      }),
+      fullConfig({
+        openapiDocuments: [],
+        grpcServices: [{ source: [{ path: 'types.proto', contents: Buffer.from('syntax = "proto3";\nmessage M {}\n').toString('base64') }] }]
+      }),
+      fullConfig({
+        openapiDocuments: [],
+        grpcServices: [{
+          source: [
+            { path: 'a.proto', contents: Buffer.from(service).toString('base64') },
+            { path: 'b.proto', contents: Buffer.from(service.replace('service A', 'service B')).toString('base64') }
+          ]
+        }]
+      }),
+      fullConfig({
+        openapiDocuments: [],
+        grpcServices: [{
+          source: [
+            {
+              path: 'service.proto',
+              contents: Buffer.from(`syntax = "proto3";\nimport "types.proto";\n${service}`).toString('base64')
+            },
+            { path: 'types.proto', contents: Buffer.from('syntax = "proto3";\nmessage T {}\n').toString('base64') }
+          ]
+        }]
+      })
+    ];
+    for (const config of variants) {
+      const provider = new ApiGatewayProvider(fakeClient(config), {
+        projectId: 'sample-project-123',
+        location: 'global'
+      });
+      const candidate = (await provider.listCandidates())[0]!;
+      expect(candidate.supported).toBe(false);
+      await expect(provider.exportSpec(candidate)).rejects.toThrow();
+    }
+  });
+
+  it('GCP-GATEWAY-011: OpenAPI remains authoritative and protobuf variant uses a distinct #protobuf id', async () => {
+    const proto = 'syntax = "proto3";\nservice Payments { rpc Get(M) returns (M); }\nmessage M { string id = 1; }\n';
+    const config = fullConfig({
+      grpcServices: [{ source: [{ path: 'api.proto', contents: Buffer.from(proto).toString('base64') }] }]
+    });
+    const provider = new ApiGatewayProvider(fakeClient(config), {
+      projectId: 'sample-project-123',
+      location: 'global'
+    });
+    const candidates = await provider.listCandidates();
+    expect(candidates).toHaveLength(2);
+    expect(candidates[0]).toMatchObject({
+      id: config.name,
+      supported: true,
+      meta: { exportFamily: 'openapi' }
+    });
+    expect(candidates[1]).toMatchObject({
+      id: `${config.name}#protobuf`,
+      supported: true,
+      meta: { exportFamily: 'protobuf' }
+    });
+    const openapi = await provider.exportSpec(candidates[0]!);
+    const protobuf = await provider.exportSpec(candidates[1]!);
+    expect(openapi.format).toBe('openapi-json');
+    expect(openapi.filename).toBe('index.json');
+    expect(protobuf.format).toBe('protobuf');
+    expect(protobuf.filename).toBe('service.proto');
+    expect(protobuf.content).toBe(proto);
   });
 });

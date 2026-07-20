@@ -19105,7 +19105,7 @@ var require_ms = __commonJS({
       options = options || {};
       var type = typeof val;
       if (type === "string" && val.length > 0) {
-        return parse3(val);
+        return parse4(val);
       } else if (type === "number" && isFinite(val)) {
         return options.long ? fmtLong(val) : fmtShort(val);
       }
@@ -19113,7 +19113,7 @@ var require_ms = __commonJS({
         "val is not a non-empty string or a valid number. val=" + JSON.stringify(val)
       );
     };
-    function parse3(str) {
+    function parse4(str) {
       str = String(str);
       if (str.length > 100) {
         return;
@@ -44232,7 +44232,7 @@ var require_public_api = __commonJS({
       }
       return doc;
     }
-    function parse3(src, reviver, options) {
+    function parse4(src, reviver, options) {
       let _reviver = void 0;
       if (typeof reviver === "function") {
         _reviver = reviver;
@@ -44273,7 +44273,7 @@ var require_public_api = __commonJS({
         return value.toString(options);
       return new Document.Document(value, _replacer, options).toString(options);
     }
-    exports2.parse = parse3;
+    exports2.parse = parse4;
     exports2.parseAllDocuments = parseAllDocuments2;
     exports2.parseDocument = parseDocument2;
     exports2.stringify = stringify;
@@ -44765,8 +44765,576 @@ function resolveActionVersion2() {
 
 // src/lib/gcp/clients.ts
 var import_node_crypto2 = require("node:crypto");
-var import_node_util4 = require("node:util");
+var import_node_util5 = require("node:util");
 var import_google_auth_library = __toESM(require_src5(), 1);
+
+// src/lib/providers/source-document.ts
+var import_node_util4 = require("node:util");
+
+// src/lib/spec/native-formats.ts
+var import_yaml2 = __toESM(require_dist3(), 1);
+
+// src/lib/spec/validate-openapi.ts
+var import_yaml = __toESM(require_dist3(), 1);
+var HTTP_OPERATIONS = /* @__PURE__ */ new Set(["get", "put", "post", "delete", "options", "head", "patch", "trace"]);
+function parseAndValidateOpenApi(content) {
+  const trimmed = content.trim();
+  if (!trimmed) {
+    throw new Error("Specification content is empty");
+  }
+  const isJson = trimmed.startsWith("{");
+  let parsed;
+  try {
+    parsed = isJson ? JSON.parse(trimmed) : (0, import_yaml.parse)(trimmed);
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    throw new Error(`Specification is not parseable JSON or YAML: ${detail}`);
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new Error("Specification did not parse to an object document");
+  }
+  const document2 = parsed;
+  let version;
+  const swagger = typeof document2.swagger === "string" ? document2.swagger : "";
+  const openapi = typeof document2.openapi === "string" ? document2.openapi : "";
+  if (swagger.startsWith("2")) {
+    version = "swagger-2.0";
+  } else if (openapi.startsWith("3.1")) {
+    version = "openapi-3.1";
+  } else if (openapi.startsWith("3.")) {
+    version = "openapi-3.0";
+  }
+  if (!version) {
+    throw new Error("Specification is not Swagger 2.0 or OpenAPI 3.x");
+  }
+  const paths = document2.paths;
+  if (!paths || typeof paths !== "object" || Array.isArray(paths)) {
+    throw new Error("Specification has no paths object");
+  }
+  if (Object.keys(paths).length === 0) {
+    throw new Error("Specification has an empty paths object");
+  }
+  if (!hasRecognizedHttpOperation(paths)) {
+    throw new Error("Specification has no recognized HTTP operation under paths");
+  }
+  return { document: document2, version, isJson };
+}
+function isRecognizedHttpOperation(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const responses = value.responses;
+  if (!responses || typeof responses !== "object" || Array.isArray(responses)) return false;
+  return Object.keys(responses).length > 0;
+}
+function hasRecognizedHttpOperation(paths) {
+  for (const pathItem of Object.values(paths)) {
+    if (!pathItem || typeof pathItem !== "object" || Array.isArray(pathItem)) continue;
+    const item = pathItem;
+    for (const key of Object.keys(item)) {
+      if (HTTP_OPERATIONS.has(key.toLowerCase()) && isRecognizedHttpOperation(item[key])) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+// src/lib/spec/native-formats.ts
+var MAX_INSPECT_CHARS = 256e3;
+function nativeFilename(format) {
+  switch (format) {
+    case "openapi-json":
+      return "index.json";
+    case "openapi-yaml":
+      return "index.yaml";
+    case "asyncapi-json":
+      return "asyncapi.json";
+    case "asyncapi-yaml":
+      return "asyncapi.yaml";
+    case "graphql-sdl":
+      return "schema.graphql";
+    case "graphql-introspection-json":
+      return "introspection.json";
+    case "protobuf":
+      return "service.proto";
+    case "wsdl":
+      return "service.wsdl";
+    case "mcp-json":
+      return "mcp.json";
+  }
+}
+function bound(content) {
+  return content.length > MAX_INSPECT_CHARS ? content.slice(0, MAX_INSPECT_CHARS) : content;
+}
+function trimContent(content) {
+  return bound(content).trim();
+}
+function looksLikeJson(trimmed) {
+  return trimmed.startsWith("{") || trimmed.startsWith("[");
+}
+function looksLikeXml(trimmed) {
+  return trimmed.startsWith("<");
+}
+function parseObjectDocument(content) {
+  const trimmed = trimContent(content);
+  if (!trimmed) return void 0;
+  const isJson = looksLikeJson(trimmed);
+  try {
+    const parsed = isJson ? JSON.parse(trimmed) : (0, import_yaml2.parse)(trimmed);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return void 0;
+    return { document: parsed, isJson };
+  } catch {
+    return void 0;
+  }
+}
+function openApiVersionOf(document2) {
+  const swagger = typeof document2.swagger === "string" ? document2.swagger : "";
+  const openapi = typeof document2.openapi === "string" ? document2.openapi : "";
+  if (swagger.startsWith("2")) return "swagger-2.0";
+  if (openapi.startsWith("3.1")) return "openapi-3.1";
+  if (openapi.startsWith("3.")) return "openapi-3.0";
+  return void 0;
+}
+function stripXmlPreamble(xml) {
+  return xml.replace(/<\?xml[\s\S]*?\?>/gi, "").replace(/<!--[\s\S]*?-->/g, "").replace(/<!DOCTYPE[\s\S]*?>/gi, "").trim();
+}
+function xmlRootInfo(xml) {
+  const body = stripXmlPreamble(trimContent(xml));
+  const match = body.match(/<\s*([A-Za-z_][\w.-]*(?::[A-Za-z_][\w.-]*)?)\b([^>]*)>/);
+  if (!match) return void 0;
+  const qualified = match[1];
+  const localName = (qualified.includes(":") ? qualified.split(":").pop() : qualified).toLowerCase();
+  const head = `${qualified} ${match[2] ?? ""}`.toLowerCase();
+  return { localName, qualified, head };
+}
+function isWsdlXml(xml) {
+  const root = xmlRootInfo(xml);
+  if (!root) return false;
+  if (root.localName !== "definitions" && root.localName !== "description") return false;
+  return /wsdl/i.test(root.head) || /schemas\.xmlsoap\.org\/wsdl|www\.w3\.org\/ns\/wsdl/i.test(trimContent(xml));
+}
+var GRAPHQL_DEFINITION_RE = /^\s*(?:"""[\s\S]*?"""\s*)?(?:extend\s+)?(?:(?:type|interface|enum|union|scalar|input)\s+[A-Za-z_]|schema\s*\{|directive\s+@)/m;
+function isGraphqlSdl(content) {
+  const trimmed = trimContent(content);
+  if (!trimmed || looksLikeJson(trimmed) || looksLikeXml(trimmed)) return false;
+  if (/^\s*(?:openapi|swagger|asyncapi)\s*:/m.test(trimmed)) return false;
+  return GRAPHQL_DEFINITION_RE.test(trimmed);
+}
+function looksLikeIntrospection(record) {
+  if (record.__schema && typeof record.__schema === "object" && !Array.isArray(record.__schema)) return true;
+  const data = record.data;
+  if (!data || typeof data !== "object" || Array.isArray(data)) return false;
+  const nested = data.__schema;
+  return Boolean(nested && typeof nested === "object" && !Array.isArray(nested));
+}
+function looksLikeMcp(record) {
+  if (record.mcpServers && typeof record.mcpServers === "object" && !Array.isArray(record.mcpServers)) return true;
+  if (typeof record.$schema === "string" && /modelcontextprotocol/i.test(record.$schema)) return true;
+  return typeof record.name === "string" && (Array.isArray(record.remotes) || Array.isArray(record.packages));
+}
+function isProtobufSource(content) {
+  const trimmed = trimContent(content);
+  if (!trimmed || looksLikeJson(trimmed) || looksLikeXml(trimmed)) return false;
+  if (/^\s*(?:openapi|swagger|asyncapi)\s*:/m.test(trimmed)) return false;
+  if (/^\s*syntax\s*=\s*["']proto[23]["']\s*;/m.test(trimmed)) return true;
+  if (/\bmessage\s+[A-Za-z_]\w*\s*\{/.test(trimmed)) return true;
+  if (/\bservice\s+[A-Za-z_]\w*\s*\{[\s\S]*\brpc\b/.test(trimmed)) return true;
+  return false;
+}
+function hasProtobufServiceRpc(content) {
+  return /\bservice\s+[A-Za-z_]\w*\s*\{[\s\S]*\brpc\b/.test(trimContent(content));
+}
+function asyncApiVersionOf(document2) {
+  return typeof document2.asyncapi === "string" && document2.asyncapi.trim() ? document2.asyncapi.trim() : void 0;
+}
+function hasAsyncApiChannels(document2) {
+  const channels = document2.channels;
+  if (channels && typeof channels === "object" && !Array.isArray(channels)) {
+    return Object.keys(channels).length > 0;
+  }
+  const operations = document2.operations;
+  if (operations && typeof operations === "object" && !Array.isArray(operations)) {
+    return Object.keys(operations).length > 0;
+  }
+  return false;
+}
+function mcpServersHasObjectEntry(mcpServers) {
+  for (const value of Object.values(mcpServers)) {
+    if (value && typeof value === "object" && !Array.isArray(value)) return true;
+  }
+  return false;
+}
+function arrayHasObjectEntry(value) {
+  if (!Array.isArray(value)) return false;
+  return value.some((entry) => entry && typeof entry === "object" && !Array.isArray(entry));
+}
+function hasUsableMcpServers(document2) {
+  const mcpServers = document2.mcpServers;
+  if (mcpServers && typeof mcpServers === "object" && !Array.isArray(mcpServers)) {
+    return mcpServersHasObjectEntry(mcpServers);
+  }
+  if (typeof document2.name !== "string" || !document2.name.trim()) return false;
+  return arrayHasObjectEntry(document2.remotes) || arrayHasObjectEntry(document2.packages);
+}
+function detectNativeFormat(content) {
+  const trimmed = trimContent(content);
+  if (!trimmed) return void 0;
+  if (looksLikeXml(trimmed)) {
+    if (isWsdlXml(trimmed)) {
+      return { kind: "wsdl", format: "wsdl", serialization: "xml" };
+    }
+    return void 0;
+  }
+  const parsed = parseObjectDocument(trimmed);
+  if (parsed) {
+    if (parsed.isJson && looksLikeIntrospection(parsed.document)) {
+      return {
+        kind: "graphql-introspection",
+        format: "graphql-introspection-json",
+        serialization: "json"
+      };
+    }
+    const asyncVersion = asyncApiVersionOf(parsed.document);
+    if (asyncVersion) {
+      return {
+        kind: "asyncapi",
+        format: parsed.isJson ? "asyncapi-json" : "asyncapi-yaml",
+        serialization: parsed.isJson ? "json" : "yaml",
+        version: asyncVersion
+      };
+    }
+    const openapiVersion = openApiVersionOf(parsed.document);
+    if (openapiVersion) {
+      return {
+        kind: "openapi",
+        format: parsed.isJson ? "openapi-json" : "openapi-yaml",
+        serialization: parsed.isJson ? "json" : "yaml",
+        version: openapiVersion
+      };
+    }
+    if (parsed.isJson && looksLikeMcp(parsed.document) && hasUsableMcpServers(parsed.document)) {
+      return { kind: "mcp", format: "mcp-json", serialization: "json" };
+    }
+  }
+  if (isProtobufSource(trimmed) && hasProtobufServiceRpc(trimmed)) {
+    return { kind: "protobuf", format: "protobuf", serialization: "text" };
+  }
+  if (isGraphqlSdl(trimmed)) {
+    return { kind: "graphql-sdl", format: "graphql-sdl", serialization: "text" };
+  }
+  return void 0;
+}
+function assertExpectedFormat(actual, expected) {
+  if (expected && actual !== expected) {
+    throw new Error(`Specification is wrong kind: expected ${expected}, detected ${actual}`);
+  }
+}
+function validateAsyncApi(content, expected) {
+  const trimmed = trimContent(content);
+  if (!trimmed) throw new Error("Specification content is empty");
+  const isJson = looksLikeJson(trimmed);
+  let parsed;
+  try {
+    parsed = isJson ? JSON.parse(trimmed) : (0, import_yaml2.parse)(trimmed);
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    throw new Error(`Specification is not parseable JSON or YAML: ${detail}`);
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new Error("Specification did not parse to an object document");
+  }
+  const document2 = parsed;
+  const version = asyncApiVersionOf(document2);
+  if (!version) {
+    throw new Error("Specification is not an AsyncAPI document");
+  }
+  if (!hasAsyncApiChannels(document2)) {
+    throw new Error("AsyncAPI document has no channels or operations");
+  }
+  const format = isJson ? "asyncapi-json" : "asyncapi-yaml";
+  assertExpectedFormat(format, expected);
+  return {
+    kind: "asyncapi",
+    format,
+    serialization: isJson ? "json" : "yaml",
+    version,
+    document: document2
+  };
+}
+function validateWsdl(content, expected) {
+  const trimmed = trimContent(content);
+  if (!trimmed) throw new Error("Specification content is empty");
+  if (!looksLikeXml(trimmed) || !xmlRootInfo(trimmed)) {
+    throw new Error("Specification is not parseable XML");
+  }
+  if (!isWsdlXml(trimmed)) {
+    throw new Error("XML document is not a WSDL 1.1/2.0 root");
+  }
+  assertExpectedFormat("wsdl", expected);
+  return { kind: "wsdl", format: "wsdl", serialization: "xml" };
+}
+function validateProtobuf(content, expected) {
+  const trimmed = trimContent(content);
+  if (!trimmed) throw new Error("Specification content is empty");
+  if (!isProtobufSource(trimmed)) {
+    throw new Error("Specification is not protobuf source (syntax, message, or service required)");
+  }
+  if (!hasProtobufServiceRpc(trimmed)) {
+    throw new Error(
+      "PROTO_NO_SERVICES: .proto defines no service methods; gRPC contract tests require at least one rpc"
+    );
+  }
+  assertExpectedFormat("protobuf", expected);
+  return { kind: "protobuf", format: "protobuf", serialization: "text" };
+}
+function validateGraphqlSdl(content, expected) {
+  const trimmed = trimContent(content);
+  if (!trimmed) throw new Error("Specification content is empty");
+  if (!isGraphqlSdl(trimmed)) {
+    throw new Error("Specification is not GraphQL SDL (type or schema definition required)");
+  }
+  assertExpectedFormat("graphql-sdl", expected);
+  return { kind: "graphql-sdl", format: "graphql-sdl", serialization: "text" };
+}
+function validateGraphqlIntrospection(content, expected) {
+  const trimmed = trimContent(content);
+  if (!trimmed) throw new Error("Specification content is empty");
+  if (!looksLikeJson(trimmed)) {
+    throw new Error("Specification is not GraphQL introspection JSON");
+  }
+  let parsed;
+  try {
+    parsed = JSON.parse(trimmed);
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    throw new Error(`Specification is not parseable JSON: ${detail}`);
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new Error("Specification did not parse to an object document");
+  }
+  const document2 = parsed;
+  if (!looksLikeIntrospection(document2)) {
+    throw new Error("Specification is not GraphQL introspection JSON (missing __schema)");
+  }
+  assertExpectedFormat("graphql-introspection-json", expected);
+  return {
+    kind: "graphql-introspection",
+    format: "graphql-introspection-json",
+    serialization: "json",
+    document: document2
+  };
+}
+function validateMcp(content, expected) {
+  const trimmed = trimContent(content);
+  if (!trimmed) throw new Error("Specification content is empty");
+  if (!looksLikeJson(trimmed)) {
+    throw new Error("Specification is not MCP JSON");
+  }
+  let parsed;
+  try {
+    parsed = JSON.parse(trimmed);
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    throw new Error(`Specification is not parseable JSON: ${detail}`);
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new Error("Specification did not parse to an object document");
+  }
+  const document2 = parsed;
+  if (!looksLikeMcp(document2) || !hasUsableMcpServers(document2)) {
+    throw new Error(
+      "Specification is not an MCP server description (usable mcpServers object entries, or name plus object remotes/packages required)"
+    );
+  }
+  assertExpectedFormat("mcp-json", expected);
+  return { kind: "mcp", format: "mcp-json", serialization: "json", document: document2 };
+}
+function validateOpenApi(content, expected) {
+  const validated = parseAndValidateOpenApi(content);
+  const format = validated.isJson ? "openapi-json" : "openapi-yaml";
+  assertExpectedFormat(format, expected);
+  return {
+    kind: "openapi",
+    format,
+    serialization: validated.isJson ? "json" : "yaml",
+    version: validated.version,
+    document: validated.document
+  };
+}
+function parseAndValidateNativeSpec(content, expectedFormat) {
+  const trimmed = trimContent(content);
+  if (!trimmed) {
+    throw new Error("Specification content is empty");
+  }
+  if (expectedFormat === "openapi-json" || expectedFormat === "openapi-yaml") {
+    return validateOpenApi(content, expectedFormat);
+  }
+  if (expectedFormat === "asyncapi-json" || expectedFormat === "asyncapi-yaml") {
+    return validateAsyncApi(content, expectedFormat);
+  }
+  if (expectedFormat === "wsdl") {
+    return validateWsdl(content, expectedFormat);
+  }
+  if (expectedFormat === "protobuf") {
+    return validateProtobuf(content, expectedFormat);
+  }
+  if (expectedFormat === "graphql-sdl") {
+    return validateGraphqlSdl(content, expectedFormat);
+  }
+  if (expectedFormat === "graphql-introspection-json") {
+    return validateGraphqlIntrospection(content, expectedFormat);
+  }
+  if (expectedFormat === "mcp-json") {
+    return validateMcp(content, expectedFormat);
+  }
+  const detected = detectNativeFormat(content);
+  if (!detected) {
+    if (looksLikeXml(trimmed)) {
+      throw new Error("XML document is not a WSDL 1.1/2.0 root");
+    }
+    if (looksLikeJson(trimmed) || /:\s*\S/.test(trimmed)) {
+      try {
+        if (looksLikeJson(trimmed)) JSON.parse(trimmed);
+        else (0, import_yaml2.parse)(trimmed);
+      } catch (error) {
+        const detail = error instanceof Error ? error.message : String(error);
+        throw new Error(`Specification is not parseable JSON or YAML: ${detail}`);
+      }
+    }
+    if (isProtobufSource(trimmed) && !hasProtobufServiceRpc(trimmed)) {
+      throw new Error(
+        "PROTO_NO_SERVICES: .proto defines no service methods; gRPC contract tests require at least one rpc"
+      );
+    }
+    if (looksLikeJson(trimmed)) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        if (parsed && typeof parsed === "object" && !Array.isArray(parsed) && looksLikeMcp(parsed)) {
+          throw new Error(
+            "Specification is not an MCP server description (usable mcpServers object entries, or name plus object remotes/packages required)"
+          );
+        }
+      } catch (error) {
+        if (error instanceof Error && /MCP server description/i.test(error.message)) throw error;
+      }
+    }
+    if (/^\s*package\s+[\w.]+/m.test(trimmed) || /\bproto\b/i.test(trimmed)) {
+      throw new Error("Specification is not protobuf source (syntax, message, or service required)");
+    }
+    if (/^\s*#/.test(trimmed) || /\b(type|schema|query)\b/i.test(trimmed)) {
+      throw new Error("Specification is not GraphQL SDL (type or schema definition required)");
+    }
+    throw new Error("Specification is not a supported native format");
+  }
+  switch (detected.kind) {
+    case "openapi":
+      return validateOpenApi(content, expectedFormat);
+    case "asyncapi":
+      return validateAsyncApi(content, expectedFormat);
+    case "wsdl":
+      return validateWsdl(content, expectedFormat);
+    case "protobuf":
+      return validateProtobuf(content, expectedFormat);
+    case "graphql-sdl":
+      return validateGraphqlSdl(content, expectedFormat);
+    case "graphql-introspection":
+      return validateGraphqlIntrospection(content, expectedFormat);
+    case "mcp":
+      return validateMcp(content, expectedFormat);
+  }
+}
+function parseAndValidateNativeFamily(content, family) {
+  switch (family) {
+    case "openapi": {
+      const result = validateOpenApi(content);
+      return result;
+    }
+    case "asyncapi": {
+      const result = validateAsyncApi(content);
+      return result;
+    }
+    case "graphql": {
+      const detected = detectNativeFormat(content);
+      if (detected?.kind === "graphql-introspection") {
+        return validateGraphqlIntrospection(content);
+      }
+      return validateGraphqlSdl(content);
+    }
+    case "protobuf":
+      return validateProtobuf(content);
+    case "wsdl":
+      return validateWsdl(content);
+    case "mcp":
+      return validateMcp(content);
+  }
+}
+function isOpenApiFormat(format) {
+  return format === "openapi-json" || format === "openapi-yaml";
+}
+
+// src/lib/providers/source-document.ts
+var MAX_SOURCE_BYTES = 10 * 1024 * 1024;
+var MAX_BASE64_CHARS = Math.ceil(MAX_SOURCE_BYTES / 3) * 4 + 4;
+function assertUtf8Size(text) {
+  if (Buffer.byteLength(text) > MAX_SOURCE_BYTES) {
+    throw new Error("Configuration source file exceeds 10 MiB");
+  }
+}
+function decodeUtf8OpenApi(text) {
+  assertUtf8Size(text);
+  const parsed = parseAndValidateOpenApi(text);
+  return {
+    content: text,
+    format: parsed.isJson ? "openapi-json" : "openapi-yaml",
+    filename: parsed.isJson ? "index.json" : "index.yaml"
+  };
+}
+function decodeSourceDocument(contents) {
+  const text = decodeBoundedBase64Utf8(contents);
+  return decodeUtf8OpenApi(text);
+}
+function decodeUtf8NativeSpec(text, expectedFormat) {
+  assertUtf8Size(text);
+  const validated = parseAndValidateNativeSpec(text, expectedFormat);
+  return {
+    content: text,
+    format: validated.format,
+    filename: nativeFilename(validated.format)
+  };
+}
+function decodeUtf8NativeFamily(text, family) {
+  assertUtf8Size(text);
+  const validated = parseAndValidateNativeFamily(text, family);
+  return {
+    content: text,
+    format: validated.format,
+    filename: nativeFilename(validated.format)
+  };
+}
+function decodeNativeSourceDocument(contents, family) {
+  const text = decodeBoundedBase64Utf8(contents);
+  return family ? decodeUtf8NativeFamily(text, family) : decodeUtf8NativeSpec(text);
+}
+function decodeBoundedBase64Utf8(contents) {
+  if (!contents) throw new Error("Configuration source file has no contents");
+  if (contents.length > MAX_BASE64_CHARS || !/^[A-Za-z0-9+/]*={0,2}$/.test(contents)) {
+    throw new Error("Configuration source file is not valid base64 or exceeds 10 MiB");
+  }
+  const bytes = Buffer.from(contents, "base64");
+  const expected = contents.replace(/=+$/, "");
+  if (bytes.toString("base64").replace(/=+$/, "") !== expected) {
+    throw new Error("Configuration source file is not valid base64");
+  }
+  if (bytes.byteLength > MAX_SOURCE_BYTES) {
+    throw new Error("Configuration source file exceeds 10 MiB");
+  }
+  try {
+    return new import_node_util4.TextDecoder("utf-8", { fatal: true }).decode(bytes);
+  } catch (error) {
+    throw new Error("Configuration source file is not valid UTF-8", { cause: error });
+  }
+}
+
+// src/lib/gcp/clients.ts
 function safeUrlForErrors(url) {
   return `${url.origin}${url.pathname}`;
 }
@@ -44800,6 +45368,54 @@ function parseApiHubAdditionalContentTypes(value) {
     if (type === "BOOSTED_SPEC_CONTENT" || type === "GATEWAY_OPEN_API_SPEC") seen.add(type);
   }
   return [...seen];
+}
+function documentationFileContents(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return void 0;
+  const contents = value.contents;
+  return typeof contents === "string" ? contents : void 0;
+}
+function parseApigeePortalDocumentationBody(body) {
+  const data = body.data && typeof body.data === "object" && !Array.isArray(body.data) ? body.data : body;
+  const arms = [
+    {
+      type: "oasDocumentation",
+      family: "openapi",
+      present: data.oasDocumentation !== void 0 && data.oasDocumentation !== null,
+      base64: documentationFileContents(
+        data.oasDocumentation && typeof data.oasDocumentation === "object" ? data.oasDocumentation.spec : void 0
+      )
+    },
+    {
+      type: "graphqlDocumentation",
+      family: "graphql",
+      present: data.graphqlDocumentation !== void 0 && data.graphqlDocumentation !== null,
+      base64: documentationFileContents(
+        data.graphqlDocumentation && typeof data.graphqlDocumentation === "object" ? data.graphqlDocumentation.schema : void 0
+      )
+    },
+    {
+      type: "asyncApiDocumentation",
+      family: "asyncapi",
+      present: data.asyncApiDocumentation !== void 0 && data.asyncApiDocumentation !== null,
+      base64: documentationFileContents(
+        data.asyncApiDocumentation && typeof data.asyncApiDocumentation === "object" ? data.asyncApiDocumentation.spec : void 0
+      )
+    }
+  ];
+  const present = arms.filter((arm2) => arm2.present);
+  if (present.length === 0) return { type: "missing" };
+  if (present.length > 1) return { type: "malformed" };
+  const arm = present[0];
+  if (arm.base64 === void 0) return { type: "malformed" };
+  try {
+    return {
+      type: arm.type,
+      family: arm.family,
+      contents: decodeBoundedBase64Utf8(arm.base64)
+    };
+  } catch {
+    return { type: "malformed" };
+  }
 }
 var CLOUD_PLATFORM_SCOPE = "https://www.googleapis.com/auth/cloud-platform";
 var MAX_LIST_PAGES = 100;
@@ -45174,12 +45790,11 @@ var GcpSdkClient = class {
     return this.collectPages(() => resourceUrl("https://apigee.googleapis.com/", `organizations/${org}/sites/${siteId}/apidocs`), "Apigee portal apidoc list", (body) => ({ items: body.data ?? [], nextPageToken: body.nextPageToken }));
   }
   async getApigeePortalDocumentation(org, siteId, apidocId) {
-    const body = await this.getJson(resourceUrl("https://apigee.googleapis.com/", `organizations/${org}/sites/${siteId}/apidocs/${apidocId}/documentation`), "Apigee portal documentation get");
-    const data = body.data ?? {};
-    for (const type of ["oasDocumentation", "graphqlDocumentation", "asyncapiDocumentation"]) {
-      if (data[type]) return { type, contents: type === "oasDocumentation" ? data[type].spec?.contents : void 0 };
-    }
-    return { type: "missing" };
+    const body = await this.getJson(
+      resourceUrl("https://apigee.googleapis.com/", `organizations/${org}/sites/${siteId}/apidocs/${apidocId}/documentation`),
+      "Apigee portal documentation get"
+    );
+    return parseApigeePortalDocumentationBody(body);
   }
   async probeVertexExtensions(projectId, location) {
     const url = resourceUrl(
@@ -45496,7 +46111,7 @@ var GcpSdkClient = class {
       throw new Error("Cloud Storage object metadata omitted CRC32C and MD5 checksums");
     }
     try {
-      return new import_node_util4.TextDecoder("utf-8", { fatal: true }).decode(bytes);
+      return new import_node_util5.TextDecoder("utf-8", { fatal: true }).decode(bytes);
     } catch {
       throw new Error("Cloud Storage object is not valid UTF-8");
     }
@@ -45662,6 +46277,26 @@ var GcpSdkClient = class {
       state: typeof item.state === "string" ? item.state : void 0
     };
   }
+  toGatewaySourceFile(value) {
+    const item = value ?? {};
+    return {
+      path: typeof item.path === "string" ? item.path : void 0,
+      contents: typeof item.contents === "string" ? item.contents : void 0
+    };
+  }
+  toGatewayOpenApiDocument(value) {
+    const item = value ?? {};
+    if (!item.document || typeof item.document !== "object" || Array.isArray(item.document)) {
+      return {};
+    }
+    return { document: this.toGatewaySourceFile(item.document) };
+  }
+  toGatewayGrpcService(value) {
+    const item = value ?? {};
+    const fileDescriptorSet = item.fileDescriptorSet && typeof item.fileDescriptorSet === "object" && !Array.isArray(item.fileDescriptorSet) ? this.toGatewaySourceFile(item.fileDescriptorSet) : void 0;
+    const source = Array.isArray(item.source) ? item.source.filter((entry) => entry && typeof entry === "object" && !Array.isArray(entry)).map((entry) => this.toGatewaySourceFile(entry)) : [];
+    return { fileDescriptorSet, source };
+  }
   toGatewayConfig(value) {
     const item = value ?? {};
     return {
@@ -45671,9 +46306,9 @@ var GcpSdkClient = class {
       state: typeof item.state === "string" ? item.state : void 0,
       createTime: typeof item.createTime === "string" ? item.createTime : void 0,
       updateTime: typeof item.updateTime === "string" ? item.updateTime : void 0,
-      openapiDocuments: Array.isArray(item.openapiDocuments) ? item.openapiDocuments : [],
-      grpcServices: Array.isArray(item.grpcServices) ? item.grpcServices : [],
-      managedServiceConfigs: Array.isArray(item.managedServiceConfigs) ? item.managedServiceConfigs : []
+      openapiDocuments: Array.isArray(item.openapiDocuments) ? item.openapiDocuments.map((entry) => this.toGatewayOpenApiDocument(entry)) : [],
+      grpcServices: Array.isArray(item.grpcServices) ? item.grpcServices.map((entry) => this.toGatewayGrpcService(entry)) : [],
+      managedServiceConfigs: Array.isArray(item.managedServiceConfigs) ? item.managedServiceConfigs.filter((entry) => entry && typeof entry === "object" && !Array.isArray(entry)).map((entry) => this.toGatewaySourceFile(entry)) : []
     };
   }
   toManagedService(value) {
@@ -45683,6 +46318,18 @@ var GcpSdkClient = class {
       producerProjectId: typeof item.producerProjectId === "string" ? item.producerProjectId : void 0
     };
   }
+  toEndpointSourceFile(value) {
+    const item = value ?? {};
+    const mapped = {
+      filePath: typeof item.filePath === "string" ? item.filePath : void 0,
+      fileContents: typeof item.fileContents === "string" ? item.fileContents : void 0,
+      fileType: typeof item.fileType === "string" ? item.fileType : void 0
+    };
+    if (typeof item["@type"] === "string") {
+      mapped["@type"] = item["@type"];
+    }
+    return mapped;
+  }
   toEndpointConfig(value) {
     const item = value ?? {};
     const sourceInfo = item.sourceInfo;
@@ -45691,7 +46338,9 @@ var GcpSdkClient = class {
       name: typeof item.name === "string" ? item.name : void 0,
       title: typeof item.title === "string" ? item.title : void 0,
       producerProjectId: typeof item.producerProjectId === "string" ? item.producerProjectId : void 0,
-      sourceInfo: sourceInfo && Array.isArray(sourceInfo.sourceFiles) ? { sourceFiles: sourceInfo.sourceFiles } : void 0
+      sourceInfo: sourceInfo && Array.isArray(sourceInfo.sourceFiles) ? {
+        sourceFiles: sourceInfo.sourceFiles.filter((entry) => entry && typeof entry === "object" && !Array.isArray(entry)).map((entry) => this.toEndpointSourceFile(entry))
+      } : void 0
     };
   }
 };
@@ -46210,7 +46859,7 @@ var actionContract = {
       description: "Provider that produced the resolved spec: api-gateway, cloud-endpoints, apigee, api-hub, apigee-registry, app-integration, connectors-custom, apigee-portal, vertex-extensions, dialogflow-tools, ces-toolsets, or iac-local."
     },
     "spec-format": {
-      description: "Format of the resolved spec: openapi-yaml or openapi-json."
+      description: "Format of the resolved spec: openapi-yaml, openapi-json, asyncapi-yaml, asyncapi-json, graphql-sdl, graphql-introspection-json, protobuf, wsdl, or mcp-json."
     },
     "contract-origin": {
       description: "Compatibility output; always empty in v1."
@@ -46312,72 +46961,6 @@ function detectRepoContext2(input, env = process.env) {
 // src/lib/repo/specs.ts
 var import_promises = require("node:fs/promises");
 var import_node_path4 = __toESM(require("node:path"), 1);
-
-// src/lib/spec/validate-openapi.ts
-var import_yaml = __toESM(require_dist3(), 1);
-var HTTP_OPERATIONS = /* @__PURE__ */ new Set(["get", "put", "post", "delete", "options", "head", "patch", "trace"]);
-function parseAndValidateOpenApi(content) {
-  const trimmed = content.trim();
-  if (!trimmed) {
-    throw new Error("Specification content is empty");
-  }
-  const isJson = trimmed.startsWith("{");
-  let parsed;
-  try {
-    parsed = isJson ? JSON.parse(trimmed) : (0, import_yaml.parse)(trimmed);
-  } catch (error) {
-    const detail = error instanceof Error ? error.message : String(error);
-    throw new Error(`Specification is not parseable JSON or YAML: ${detail}`);
-  }
-  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-    throw new Error("Specification did not parse to an object document");
-  }
-  const document2 = parsed;
-  let version;
-  const swagger = typeof document2.swagger === "string" ? document2.swagger : "";
-  const openapi = typeof document2.openapi === "string" ? document2.openapi : "";
-  if (swagger.startsWith("2")) {
-    version = "swagger-2.0";
-  } else if (openapi.startsWith("3.1")) {
-    version = "openapi-3.1";
-  } else if (openapi.startsWith("3.")) {
-    version = "openapi-3.0";
-  }
-  if (!version) {
-    throw new Error("Specification is not Swagger 2.0 or OpenAPI 3.x");
-  }
-  const paths = document2.paths;
-  if (!paths || typeof paths !== "object" || Array.isArray(paths)) {
-    throw new Error("Specification has no paths object");
-  }
-  if (Object.keys(paths).length === 0) {
-    throw new Error("Specification has an empty paths object");
-  }
-  if (!hasRecognizedHttpOperation(paths)) {
-    throw new Error("Specification has no recognized HTTP operation under paths");
-  }
-  return { document: document2, version, isJson };
-}
-function isRecognizedHttpOperation(value) {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
-  const responses = value.responses;
-  if (!responses || typeof responses !== "object" || Array.isArray(responses)) return false;
-  return Object.keys(responses).length > 0;
-}
-function hasRecognizedHttpOperation(paths) {
-  for (const pathItem of Object.values(paths)) {
-    if (!pathItem || typeof pathItem !== "object" || Array.isArray(pathItem)) continue;
-    const item = pathItem;
-    for (const key of Object.keys(item)) {
-      if (HTTP_OPERATIONS.has(key.toLowerCase()) && isRecognizedHttpOperation(item[key])) {
-        return true;
-      }
-    }
-  }
-  return false;
-}
-
-// src/lib/repo/specs.ts
 var DIRECT_SPEC_CANDIDATES = [
   "openapi.yaml",
   "openapi.yml",
@@ -46391,6 +46974,18 @@ var DIRECT_SPEC_CANDIDATES = [
   "swagger.yaml",
   "swagger.yml",
   "swagger.json",
+  "asyncapi.yaml",
+  "asyncapi.yml",
+  "asyncapi.json",
+  "schema.graphql",
+  "schema.graphqls",
+  "schema.gql",
+  "introspection.json",
+  "service.proto",
+  "schema.proto",
+  "service.wsdl",
+  "api.wsdl",
+  "mcp.json",
   "spec/openapi.yaml",
   "spec/openapi.yml",
   "spec/openapi.json",
@@ -46399,7 +46994,14 @@ var DIRECT_SPEC_CANDIDATES = [
   "api/openapi.json",
   "docs/openapi.yaml",
   "docs/openapi.yml",
-  "docs/openapi.json"
+  "docs/openapi.json",
+  "spec/asyncapi.yaml",
+  "spec/asyncapi.yml",
+  "spec/asyncapi.json",
+  "spec/schema.graphql",
+  "spec/service.proto",
+  "spec/service.wsdl",
+  "spec/mcp.json"
 ];
 var COMMON_SCAN_DIRS = [
   ".",
@@ -46414,7 +47016,11 @@ var COMMON_SCAN_DIRS = [
   "contracts",
   "services",
   "packages",
-  "apps"
+  "apps",
+  "proto",
+  "protos",
+  "graphql",
+  "schemas"
 ];
 var SKIP_DIRS = /* @__PURE__ */ new Set([
   ".git",
@@ -46433,16 +47039,15 @@ var SKIP_DIRS = /* @__PURE__ */ new Set([
 ]);
 var MAX_SPEC_SCAN_FILES = 200;
 var MAX_SPEC_SCAN_DEPTH = 6;
-function isLikelyOpenApiDocument(content) {
+function isLikelyNativeSpec(content) {
+  const detected = detectNativeFormat(content);
+  if (!detected) return void 0;
   try {
-    parseAndValidateOpenApi(content);
-    return true;
+    const validated = parseAndValidateNativeSpec(content, detected.format);
+    return validated.format;
   } catch {
-    return false;
+    return void 0;
   }
-}
-function formatFor(candidate) {
-  return candidate.endsWith(".json") ? "openapi-json" : "openapi-yaml";
 }
 async function findExistingRepoSpecTyped(repoRoot) {
   const candidates = await collectSpecCandidates(repoRoot);
@@ -46455,32 +47060,54 @@ async function findExistingRepoSpecTyped(repoRoot) {
         continue;
       }
       const content = await (0, import_promises.readFile)(fullPath, "utf8");
-      if (isLikelyOpenApiDocument(content)) {
-        valid.push({ path: candidate.replace(/\\/g, "/"), score: specCandidateScore(candidate) });
+      const format = isLikelyNativeSpec(content);
+      if (format) {
+        valid.push({
+          path: candidate.replace(/\\/g, "/"),
+          score: specCandidateScore(candidate),
+          format
+        });
       }
     } catch {
     }
   }
   if (valid.length === 0) return void 0;
+  valid.sort(
+    (left, right) => right.score - left.score || Number(isOpenApiFormat(right.format)) - Number(isOpenApiFormat(left.format)) || left.path.localeCompare(right.path)
+  );
   const top = valid[0];
   const tied = valid.filter((match) => match.score === top.score);
   if (tied.length > 1) {
+    const openApiTied = tied.filter((match) => isOpenApiFormat(match.format));
+    if (openApiTied.length === 1) {
+      const preferred = openApiTied[0];
+      return {
+        path: preferred.path,
+        format: preferred.format,
+        evidence: [`Resolved from repository specification ${preferred.path}`]
+      };
+    }
     return {
       path: top.path,
-      format: formatFor(top.path.toLowerCase()),
+      format: top.format,
       ambiguousPaths: tied.map((match) => match.path),
       evidence: [`Repository contains ${tied.length} equally ranked specification documents; refusing to guess between them`]
     };
   }
   return {
     path: top.path,
-    format: formatFor(top.path.toLowerCase()),
+    format: top.format,
     evidence: [`Resolved from repository specification ${top.path}`]
   };
 }
 function isSpecLikeFilename(filename) {
   const lower2 = filename.toLowerCase();
-  return /^(openapi|swagger|api|oas)(?:[.-]v?\d+(?:\.\d+)*)?\.(?:ya?ml|json)$/.test(lower2);
+  if (/^(openapi|swagger|api|oas)(?:[.-]v?\d+(?:\.\d+)*)?\.(?:ya?ml|json)$/.test(lower2)) return true;
+  if (/^(asyncapi)(?:[.-]v?\d+(?:\.\d+)*)?\.(?:ya?ml|json)$/.test(lower2)) return true;
+  if (/\.(?:wsdl|proto|graphql|graphqls|gql)$/.test(lower2)) return true;
+  if (/^(schema|service|api)\.(?:graphql|graphqls|gql|proto|wsdl)$/.test(lower2)) return true;
+  if (/^(introspection|mcp|server)\.json$/.test(lower2)) return true;
+  return false;
 }
 async function collectSpecCandidates(repoRoot) {
   const candidates = /* @__PURE__ */ new Set();
@@ -46505,7 +47132,9 @@ async function collectSpecCandidates(repoRoot) {
     }
     if (count.value >= MAX_SPEC_SCAN_FILES) break;
   }
-  return [...candidates].sort((left, right) => specCandidateScore(right) - specCandidateScore(left) || left.localeCompare(right));
+  return [...candidates].sort(
+    (left, right) => specCandidateScore(right) - specCandidateScore(left) || left.localeCompare(right)
+  );
 }
 async function walkSpecCandidates(repoRoot, current, count, depth = 0) {
   if (depth > MAX_SPEC_SCAN_DEPTH || count.value >= MAX_SPEC_SCAN_FILES) return [];
@@ -46534,8 +47163,12 @@ function specCandidateScore(candidate) {
   let score = 0;
   if (DIRECT_SPEC_CANDIDATES.includes(normalized)) score += 200;
   if (/^(openapi|swagger)(?:[.-]v?\d+(?:\.\d+)*)?\.(?:ya?ml|json)$/.test(basename2)) score += 90;
-  if (/^(api|oas)(?:[.-]v?\d+(?:\.\d+)*)?\.(?:ya?ml|json)$/.test(basename2)) score += 85;
-  if (/^(api|apis|spec|specs|contracts|reference|public)\//.test(normalized)) score += 20;
+  else if (/^(asyncapi)(?:[.-]v?\d+(?:\.\d+)*)?\.(?:ya?ml|json)$/.test(basename2)) score += 88;
+  else if (/^(api|oas)(?:[.-]v?\d+(?:\.\d+)*)?\.(?:ya?ml|json)$/.test(basename2)) score += 85;
+  else if (/^(schema|service|api)\.(?:graphql|graphqls|gql|proto|wsdl)$/.test(basename2)) score += 70;
+  else if (/\.(?:wsdl|proto|graphql|graphqls|gql)$/.test(basename2)) score += 70;
+  else if (/^(introspection|mcp|server)\.json$/.test(basename2)) score += 65;
+  if (/^(api|apis|spec|specs|contracts|reference|public|proto|protos|graphql|schemas)\//.test(normalized)) score += 20;
   if (/^(services|packages|apps)\/[^/]+\//.test(normalized)) score += 15;
   return score;
 }
@@ -46636,41 +47269,7 @@ async function collectRepoSignals(input) {
 // src/lib/repo/gcp-iac-scanner.ts
 var import_promises4 = require("node:fs/promises");
 var import_node_path7 = __toESM(require("node:path"), 1);
-var import_yaml2 = __toESM(require_dist3(), 1);
-
-// src/lib/providers/source-document.ts
-var import_node_util5 = require("node:util");
-var MAX_SOURCE_BYTES = 10 * 1024 * 1024;
-var MAX_BASE64_CHARS = Math.ceil(MAX_SOURCE_BYTES / 3) * 4 + 4;
-function decodeUtf8OpenApi(text) {
-  if (Buffer.byteLength(text) > MAX_SOURCE_BYTES) throw new Error("Configuration source file exceeds 10 MiB");
-  const parsed = parseAndValidateOpenApi(text);
-  return { content: `${text.replace(/(?:\r?\n)+$/, "")}
-`, format: parsed.isJson ? "openapi-json" : "openapi-yaml", filename: parsed.isJson ? "index.json" : "index.yaml" };
-}
-function decodeSourceDocument(contents) {
-  if (!contents) throw new Error("Configuration source file has no contents");
-  if (contents.length > MAX_BASE64_CHARS || !/^[A-Za-z0-9+/]*={0,2}$/.test(contents)) {
-    throw new Error("Configuration source file is not valid base64 or exceeds 10 MiB");
-  }
-  const bytes = Buffer.from(contents, "base64");
-  const expected = contents.replace(/=+$/, "");
-  if (bytes.toString("base64").replace(/=+$/, "") !== expected) {
-    throw new Error("Configuration source file is not valid base64");
-  }
-  if (bytes.byteLength > MAX_SOURCE_BYTES) {
-    throw new Error("Configuration source file exceeds 10 MiB");
-  }
-  let text;
-  try {
-    text = new import_node_util5.TextDecoder("utf-8", { fatal: true }).decode(bytes);
-  } catch (error) {
-    throw new Error("Configuration source file is not valid UTF-8", { cause: error });
-  }
-  return decodeUtf8OpenApi(text);
-}
-
-// src/lib/repo/gcp-iac-scanner.ts
+var import_yaml3 = __toESM(require_dist3(), 1);
 var MAX_SCAN_FILES = 200;
 var MAX_SCAN_DEPTH = 6;
 var MAX_REFERENCED_OPENAPI_BYTES = 10 * 1024 * 1024;
@@ -46987,7 +47586,7 @@ function addInlineDocument(terraformPath, block, content, candidates, fingerprin
 function extractPulumiYamlDocuments(relativePath, content, candidates, fingerprint) {
   let documents;
   try {
-    documents = (0, import_yaml2.parseAllDocuments)(content, { merge: false, prettyErrors: false });
+    documents = (0, import_yaml3.parseAllDocuments)(content, { merge: false, prettyErrors: false });
   } catch {
     return;
   }
@@ -47000,25 +47599,25 @@ function extractPulumiYamlDocuments(relativePath, content, candidates, fingerpri
   const document2 = nonEmpty[0];
   if (document2.errors.length > 0) return;
   const root = document2.contents;
-  if (!(0, import_yaml2.isMap)(root) || mapHasMergeKey(root) || mapHasFnKey(root)) return;
+  if (!(0, import_yaml3.isMap)(root) || mapHasMergeKey(root) || mapHasFnKey(root)) return;
   if (!isYamlRuntime(mapGet(root, "runtime"))) return;
   const resourcesNode = mapGet(root, "resources");
-  if (!(0, import_yaml2.isMap)(resourcesNode) || mapHasMergeKey(resourcesNode) || mapHasFnKey(resourcesNode)) return;
+  if (!(0, import_yaml3.isMap)(resourcesNode) || mapHasMergeKey(resourcesNode) || mapHasFnKey(resourcesNode)) return;
   for (const item of resourcesNode.items) {
-    if (!(0, import_yaml2.isPair)(item)) continue;
+    if (!(0, import_yaml3.isPair)(item)) continue;
     const resourceName = scalarString(item.key);
-    if (!resourceName || !(0, import_yaml2.isMap)(item.value) || mapHasMergeKey(item.value) || mapHasFnKey(item.value)) continue;
+    if (!resourceName || !(0, import_yaml3.isMap)(item.value) || mapHasMergeKey(item.value) || mapHasFnKey(item.value)) continue;
     const resourceType = scalarString(mapGet(item.value, "type"));
     if (!resourceType || !PULUMI_API_CONFIG_TYPES.has(resourceType)) continue;
     const properties = mapGet(item.value, "properties");
-    if (!(0, import_yaml2.isMap)(properties) || mapHasMergeKey(properties) || mapHasFnKey(properties)) continue;
+    if (!(0, import_yaml3.isMap)(properties) || mapHasMergeKey(properties) || mapHasFnKey(properties)) continue;
     const project = literalFingerprintString(mapGet(properties, "project"));
     if (project) fingerprint.projectIds.push(project);
     const api = literalFingerprintString(mapGet(properties, "api")) ?? literalFingerprintString(mapGet(properties, "apiId"));
     if (api) fingerprint.serviceNames.push(api);
     fingerprint.serviceNames.push(resourceName);
     const openapiDocuments = mapGet(properties, "openapiDocuments");
-    if (!(0, import_yaml2.isSeq)(openapiDocuments)) continue;
+    if (!(0, import_yaml3.isSeq)(openapiDocuments)) continue;
     if (seqHasFnOrMerge(openapiDocuments)) continue;
     openapiDocuments.items.forEach((entry, index) => {
       addPulumiOpenApiDocument(
@@ -47034,19 +47633,19 @@ function extractPulumiYamlDocuments(relativePath, content, candidates, fingerpri
   }
 }
 function addPulumiOpenApiDocument(relativePath, resourceType, resourceName, index, entry, candidates, fingerprint) {
-  if (!(0, import_yaml2.isMap)(entry) || mapHasMergeKey(entry) || mapHasFnKey(entry)) return;
+  if (!(0, import_yaml3.isMap)(entry) || mapHasMergeKey(entry) || mapHasFnKey(entry)) return;
   const documentNode = mapGet(entry, "document");
-  if (!(0, import_yaml2.isMap)(documentNode) || mapHasMergeKey(documentNode) || mapHasFnKey(documentNode)) return;
+  if (!(0, import_yaml3.isMap)(documentNode) || mapHasMergeKey(documentNode) || mapHasFnKey(documentNode)) return;
   const pathNode = mapGet(documentNode, "path");
   const contentsNode = mapGet(documentNode, "contents");
   if (contentsNode == null) return;
-  if ((0, import_yaml2.isAlias)(contentsNode) || (0, import_yaml2.isAlias)(pathNode)) {
+  if ((0, import_yaml3.isAlias)(contentsNode) || (0, import_yaml3.isAlias)(pathNode)) {
     fingerprint.evidence.push(
       `Pulumi ${resourceType}.${resourceName} openapiDocuments/${index} uses YAML alias; ignored`
     );
     return;
   }
-  if (!(0, import_yaml2.isScalar)(contentsNode) || typeof contentsNode.value !== "string") {
+  if (!(0, import_yaml3.isScalar)(contentsNode) || typeof contentsNode.value !== "string") {
     fingerprint.evidence.push(
       `Pulumi ${resourceType}.${resourceName} openapiDocuments/${index} contents is not a literal scalar; ignored`
     );
@@ -47093,8 +47692,8 @@ function addPulumiOpenApiDocument(relativePath, resourceType, resourceName, inde
   }
 }
 function isYamlRuntime(node) {
-  if ((0, import_yaml2.isScalar)(node) && node.value === "yaml") return true;
-  if (!(0, import_yaml2.isMap)(node) || mapHasMergeKey(node) || mapHasFnKey(node)) return false;
+  if ((0, import_yaml3.isScalar)(node) && node.value === "yaml") return true;
+  if (!(0, import_yaml3.isMap)(node) || mapHasMergeKey(node) || mapHasFnKey(node)) return false;
   return scalarString(mapGet(node, "name")) === "yaml";
 }
 function literalFingerprintString(node) {
@@ -47103,28 +47702,28 @@ function literalFingerprintString(node) {
   return value;
 }
 function scalarString(node) {
-  if ((0, import_yaml2.isAlias)(node) || !(0, import_yaml2.isScalar)(node) || typeof node.value !== "string") return void 0;
+  if ((0, import_yaml3.isAlias)(node) || !(0, import_yaml3.isScalar)(node) || typeof node.value !== "string") return void 0;
   return node.value;
 }
 function mapGet(map, key) {
   for (const item of map.items) {
-    if (!(0, import_yaml2.isPair)(item)) continue;
+    if (!(0, import_yaml3.isPair)(item)) continue;
     if (scalarString(item.key) === key) return item.value;
   }
   return void 0;
 }
 function mapHasMergeKey(map) {
-  return map.items.some((item) => (0, import_yaml2.isPair)(item) && scalarString(item.key) === "<<");
+  return map.items.some((item) => (0, import_yaml3.isPair)(item) && scalarString(item.key) === "<<");
 }
 function mapHasFnKey(map) {
   return map.items.some((item) => {
-    if (!(0, import_yaml2.isPair)(item)) return false;
+    if (!(0, import_yaml3.isPair)(item)) return false;
     const key = scalarString(item.key);
     return Boolean(key?.startsWith("fn::"));
   });
 }
 function seqHasFnOrMerge(seq) {
-  return seq.items.some((item) => (0, import_yaml2.isMap)(item) && (mapHasFnKey(item) || mapHasMergeKey(item)));
+  return seq.items.some((item) => (0, import_yaml3.isMap)(item) && (mapHasFnKey(item) || mapHasMergeKey(item)));
 }
 
 // src/lib/resolve/source-selector.ts
@@ -47390,10 +47989,10 @@ async function runNarrowingPipeline(context, candidates) {
 }
 
 // src/lib/spec/oas-derivation.ts
-var import_yaml3 = __toESM(require_dist3(), 1);
+var import_yaml4 = __toESM(require_dist3(), 1);
 function parseDocument(content) {
   try {
-    const parsed = content.trim().startsWith("{") ? JSON.parse(content) : (0, import_yaml3.parse)(content);
+    const parsed = content.trim().startsWith("{") ? JSON.parse(content) : (0, import_yaml4.parse)(content);
     return parsed && typeof parsed === "object" ? parsed : void 0;
   } catch {
     return void 0;
@@ -47453,6 +48052,206 @@ function swaggerToOpenApi(parsed, title) {
   return document2;
 }
 
+// src/lib/spec/proto-source-set.ts
+var WELL_KNOWN_IMPORT_PREFIXES = [
+  "google/protobuf/",
+  "google/api/",
+  "google/rpc/",
+  "google/type/",
+  "google/longrunning/"
+];
+function isWellKnownImport(value) {
+  return WELL_KNOWN_IMPORT_PREFIXES.some((prefix) => value.startsWith(prefix));
+}
+function extractProtoImports(content) {
+  const imports = [];
+  const pattern = /^\s*import\s+(?:public\s+|weak\s+)?["']([^"']+)["']\s*;/gm;
+  for (const match of content.matchAll(pattern)) {
+    const value = match[1]?.trim();
+    if (value) imports.push(value);
+  }
+  return imports;
+}
+function normalizeProtoSourcePath(path8) {
+  if (!path8 || !path8.trim()) return void 0;
+  const normalized = path8.trim().replace(/\\/g, "/");
+  if (normalized.startsWith("/") || /^[A-Za-z]:\//.test(normalized) || normalized.includes("\0")) {
+    return void 0;
+  }
+  const parts = normalized.split("/");
+  if (parts.some((part) => part === "" || part === "." || part === "..")) {
+    return void 0;
+  }
+  return parts.join("/");
+}
+function pathBasename(path8) {
+  return path8.split("/").pop() ?? path8;
+}
+function importMatchesReturnedSource(imp, returned) {
+  if (returned.has(imp)) return true;
+  for (const path8 of returned) {
+    if (path8.endsWith(`/${imp}`) || pathBasename(path8) === imp) return true;
+  }
+  return false;
+}
+function classifyProtobufContent(content) {
+  try {
+    parseAndValidateNativeFamily(content, "protobuf");
+    return "service";
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    if (/PROTO_NO_SERVICES/i.test(detail)) return "message-only";
+    return "invalid";
+  }
+}
+function resolveProtoSourceSet(inputs, options = {}) {
+  const evidence = [...options.evidencePrefix ?? []];
+  if (inputs.length === 0) {
+    if (options.descriptorOnly) {
+      return {
+        status: "unsupported",
+        authority: "unsupported-format",
+        evidence: [
+          ...evidence,
+          "Protobuf descriptor set is present without .proto sources; descriptor-to-contract conversion is not supported"
+        ]
+      };
+    }
+    return {
+      status: "unsupported",
+      authority: "metadata-only",
+      evidence: [...evidence, "No protobuf source files were returned"]
+    };
+  }
+  const decoded = [];
+  const normalizedSeen = /* @__PURE__ */ new Map();
+  for (const input of inputs) {
+    const normalizedPath = normalizeProtoSourcePath(input.path);
+    if (!normalizedPath) {
+      return {
+        status: "unsupported",
+        authority: "unsupported-format",
+        evidence: [
+          ...evidence,
+          `Protobuf source path is missing or unsafe (${input.path ?? "<empty>"}); refusing to guess an entrypoint`
+        ]
+      };
+    }
+    const prior = normalizedSeen.get(normalizedPath);
+    if (prior) {
+      return {
+        status: "unsupported",
+        authority: "unsupported-format",
+        evidence: [
+          ...evidence,
+          `Protobuf source paths collide at ${normalizedPath}; refusing to merge or guess`
+        ]
+      };
+    }
+    normalizedSeen.set(normalizedPath, input.path ?? normalizedPath);
+    let content;
+    try {
+      content = decodeBoundedBase64Utf8(input.contentsBase64);
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      return {
+        status: "unsupported",
+        authority: "metadata-only",
+        evidence: [...evidence, `Protobuf source ${normalizedPath} decode failed: ${detail}`]
+      };
+    }
+    const kind = classifyProtobufContent(content);
+    if (kind === "invalid") {
+      return {
+        status: "unsupported",
+        authority: "unsupported-format",
+        evidence: [
+          ...evidence,
+          `Returned source ${normalizedPath} is not valid service/rpc-bearing protobuf`
+        ]
+      };
+    }
+    decoded.push({
+      originalPath: input.path ?? normalizedPath,
+      normalizedPath,
+      content,
+      serviceBearing: kind === "service",
+      imports: extractProtoImports(content)
+    });
+  }
+  decoded.sort((a, b) => a.normalizedPath.localeCompare(b.normalizedPath));
+  const serviceBearing = decoded.filter((entry) => entry.serviceBearing);
+  const returnedPaths = new Set(decoded.map((entry) => entry.normalizedPath));
+  if (serviceBearing.length === 0) {
+    if (options.descriptorOnly) {
+      return {
+        status: "unsupported",
+        authority: "unsupported-format",
+        evidence: [
+          ...evidence,
+          "Protobuf descriptor set / message-only sources lack a service/rpc entrypoint; not converted"
+        ]
+      };
+    }
+    return {
+      status: "unsupported",
+      authority: "unsupported-format",
+      evidence: [
+        ...evidence,
+        "PROTO_NO_SERVICES: protobuf source set defines no service methods; gRPC contract tests require at least one rpc"
+      ]
+    };
+  }
+  if (serviceBearing.length > 1) {
+    return {
+      status: "unsupported",
+      authority: "unsupported-format",
+      evidence: [
+        ...evidence,
+        `Protobuf source set has ${serviceBearing.length} service/rpc-bearing entrypoints (${serviceBearing.map((entry) => entry.normalizedPath).join(", ")}); refusing to merge or guess`
+      ]
+    };
+  }
+  const primary = serviceBearing[0];
+  for (const imp of primary.imports) {
+    if (isWellKnownImport(imp)) continue;
+    if (importMatchesReturnedSource(imp, returnedPaths)) {
+      return {
+        status: "unsupported",
+        authority: "unsupported-format",
+        evidence: [
+          ...evidence,
+          `Protobuf entrypoint ${primary.normalizedPath} imports sibling source ${imp}; bootstrap cannot load proto closure`
+        ]
+      };
+    }
+    return {
+      status: "unsupported",
+      authority: "unsupported-format",
+      evidence: [
+        ...evidence,
+        `Protobuf entrypoint ${primary.normalizedPath} has unresolved local import ${imp}`
+      ]
+    };
+  }
+  const ignored = decoded.filter((entry) => entry.normalizedPath !== primary.normalizedPath).map((entry) => entry.normalizedPath);
+  if (ignored.length > 0) {
+    evidence.push(
+      `Selected sole service/rpc-bearing protobuf entrypoint ${primary.normalizedPath}; ignored non-imported sources (${ignored.join(", ")})`
+    );
+  } else {
+    evidence.push(`Selected sole service/rpc-bearing protobuf entrypoint ${primary.normalizedPath}`);
+  }
+  return {
+    status: "exportable",
+    export: {
+      content: primary.content,
+      originalPath: primary.originalPath,
+      evidence
+    }
+  };
+}
+
 // src/lib/providers/probe.ts
 function probeFailureStatus(error) {
   const message = error instanceof Error ? error.message : String(error);
@@ -47472,14 +48271,39 @@ function withAuthority(candidate) {
 
 // src/lib/providers/api-gateway.ts
 var CONFIG_PATTERN = /^projects\/([^/]+)\/locations\/([^/]+)\/apis\/([^/]+)\/configs\/([^/]+)$/;
+var API_GATEWAY_PROTOBUF_VARIANT = "protobuf";
 function parseApiGatewayConfigName(value) {
-  const match = CONFIG_PATTERN.exec(value);
+  const match = CONFIG_PATTERN.exec(stripProtobufVariant(value));
   return match ? { projectId: match[1], location: match[2], apiName: match[3], configId: match[4] } : void 0;
+}
+function stripProtobufVariant(value) {
+  return value.endsWith(`#${API_GATEWAY_PROTOBUF_VARIANT}`) ? value.slice(0, -(API_GATEWAY_PROTOBUF_VARIANT.length + 1)) : value;
+}
+function isProtobufVariantId(value) {
+  return value.endsWith(`#${API_GATEWAY_PROTOBUF_VARIANT}`);
 }
 function shortName(value) {
   return value.split("/").pop() ?? value;
 }
-function supportEvidence(config, options = {}) {
+function flattenGrpcSources(config) {
+  const sources = [];
+  let hasDescriptor = false;
+  for (const service of config.grpcServices) {
+    if (service.fileDescriptorSet?.contents) hasDescriptor = true;
+    for (const source of service.source) {
+      sources.push(source);
+    }
+  }
+  return { sources, descriptorOnly: hasDescriptor && sources.length === 0 };
+}
+function resolveGatewayProtobuf(config, evidencePrefix) {
+  const { sources, descriptorOnly } = flattenGrpcSources(config);
+  return resolveProtoSourceSet(
+    sources.map((source) => ({ path: source.path, contentsBase64: source.contents })),
+    { descriptorOnly, evidencePrefix }
+  );
+}
+function openApiSupportEvidence(config, options = {}) {
   const evidence = [`API Gateway config ${shortName(config.name)} is ${config.state ?? "STATE_UNSPECIFIED"}`];
   if (config.state !== "ACTIVE") {
     if (!options.allowInactive) {
@@ -47495,14 +48319,39 @@ function supportEvidence(config, options = {}) {
     const detail = config.openapiDocuments.length === 0 ? "API Gateway config has no OpenAPI source document" : `API Gateway config has ${config.openapiDocuments.length} OpenAPI source documents; refusing to merge or guess`;
     return { supported: false, authority: "metadata-only", evidence: [...evidence, detail] };
   }
-  if (config.grpcServices.length > 0) {
+  return { supported: true, authority: "stored-authoritative", evidence };
+}
+function protobufSupportEvidence(config, options = {}) {
+  const evidence = [`API Gateway config ${shortName(config.name)} is ${config.state ?? "STATE_UNSPECIFIED"}`];
+  if (config.state !== "ACTIVE") {
+    if (!options.allowInactive) {
+      return {
+        supported: false,
+        authority: "metadata-only",
+        evidence: [...evidence, "Only ACTIVE API Gateway configs are exportable"]
+      };
+    }
+    evidence.push("Explicit api-id requested inactive/historical API Gateway config export");
+  }
+  if (config.managedServiceConfigs.length > 0) {
+    evidence.push(
+      `API Gateway managedServiceConfigs (${config.managedServiceConfigs.length}) are non-exportable service configs`
+    );
+  }
+  const resolved = resolveGatewayProtobuf(config, evidence);
+  if (resolved.status === "exportable") {
     return {
-      supported: false,
-      authority: "unsupported-format",
-      evidence: [...evidence, "gRPC API Gateway configs are not converted in v1.0.0"]
+      supported: true,
+      authority: "stored-authoritative",
+      evidence: resolved.export.evidence,
+      originalPath: resolved.export.originalPath
     };
   }
-  return { supported: true, authority: "stored-authoritative", evidence };
+  return {
+    supported: false,
+    authority: resolved.authority,
+    evidence: resolved.evidence
+  };
 }
 var ApiGatewayProvider = class {
   constructor(client, scope) {
@@ -47521,15 +48370,25 @@ var ApiGatewayProvider = class {
     }
   }
   async listCandidates() {
-    const explicit = this.scope.apiId ? parseApiGatewayConfigName(this.scope.apiId) : void 0;
-    if (explicit) {
+    const explicitRaw = this.scope.apiId;
+    const explicit = explicitRaw ? parseApiGatewayConfigName(explicitRaw) : void 0;
+    if (explicitRaw && explicit) {
       if (explicit.projectId !== this.scope.projectId || explicit.location !== this.scope.location) {
         throw new Error("api-id must belong to the configured project-id and global location");
       }
-      const candidate = this.toCandidate(await this.client.getApiGatewayConfig(this.scope.apiId), void 0, {
-        allowInactive: true
+      const full = await this.client.getApiGatewayConfig(stripProtobufVariant(explicitRaw));
+      const wantProtobuf = isProtobufVariantId(explicitRaw);
+      const candidates2 = this.toCandidates(full, void 0, {
+        allowInactive: true,
+        preferProtobufOnly: wantProtobuf
       });
-      return [{ ...candidate, apiId: this.scope.apiId }];
+      if (wantProtobuf) {
+        const protobuf = candidates2.find((candidate) => candidate.meta.exportFamily === "protobuf");
+        return protobuf ? [{ ...protobuf, apiId: explicitRaw }] : candidates2.map((candidate) => ({ ...candidate, apiId: explicitRaw }));
+      }
+      return candidates2.map(
+        (candidate) => candidate.meta.exportFamily === "protobuf" ? candidate : { ...candidate, apiId: stripProtobufVariant(explicitRaw) }
+      );
     }
     if (this.scope.apiId) return [];
     const candidates = [];
@@ -47541,25 +48400,44 @@ var ApiGatewayProvider = class {
         if (!summary.name) continue;
         try {
           const full = await this.client.getApiGatewayConfig(summary.name);
-          candidates.push(this.toCandidate(full, api, { allowInactive: false }));
+          candidates.push(...this.toCandidates(full, api, { allowInactive: false }));
         } catch {
-          const candidate = this.toCandidate(summary, api, { allowInactive: false });
-          candidates.push({
-            ...candidate,
-            supported: false,
-            authority: "metadata-only",
-            evidence: [...candidate.evidence, "API Gateway FULL source export is unavailable; retained for manual review"]
+          const candidate = this.toOpenApiCandidate(summary, api, {
+            allowInactive: false,
+            supportedOverride: {
+              supported: false,
+              authority: "metadata-only",
+              evidence: [
+                `API Gateway config ${shortName(summary.name)} is ${summary.state ?? "STATE_UNSPECIFIED"}`,
+                "API Gateway FULL source export is unavailable; retained for manual review"
+              ]
+            }
           });
+          candidates.push(candidate);
         }
       }
     }
     return candidates;
   }
   async exportSpec(candidate) {
-    const configName = candidate.apiId && parseApiGatewayConfigName(candidate.apiId) ? candidate.apiId : candidate.id;
+    const configName = candidate.meta.configName || (candidate.apiId ? stripProtobufVariant(candidate.apiId) : void 0) || stripProtobufVariant(candidate.id);
     const config = await this.client.getApiGatewayConfig(configName);
     const allowInactive = candidate.meta.allowInactiveExport === "true" || Boolean(this.scope.apiId && parseApiGatewayConfigName(this.scope.apiId));
-    const support = supportEvidence(config, { allowInactive });
+    if (candidate.meta.exportFamily === "protobuf" || isProtobufVariantId(candidate.id)) {
+      const support2 = protobufSupportEvidence(config, { allowInactive });
+      if (!support2.supported) throw new Error(support2.evidence.at(-1));
+      const resolved = resolveGatewayProtobuf(config, []);
+      if (resolved.status !== "exportable") throw new Error(resolved.evidence.at(-1));
+      const decoded2 = decodeUtf8NativeFamily(resolved.export.content, "protobuf");
+      return {
+        ...decoded2,
+        evidence: [
+          `Exported original API Gateway protobuf source ${resolved.export.originalPath}`,
+          ...resolved.export.evidence.filter((line) => !line.startsWith("Selected sole"))
+        ]
+      };
+    }
+    const support = openApiSupportEvidence(config, { allowInactive });
     if (!support.supported) throw new Error(support.evidence.at(-1));
     const decoded = decodeSourceDocument(config.openapiDocuments[0]?.document?.contents);
     return {
@@ -47567,8 +48445,29 @@ var ApiGatewayProvider = class {
       evidence: [`Exported original API Gateway source ${config.openapiDocuments[0]?.document?.path ?? "openapi source"}`]
     };
   }
-  toCandidate(config, api, options) {
-    const support = supportEvidence(config, options);
+  toCandidates(config, api, options) {
+    const hasOpenApi = config.openapiDocuments.length > 0;
+    const hasGrpc = config.grpcServices.length > 0;
+    const results = [];
+    if (!options.preferProtobufOnly && (hasOpenApi || !hasGrpc)) {
+      results.push(this.toOpenApiCandidate(config, api, { allowInactive: options.allowInactive }));
+    }
+    if (hasGrpc) {
+      results.push(
+        this.toProtobufCandidate(config, api, {
+          allowInactive: options.allowInactive,
+          // Distinct ID only when OpenAPI candidate also exists (no silent overwrite).
+          distinctId: hasOpenApi && !options.preferProtobufOnly
+        })
+      );
+    }
+    if (results.length === 0) {
+      results.push(this.toOpenApiCandidate(config, api, { allowInactive: options.allowInactive }));
+    }
+    return results;
+  }
+  toOpenApiCandidate(config, api, options) {
+    const support = options.supportedOverride ?? openApiSupportEvidence(config, options);
     const apiName = config.name.split("/configs/")[0] ?? config.name;
     return withAuthority({
       id: config.name,
@@ -47584,9 +48483,39 @@ var ApiGatewayProvider = class {
       meta: {
         apiName,
         configId: shortName(config.name),
+        configName: config.name,
         createTime: config.createTime ?? "",
         updateTime: config.updateTime ?? "",
         state: config.state ?? "",
+        exportFamily: "openapi",
+        allowInactiveExport: options.allowInactive && config.state !== "ACTIVE" && support.supported ? "true" : "false"
+      }
+    });
+  }
+  toProtobufCandidate(config, api, options) {
+    const support = protobufSupportEvidence(config, options);
+    const apiName = config.name.split("/configs/")[0] ?? config.name;
+    const id = options.distinctId ? `${config.name}#${API_GATEWAY_PROTOBUF_VARIANT}` : config.name;
+    return withAuthority({
+      id,
+      name: `${config.displayName || api?.displayName || shortName(apiName)} (protobuf)`,
+      providerType: this.type,
+      sourceType: "api-gateway-config",
+      authority: support.authority,
+      apiId: id,
+      projectId: this.scope.projectId,
+      tags: { ...api?.labels ?? {}, ...config.labels },
+      supported: support.supported,
+      evidence: support.evidence,
+      meta: {
+        apiName,
+        configId: shortName(config.name),
+        configName: config.name,
+        createTime: config.createTime ?? "",
+        updateTime: config.updateTime ?? "",
+        state: config.state ?? "",
+        exportFamily: "protobuf",
+        originalProtoPath: support.originalPath ?? "",
         allowInactiveExport: options.allowInactive && config.state !== "ACTIVE" && support.supported ? "true" : "false"
       }
     });
@@ -47596,29 +48525,77 @@ var ApiGatewayProvider = class {
 // src/lib/providers/cloud-endpoints.ts
 var ENDPOINT_CONFIG_PATTERN = /^services\/([^/]+)\/configs\/([^/]+)$/;
 var OPENAPI_FILE_TYPES = /* @__PURE__ */ new Set(["OPEN_API_JSON", "OPEN_API_YAML"]);
+var CLOUD_ENDPOINTS_PROTOBUF_VARIANT = "protobuf";
 function parseEndpointConfigName(value) {
-  const match = ENDPOINT_CONFIG_PATTERN.exec(value);
+  const match = ENDPOINT_CONFIG_PATTERN.exec(stripProtobufVariant2(value));
   return match ? { serviceName: match[1], configId: match[2] } : void 0;
 }
-function sourceFiles(config) {
-  return (config.sourceInfo?.sourceFiles ?? []).filter((file) => OPENAPI_FILE_TYPES.has(file.fileType ?? ""));
+function stripProtobufVariant2(value) {
+  return value.endsWith(`#${CLOUD_ENDPOINTS_PROTOBUF_VARIANT}`) ? value.slice(0, -(CLOUD_ENDPOINTS_PROTOBUF_VARIANT.length + 1)) : value;
 }
-function supportEvidence2(config) {
-  const files = sourceFiles(config);
+function isProtobufVariantId2(value) {
+  return value.endsWith(`#${CLOUD_ENDPOINTS_PROTOBUF_VARIANT}`);
+}
+function allSourceFiles(config) {
+  return config.sourceInfo?.sourceFiles ?? [];
+}
+function openApiSourceFiles(config) {
+  return allSourceFiles(config).filter((file) => OPENAPI_FILE_TYPES.has(file.fileType ?? ""));
+}
+function protoSourceFiles(config) {
+  return allSourceFiles(config).filter((file) => file.fileType === "PROTO_FILE");
+}
+function hasDescriptorSet(config) {
+  return allSourceFiles(config).some((file) => file.fileType === "FILE_DESCRIPTOR_SET_PROTO");
+}
+function resolveEndpointsProtobuf(config) {
+  const protoFiles = protoSourceFiles(config);
+  return resolveProtoSourceSet(
+    protoFiles.map((file) => ({ path: file.filePath, contentsBase64: file.fileContents })),
+    {
+      descriptorOnly: hasDescriptorSet(config) && protoFiles.length === 0,
+      evidencePrefix: [`Cloud Endpoints config ${config.id}`]
+    }
+  );
+}
+function openApiSupportEvidence2(config) {
+  const files = openApiSourceFiles(config);
   if (files.length === 1) {
-    return { supported: true, authority: "stored-authoritative", evidence: [`Cloud Endpoints config ${config.id} has one original OpenAPI source`] };
+    return {
+      supported: true,
+      authority: "stored-authoritative",
+      evidence: [`Cloud Endpoints config ${config.id} has one original OpenAPI source`]
+    };
   }
   if (files.length === 0) {
     return {
       supported: false,
       authority: "metadata-only",
-      evidence: ["Cloud Endpoints config has no original OpenAPI sourceInfo file; normalized Service Config is not reverse-converted"]
+      evidence: [
+        "Cloud Endpoints config has no original OpenAPI sourceInfo file; normalized Service Config is not reverse-converted"
+      ]
     };
   }
   return {
     supported: false,
     authority: "metadata-only",
     evidence: [`Cloud Endpoints config has ${files.length} OpenAPI source files; refusing to merge or guess`]
+  };
+}
+function protobufSupportEvidence2(config) {
+  const resolved = resolveEndpointsProtobuf(config);
+  if (resolved.status === "exportable") {
+    return {
+      supported: true,
+      authority: "stored-authoritative",
+      evidence: resolved.export.evidence,
+      originalPath: resolved.export.originalPath
+    };
+  }
+  return {
+    supported: false,
+    authority: resolved.authority,
+    evidence: resolved.evidence
   };
 }
 var CloudEndpointsProvider = class {
@@ -47638,13 +48615,21 @@ var CloudEndpointsProvider = class {
     }
   }
   async listCandidates() {
-    const explicit = this.scope.apiId ? parseEndpointConfigName(this.scope.apiId) : void 0;
-    if (explicit) {
+    const explicitRaw = this.scope.apiId;
+    const explicit = explicitRaw ? parseEndpointConfigName(explicitRaw) : void 0;
+    if (explicitRaw && explicit) {
       const full = await this.client.getEndpointConfig(explicit.serviceName, explicit.configId);
       if (full.producerProjectId !== this.scope.projectId) {
         throw new Error("api-id Cloud Endpoints config does not belong to the configured project-id");
       }
-      return [this.toCandidate(full, { serviceName: explicit.serviceName, producerProjectId: full.producerProjectId })];
+      const service = { serviceName: explicit.serviceName, producerProjectId: full.producerProjectId };
+      const wantProtobuf = isProtobufVariantId2(explicitRaw);
+      const candidates2 = this.toCandidates(full, service, { preferProtobufOnly: wantProtobuf });
+      if (wantProtobuf) {
+        const protobuf = candidates2.find((candidate) => candidate.meta.exportFamily === "protobuf");
+        return protobuf ? [{ ...protobuf, apiId: explicitRaw }] : candidates2;
+      }
+      return candidates2;
     }
     if (this.scope.apiId) return [];
     const candidates = [];
@@ -47654,7 +48639,7 @@ var CloudEndpointsProvider = class {
       if (!newest?.id) continue;
       const full = await this.client.getEndpointConfig(service.serviceName, newest.id);
       if (full.producerProjectId && full.producerProjectId !== this.scope.projectId) continue;
-      candidates.push(this.toCandidate(full, service));
+      candidates.push(...this.toCandidates(full, service));
     }
     return candidates;
   }
@@ -47665,17 +48650,53 @@ var CloudEndpointsProvider = class {
     if (config.producerProjectId !== this.scope.projectId) {
       throw new Error("Cloud Endpoints config belongs to a different project");
     }
-    const support = supportEvidence2(config);
+    if (candidate.meta.exportFamily === "protobuf" || isProtobufVariantId2(candidate.id)) {
+      const support2 = protobufSupportEvidence2(config);
+      if (!support2.supported) throw new Error(support2.evidence.at(-1));
+      const resolved = resolveEndpointsProtobuf(config);
+      if (resolved.status !== "exportable") throw new Error(resolved.evidence.at(-1));
+      const decoded2 = decodeUtf8NativeFamily(resolved.export.content, "protobuf");
+      return {
+        ...decoded2,
+        evidence: [
+          `Exported original Cloud Endpoints protobuf source ${resolved.export.originalPath}`,
+          ...support2.evidence.filter((line) => line.includes("ignored non-imported"))
+        ]
+      };
+    }
+    const support = openApiSupportEvidence2(config);
     if (!support.supported) throw new Error(support.evidence.at(-1));
-    const source = sourceFiles(config)[0];
+    const source = openApiSourceFiles(config)[0];
     const decoded = decodeSourceDocument(source.fileContents);
     return {
       ...decoded,
       evidence: [`Exported original Cloud Endpoints source ${source.filePath ?? "OpenAPI source"}`]
     };
   }
-  toCandidate(config, service) {
-    const support = supportEvidence2(config);
+  toCandidates(config, service, options = {}) {
+    const openapiFiles = openApiSourceFiles(config);
+    const protoFiles = protoSourceFiles(config);
+    const descriptor = hasDescriptorSet(config);
+    const results = [];
+    if (!options.preferProtobufOnly) {
+      if (openapiFiles.length > 0 || protoFiles.length === 0 && !descriptor) {
+        results.push(this.toOpenApiCandidate(config, service));
+      }
+    }
+    if (protoFiles.length > 0 || descriptor) {
+      results.push(
+        this.toProtobufCandidate(config, service, {
+          distinctId: results.length > 0 && !options.preferProtobufOnly
+        })
+      );
+    }
+    if (results.length === 0) {
+      results.push(this.toOpenApiCandidate(config, service));
+    }
+    return results;
+  }
+  toOpenApiCandidate(config, service) {
+    const support = openApiSupportEvidence2(config);
     const id = `services/${service.serviceName}/configs/${config.id}`;
     return withAuthority({
       id,
@@ -47688,7 +48709,34 @@ var CloudEndpointsProvider = class {
       tags: {},
       supported: support.supported,
       evidence: support.evidence,
-      meta: { serviceName: service.serviceName, configId: config.id }
+      meta: {
+        serviceName: service.serviceName,
+        configId: config.id,
+        exportFamily: "openapi"
+      }
+    });
+  }
+  toProtobufCandidate(config, service, options) {
+    const support = protobufSupportEvidence2(config);
+    const baseId = `services/${service.serviceName}/configs/${config.id}`;
+    const id = options.distinctId ? `${baseId}#${CLOUD_ENDPOINTS_PROTOBUF_VARIANT}` : baseId;
+    return withAuthority({
+      id,
+      name: `${config.title || config.name || service.serviceName} (protobuf)`,
+      providerType: this.type,
+      sourceType: "cloud-endpoints-config",
+      authority: support.authority,
+      apiId: id,
+      projectId: this.scope.projectId,
+      tags: {},
+      supported: support.supported,
+      evidence: support.evidence,
+      meta: {
+        serviceName: service.serviceName,
+        configId: config.id,
+        exportFamily: "protobuf",
+        originalProtoPath: support.originalPath ?? ""
+      }
     });
   }
 };
@@ -47799,6 +48847,8 @@ function inflateZip(bytes) {
 // src/lib/providers/apigee.ts
 var REVISION_PATTERN = /^organizations\/([^/]+)\/apis\/([^/]+)\/revisions\/([^/]+)$/;
 var ARCHIVE_PATTERN = /^organizations\/([^/]+)\/environments\/([^/]+)\/archiveDeployments\/([^/]+)$/;
+var PROXY_OPENAPI_PATH = /^apiproxy\/resources\/(?:oas|openapi)\//i;
+var PROXY_WSDL_PATH = /^apiproxy\/resources\/wsdl\//i;
 function parseApigeeRevisionName(value) {
   const match = REVISION_PATTERN.exec(value);
   return match ? { org: match[1], proxyName: match[2], revision: match[3] } : void 0;
@@ -47813,13 +48863,24 @@ function isUnsafeZipEntryName(name) {
   if (normalized.startsWith("/") || /^[A-Za-z]:/.test(normalized)) return true;
   return normalized.split("/").some((segment) => segment === "..");
 }
+function decodeUtf8Text(bytes) {
+  return new import_node_util6.TextDecoder("utf-8", { fatal: true }).decode(bytes);
+}
 function proxyDocuments(bundle) {
   const result = [];
   for (const [path8, bytes] of inflateZip(bundle)) {
-    if (!/^apiproxy\/resources\/(?:oas|openapi)\//i.test(path8) && !/^apiproxy\/resources\/.*\.(?:json|ya?ml)$/i.test(path8)) continue;
-    try {
-      result.push({ path: path8, decoded: decodeUtf8OpenApi(new import_node_util6.TextDecoder("utf-8", { fatal: true }).decode(bytes)) });
-    } catch {
+    if (PROXY_OPENAPI_PATH.test(path8)) {
+      try {
+        result.push({ path: path8, decoded: decodeUtf8OpenApi(decodeUtf8Text(bytes)) });
+      } catch {
+      }
+      continue;
+    }
+    if (PROXY_WSDL_PATH.test(path8)) {
+      try {
+        result.push({ path: path8, decoded: decodeUtf8NativeFamily(decodeUtf8Text(bytes), "wsdl") });
+      } catch {
+      }
     }
   }
   return result;
@@ -47832,11 +48893,16 @@ function archiveDocuments(bundle) {
     }
     if (path8.endsWith("/") || !/\.(?:json|ya?ml)$/i.test(path8)) continue;
     try {
-      result.push({ path: path8, decoded: decodeUtf8OpenApi(new import_node_util6.TextDecoder("utf-8", { fatal: true }).decode(bytes)) });
+      result.push({ path: path8, decoded: decodeUtf8OpenApi(decodeUtf8Text(bytes)) });
     } catch {
     }
   }
   return result;
+}
+function documentCountEvidence(kind, count) {
+  if (count === 1) return [`Apigee ${kind} has one contract source document`];
+  if (count === 0) return [`Apigee ${kind} has no contract source document`];
+  return [`Apigee ${kind} has ${count} contract source documents; refusing to merge or guess`];
 }
 var ApigeeProvider = class {
   constructor(client, scope) {
@@ -47879,7 +48945,7 @@ var ApigeeProvider = class {
       revisions.map(async ({ proxyName, revision, labels }) => {
         const id = `organizations/${this.scope.projectId}/apis/${proxyName}/revisions/${revision}`;
         const count = proxyDocuments(await this.client.downloadApigeeRevisionBundle(this.scope.projectId, proxyName, revision)).length;
-        const evidence = count === 1 ? ["Apigee proxy revision has one OpenAPI source document"] : count === 0 ? ["Apigee proxy revision has no OpenAPI source document"] : [`Apigee proxy revision has ${count} OpenAPI source documents; refusing to merge or guess`];
+        const evidence = documentCountEvidence("proxy revision", count);
         return withAuthority({
           id,
           name: proxyName,
@@ -47915,7 +48981,7 @@ var ApigeeProvider = class {
     const found = proxyDocuments(await this.client.downloadApigeeRevisionBundle(parsed.org, parsed.proxyName, parsed.revision));
     if (found.length !== 1) {
       throw new Error(
-        found.length ? `Apigee proxy revision has ${found.length} OpenAPI source documents; refusing to merge or guess` : "Apigee proxy revision has no OpenAPI source document"
+        found.length ? `Apigee proxy revision has ${found.length} contract source documents; refusing to merge or guess` : "Apigee proxy revision has no contract source document"
       );
     }
     return { ...found[0].decoded, evidence: [`Exported original Apigee source ${found[0].path}`] };
@@ -48084,19 +49150,54 @@ function shortName3(value) {
 function additionalSourceType(type) {
   return type === "BOOSTED_SPEC_CONTENT" ? "api-hub-boosted-spec" : "api-hub-gateway-openapi-spec";
 }
-function supportEvidence3(spec) {
+function resolveApiHubNativeFamily(specTypeIds) {
+  if (specTypeIds.length === 0) return "unspecified";
+  for (const id of specTypeIds) {
+    const lower2 = id.toLowerCase();
+    if (/openapi|oas|swagger|(?:^|[^a-z])rest(?:[^a-z]|$)/i.test(lower2)) return "openapi";
+    if (/asyncapi/i.test(lower2)) return "asyncapi";
+    if (/graphql|gql/i.test(lower2)) return "graphql";
+    if (/proto|protobuf|grpc/i.test(lower2)) return "protobuf";
+    if (/wsdl|soap/i.test(lower2)) return "wsdl";
+    if (/mcp|model.?context.?protocol/i.test(lower2)) return "mcp";
+  }
+  return "unsupported";
+}
+function supportEvidence(spec) {
   const specTypes = spec.specTypeIds;
   const evidence = [
     `API Hub spec ${shortName3(spec.name)} declares type ${specTypes.length > 0 ? specTypes.join(",") : "unspecified"}`
   ];
-  if (specTypes.length > 0 && !specTypes.some((id) => /openapi|oas|swagger/i.test(id))) {
+  const family = resolveApiHubNativeFamily(specTypes);
+  if (family === "unsupported") {
     return {
       supported: false,
       authority: "unsupported-format",
-      evidence: [...evidence, "Only OpenAPI-typed API Hub specs are exportable in v1.0.0"]
+      evidence: [
+        ...evidence,
+        "Only bootstrap-supported native API Hub types (OpenAPI, GraphQL, protobuf, WSDL, AsyncAPI, MCP) are exportable"
+      ],
+      family: "unspecified"
     };
   }
-  return { supported: true, authority: "stored-authoritative", evidence };
+  if (family === "unspecified") {
+    return {
+      supported: true,
+      authority: "stored-authoritative",
+      evidence: [...evidence, "Unspecified API Hub type; export validates content as a bootstrap-supported native format"],
+      family: "unspecified"
+    };
+  }
+  return {
+    supported: true,
+    authority: "stored-authoritative",
+    evidence: [...evidence, `API Hub stored original is bootstrap-supported native family ${family}`],
+    family
+  };
+}
+function isOpenApiTyped(spec) {
+  const family = resolveApiHubNativeFamily(spec.specTypeIds);
+  return family === "openapi" || family === "unspecified";
 }
 var ApiHubProvider = class {
   constructor(client, scope) {
@@ -48153,17 +49254,19 @@ var ApiHubProvider = class {
         ]
       };
     }
+    const family = candidate.meta.nativeFamily || "unspecified";
     const contents = await this.client.getApiHubSpecContents(specName);
     let decoded;
     const evidence = [`Exported API Hub spec contents for ${shortName3(specName)}`];
     if (contents.contents) {
-      decoded = decodeSourceDocument(contents.contents);
+      decoded = family === "unspecified" ? decodeNativeSourceDocument(contents.contents) : decodeNativeSourceDocument(contents.contents, family);
     } else {
       const gcs = parseGcsSpecLocation(candidate.meta.sourceUri ?? "");
       if (!gcs) {
         throw new Error("API Hub spec contents are absent and sourceUri is not a trusted gs:// object reference");
       }
-      decoded = decodeUtf8OpenApi(await this.client.getStorageObjectText(gcs.bucket, gcs.object));
+      const text = await this.client.getStorageObjectText(gcs.bucket, gcs.object);
+      decoded = family === "unspecified" ? decodeUtf8NativeSpec(text) : decodeUtf8NativeFamily(text, family);
       evidence.push("Fetched original spec bytes from registered Cloud Storage source_uri");
     }
     return { ...decoded, evidence };
@@ -48171,7 +49274,7 @@ var ApiHubProvider = class {
   async candidatesForSpec(spec) {
     const original = this.toOriginalCandidate(spec);
     const result = [original];
-    if (!original.supported) return result;
+    if (!original.supported || !isOpenApiTyped(spec)) return result;
     const types3 = spec.additionalSpecContentTypes ?? [];
     for (const type of types3) {
       result.push(...await this.candidatesForAdditionalVariant(spec, type, { includeOriginalBytesGuard: true }));
@@ -48183,8 +49286,8 @@ var ApiHubProvider = class {
    * Never returns the stored original, so generated content cannot overwrite it.
    */
   async candidatesForAdditionalVariant(spec, type, options = {}) {
-    const originalSupport = supportEvidence3(spec);
-    if (!originalSupport.supported) {
+    const originalSupport = supportEvidence(spec);
+    if (!originalSupport.supported || !isOpenApiTyped(spec)) {
       return [
         this.toAdditionalCandidate(spec, type, {
           supported: false,
@@ -48213,7 +49316,10 @@ var ApiHubProvider = class {
         ];
       }
       try {
-        decodeSourceDocument(fetched.contents);
+        const decoded = decodeSourceDocument(fetched.contents);
+        if (!isOpenApiFormat(decoded.format)) {
+          throw new Error("not openapi");
+        }
       } catch {
         return [
           this.toAdditionalCandidate(spec, type, {
@@ -48248,7 +49354,7 @@ var ApiHubProvider = class {
     }
   }
   toOriginalCandidate(spec) {
-    const support = supportEvidence3(spec);
+    const support = supportEvidence(spec);
     return withAuthority({
       id: spec.name,
       name: spec.displayName || spec.apiDisplayName || shortName3(spec.name),
@@ -48266,7 +49372,8 @@ var ApiHubProvider = class {
         specId: shortName3(spec.name),
         createTime: spec.createTime ?? "",
         sourceUri: spec.sourceUri ?? "",
-        specName: spec.name
+        specName: spec.name,
+        nativeFamily: support.family
       }
     });
   }
@@ -48299,6 +49406,7 @@ var ApiHubProvider = class {
 var import_node_zlib3 = require("node:zlib");
 var import_node_util7 = require("node:util");
 var SPEC_PATTERN2 = /^projects\/([^/]+)\/locations\/([^/]+)\/apis\/([^/]+)\/versions\/([^/]+)\/specs\/([^/]+)$/;
+var NATIVE_ZIP_ENTRY = /\.(?:json|ya?ml|graphql|gql|proto|wsdl|xml)$/i;
 function parseApigeeRegistrySpecName(value) {
   const match = SPEC_PATTERN2.exec(value);
   return match ? { projectId: match[1], location: match[2], apiName: match[3], versionId: match[4], specId: match[5] } : void 0;
@@ -48309,45 +49417,85 @@ function shortName4(value) {
 function mimeBase(mimeType) {
   return (mimeType ?? "").split(";")[0]?.trim().toLowerCase() ?? "";
 }
-function isNonOpenApiMime(mimeType) {
-  const base = mimeBase(mimeType);
-  if (!base) return false;
-  return /(?:^|[+/.-])(?:proto|protobuf|graphql|wsdl|asyncapi)(?:$|[+/.-])/.test(base) || base.includes("vnd.apigee.proto") || base.includes("vnd.apigee.graphql");
-}
 function isGzipMime(mimeType) {
   const base = mimeBase(mimeType);
   return base.endsWith("+gzip") || base === "application/gzip" || base === "application/x-gzip";
 }
+function familyHintFromMime(mimeType) {
+  const base = mimeBase(mimeType);
+  if (!base) return void 0;
+  if (/(?:^|[+/.-])(?:openapi|swagger)(?:$|[+/.-])/.test(base) || base.includes("vnd.apigee.openapi")) {
+    return "openapi";
+  }
+  if (/(?:^|[+/.-])asyncapi(?:$|[+/.-])/.test(base)) return "asyncapi";
+  if (/(?:^|[+/.-])graphql(?:$|[+/.-])/.test(base) || base.includes("vnd.apigee.graphql")) return "graphql";
+  if (/(?:^|[+/.-])(?:proto|protobuf)(?:$|[+/.-])/.test(base) || base.includes("vnd.apigee.proto")) {
+    return "protobuf";
+  }
+  if (/(?:^|[+/.-])wsdl(?:$|[+/.-])/.test(base)) return "wsdl";
+  if (/(?:^|[+/.-])mcp(?:$|[+/.-])/.test(base)) return "mcp";
+  return void 0;
+}
+function isClearlyNonSpecMime(mimeType) {
+  const base = mimeBase(mimeType);
+  if (!base) return false;
+  if (familyHintFromMime(mimeType) || isGzipMime(mimeType)) return false;
+  if (base === "application/zip" || base === "application/x-zip-compressed") return false;
+  if (base === "application/octet-stream" || base === "text/plain") return false;
+  return /^(?:image|audio|video|font)\//.test(base) || base === "application/pdf";
+}
 function supportFromMime(spec) {
   const evidence = [
-    `Legacy Apigee Registry spec ${shortName4(spec.name)} declares mimeType ${spec.mimeType ?? "unspecified"} (no-longer-supported surface; not a replacement for API Hub)`
+    `Legacy Apigee Registry spec ${shortName4(spec.name)} declares mimeType ${spec.mimeType ?? "unspecified"} (no-longer-supported surface; not a replacement for API Hub)`,
+    "MIME type is a hint only; export validates bootstrap-native single-file contents"
   ];
-  if (isNonOpenApiMime(spec.mimeType)) {
+  if (isClearlyNonSpecMime(spec.mimeType)) {
     return {
       supported: false,
       authority: "unsupported-format",
-      evidence: [...evidence, "Only OpenAPI/Swagger Apigee Registry specs are exportable"]
+      evidence: [...evidence, "MIME type is not a bootstrap-supported specification family"]
     };
   }
   return { supported: true, authority: "stored-authoritative", evidence };
 }
-function tryDecodeOpenApiBytes(bytes) {
+function tryDecodeNativeBytes(bytes, familyHint) {
+  let text;
   try {
-    return decodeUtf8OpenApi(new import_node_util7.TextDecoder("utf-8", { fatal: true }).decode(bytes));
+    text = new import_node_util7.TextDecoder("utf-8", { fatal: true }).decode(bytes);
   } catch {
     return void 0;
   }
+  try {
+    if (familyHint) return decodeUtf8NativeFamily(text, familyHint);
+    return decodeUtf8NativeSpec(text);
+  } catch {
+    if (familyHint) {
+      try {
+        return decodeUtf8NativeSpec(text);
+      } catch {
+        return void 0;
+      }
+    }
+    return void 0;
+  }
+}
+function familyOf(decoded) {
+  const detected = detectNativeFormat(decoded.content);
+  return detected?.kind ?? decoded.format;
 }
 function decodeRegistryContents(bytes, mimeType) {
-  if (bytes.byteLength >= 2 && bytes[0] === 31 && bytes[1] === 138) {
+  const hint = familyHintFromMime(mimeType);
+  if (bytes.byteLength >= 2 && bytes[0] === 31 && bytes[1] === 139) {
     let inflated;
     try {
       inflated = (0, import_node_zlib3.gunzipSync)(bytes, { maxOutputLength: 10 * 1024 * 1024 });
     } catch {
       throw new Error("Legacy Apigee Registry spec contents are gzip-compressed and could not be inflated within bounds");
     }
-    const decoded2 = tryDecodeOpenApiBytes(inflated);
-    if (!decoded2) throw new Error("Legacy Apigee Registry gzip contents are not a valid OpenAPI document");
+    const decoded2 = tryDecodeNativeBytes(inflated, hint);
+    if (!decoded2) {
+      throw new Error("Legacy Apigee Registry gzip contents are not a valid bootstrap-supported native document");
+    }
     return decoded2;
   }
   if (bytes.byteLength >= 4 && bytes.readUInt32LE(0) === 67324752) {
@@ -48356,24 +49504,33 @@ function decodeRegistryContents(bytes, mimeType) {
       if (path8.includes("\0") || path8.startsWith("/") || path8.includes("..") || /^[A-Za-z]:/.test(path8)) {
         throw new Error("Legacy Apigee Registry multi-file bundle contains an unsafe entry name");
       }
-      if (!/\.(?:json|ya?ml)$/i.test(path8)) continue;
-      const decoded2 = tryDecodeOpenApiBytes(entry);
+      if (!NATIVE_ZIP_ENTRY.test(path8)) continue;
+      const decoded2 = tryDecodeNativeBytes(entry, hint);
       if (decoded2) found.push(decoded2);
     }
     if (found.length === 1) return found[0];
     if (found.length === 0) {
-      throw new Error("Legacy Apigee Registry multi-file bundle has no OpenAPI document");
+      throw new Error("Legacy Apigee Registry multi-file bundle has no bootstrap-supported native document");
     }
-    throw new Error(`Legacy Apigee Registry multi-file bundle has ${found.length} OpenAPI documents; refusing to merge or guess`);
+    const families = new Set(found.map(familyOf));
+    if (families.size > 1) {
+      throw new Error(
+        `Legacy Apigee Registry multi-file bundle has mixed native families (${[...families].join(", ")}); refusing to merge or guess`
+      );
+    }
+    throw new Error(
+      `Legacy Apigee Registry multi-file bundle has ${found.length} native documents; refusing to merge or guess`
+    );
   }
-  if (isGzipMime(mimeType)) {
-    throw new Error("Legacy Apigee Registry spec mimeType indicates compression that remains unsupported without a single OpenAPI document");
+  if (isGzipMime(mimeType) && !(bytes.byteLength >= 2 && bytes[0] === 31 && bytes[1] === 139)) {
+    throw new Error(
+      "Legacy Apigee Registry spec mimeType indicates compression that remains unsupported without inflateable gzip bytes"
+    );
   }
-  if (isNonOpenApiMime(mimeType)) {
-    throw new Error("Legacy Apigee Registry spec contents are a non-OpenAPI mime type");
+  const decoded = tryDecodeNativeBytes(bytes, hint);
+  if (!decoded) {
+    throw new Error("Legacy Apigee Registry spec contents are not a valid bootstrap-supported native document");
   }
-  const decoded = tryDecodeOpenApiBytes(bytes);
-  if (!decoded) throw new Error("Legacy Apigee Registry spec contents are not a valid OpenAPI document");
   return decoded;
 }
 var ApigeeRegistryProvider = class {
@@ -48514,9 +49671,20 @@ var AppIntegrationProvider = class {
 
 // src/lib/providers/apigee-portal.ts
 var PATTERN = /^organizations\/([^/]+)\/sites\/([^/]+)\/apidocs\/([^/]+)$/;
+function isSupportedPortalType(type) {
+  return type === "oasDocumentation" || type === "graphqlDocumentation" || type === "asyncApiDocumentation";
+}
 function parseApigeePortalApidocName(value) {
   const m2 = PATTERN.exec(value);
   return m2 ? { org: m2[1], siteId: m2[2], apidocId: m2[3] } : void 0;
+}
+function tryDecodePortalDoc(doc) {
+  if (!doc.family || !doc.contents?.length || !isSupportedPortalType(doc.type)) return void 0;
+  try {
+    return decodeUtf8NativeFamily(doc.contents, doc.family);
+  } catch {
+    return void 0;
+  }
 }
 var ApigeePortalProvider = class {
   constructor(client, scope) {
@@ -48552,17 +49720,15 @@ var ApigeePortalProvider = class {
     return Promise.all(docs.map(async ({ siteId, doc }) => {
       const id = `organizations/${this.scope.projectId}/sites/${siteId}/apidocs/${doc.id}`;
       const found = await this.client.getApigeePortalDocumentation(this.scope.projectId, siteId, doc.id);
-      let supported = false;
-      let authority = found.type === "oasDocumentation" ? "metadata-only" : "unsupported-format";
-      if (found.type === "oasDocumentation" && found.contents?.trim()) {
-        try {
-          decodeUtf8OpenApi(found.contents);
-          supported = true;
-          authority = "stored-authoritative";
-        } catch {
-          supported = false;
-          authority = "metadata-only";
-        }
+      const decoded = tryDecodePortalDoc(found);
+      const supported = Boolean(decoded);
+      let authority = "unsupported-format";
+      if (found.type === "missing" || found.type === "malformed") {
+        authority = "unsupported-format";
+      } else if (decoded) {
+        authority = "stored-authoritative";
+      } else if (isSupportedPortalType(found.type)) {
+        authority = "metadata-only";
       }
       return withAuthority({
         id,
@@ -48575,7 +49741,7 @@ var ApigeePortalProvider = class {
         tags: {},
         supported,
         evidence: [`Apigee portal documentation type: ${found.type}`],
-        meta: { siteId, apidocId: doc.id, documentationType: found.type }
+        meta: { siteId, apidocId: doc.id, documentationType: found.type, documentationFamily: found.family ?? "" }
       });
     }));
   }
@@ -48583,10 +49749,14 @@ var ApigeePortalProvider = class {
     const p = parseApigeePortalApidocName(candidate.id);
     if (!p || p.org !== this.scope.projectId) throw new Error("Invalid Apigee portal document resource name");
     const doc = await this.client.getApigeePortalDocumentation(p.org, p.siteId, p.apidocId);
-    if (doc.type !== "oasDocumentation" || !doc.contents?.trim()) {
+    const decoded = tryDecodePortalDoc(doc);
+    if (!decoded) {
       throw new Error(`Apigee portal documentation type ${doc.type} is unsupported`);
     }
-    return { ...decodeUtf8OpenApi(doc.contents), evidence: ["Exported original Apigee portal OpenAPI documentation"] };
+    return {
+      ...decoded,
+      evidence: [`Exported original Apigee portal ${doc.family ?? doc.type} documentation`]
+    };
   }
 };
 
@@ -48620,10 +49790,11 @@ var DialogflowToolsProvider = class {
     if (parsed) tools = (await this.client.listDialogflowTools(`projects/${parsed.projectId}/locations/${parsed.location}/agents/${parsed.agentId}`)).filter((tool) => tool.name === this.scope.apiId);
     else for (const agent of await this.client.listDialogflowAgents(this.scope.projectId)) tools.push(...await this.client.listDialogflowTools(agent.name));
     return tools.map((tool) => {
-      const schema = tool.textSchema?.trim();
-      let supported = Boolean(schema);
-      let authority = schema ? "stored-authoritative" : "metadata-only";
-      if (schema) {
+      const schema = tool.textSchema ?? "";
+      const hasSchema = Boolean(schema.trim());
+      let supported = hasSchema;
+      let authority = hasSchema ? "stored-authoritative" : "metadata-only";
+      if (hasSchema) {
         try {
           decodeUtf8OpenApi(schema);
         } catch {
@@ -48641,8 +49812,8 @@ var DialogflowToolsProvider = class {
         projectId: this.scope.projectId,
         tags: {},
         supported,
-        evidence: [schema ? "Dialogflow tool stores an OpenAPI text schema" : "Dialogflow tool has no OpenAPI text schema; only OPEN_API_TOOL tools are exportable"],
-        meta: { textSchema: schema ?? "" }
+        evidence: [hasSchema ? "Dialogflow tool stores an OpenAPI text schema" : "Dialogflow tool has no OpenAPI text schema; only OPEN_API_TOOL tools are exportable"],
+        meta: { textSchema: schema }
       });
     });
   }
@@ -48777,13 +49948,14 @@ var CesToolsetsProvider = class {
     return toolsets.map((toolset) => this.toCandidate(toolset));
   }
   toCandidate(toolset) {
-    const schema = toolset.openApiSchema?.trim();
+    const schema = toolset.openApiSchema ?? "";
+    const hasSchema = Boolean(schema.trim());
     const toolsetScopedTool = /\/toolsets\/[^/]+\/tools\/[^/]+$/.test(toolset.name);
     const standaloneTool = /\/apps\/[^/]+\/tools\/[^/]+$/.test(toolset.name);
     const resourceKind = toolsetScopedTool ? "toolset-scoped tool" : standaloneTool ? "tool" : "toolset";
-    let supported = Boolean(schema);
-    let authority = schema ? "stored-authoritative" : "metadata-only";
-    if (schema) {
+    let supported = hasSchema;
+    let authority = hasSchema ? "stored-authoritative" : "metadata-only";
+    if (hasSchema) {
       try {
         decodeUtf8OpenApi(schema);
       } catch {
@@ -48801,8 +49973,8 @@ var CesToolsetsProvider = class {
       projectId: this.scope.projectId,
       tags: {},
       supported,
-      evidence: [schema ? `CES ${resourceKind} stores an OpenAPI schema` : `CES ${resourceKind} has no OpenAPI schema`],
-      meta: { openApiSchema: schema ?? "", resourceKind }
+      evidence: [hasSchema ? `CES ${resourceKind} stores an OpenAPI schema` : `CES ${resourceKind} has no OpenAPI schema`],
+      meta: { openApiSchema: schema, resourceKind }
     });
   }
   async exportSpec(candidate) {
