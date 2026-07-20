@@ -558,7 +558,7 @@ describe('GCP live validation contract', () => {
 
   it('classifies an authenticated empty portal collection as unavailable for live fixture validation', async () => {
     const result = await probeProviderSurface({
-      runner: () => '{"sites":[]}\n200',
+      runner: () => '{"message":"Returning sites","status":"success"}\n200',
       token: 'token',
       env: { projectId: 'sample-project', location: 'global', apigeeOrg: 'sample-org', apigeeEnv: 'eval' },
       providerType: 'apigee-portal'
