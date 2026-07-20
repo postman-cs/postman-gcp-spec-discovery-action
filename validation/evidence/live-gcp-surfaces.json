@@ -1,102 +1,31 @@
 {
   "schemaVersion": 2,
-  "evidenceKind": "historical",
-  "capturedAt": "2026-07-18T00:00:00.000Z",
-  "actionVersion": "legacy-unbound",
-  "gitCommit": "legacy-unbound",
-  "distCliSha256": "legacy-unbound",
-  "distIndexSha256": "legacy-unbound",
+  "evidenceKind": "current",
+  "capturedAt": "2026-07-20T07:16:41.331Z",
+  "actionVersion": "1.0.0",
+  "gitCommit": "482e8dd3bfc2ee961f9627318eab8435243a44eb",
+  "distCliSha256": "398505d9fb3361a5ca016fe317f8ad7223c81ae13be83ecd4e458bd56be13bb3",
+  "distIndexSha256": "6cde4400f4d197f1bde9d204e9e65d3b332a13bbb7c9c37b47b97b20874c7533",
   "projectScope": "live-validation-project",
   "totals": {
-    "cases": 10,
-    "passed": 10,
-    "failed": 0,
+    "cases": 1,
+    "passed": 0,
+    "failed": 1,
     "substituted": 0
   },
   "teardown": {
-    "status": "pass",
-    "reasonCode": "legacy-unbound"
+    "status": "fail",
+    "reasonCode": "teardown-failed"
   },
   "results": [
     {
-      "name": "gateway-explicit-api-id",
-      "providerType": "api-gateway",
-      "sourceType": "api-gateway-config",
-      "specFormat": "openapi-yaml",
-      "status": "pass",
-      "validationMode": "legacy-unbound"
-    },
-    {
-      "name": "gateway-discovery",
-      "providerType": "api-gateway",
-      "sourceType": "api-gateway-config",
-      "specFormat": "openapi-yaml",
-      "status": "pass",
-      "validationMode": "legacy-unbound"
-    },
-    {
-      "name": "gateway-repo-label",
-      "providerType": "api-gateway",
-      "sourceType": "api-gateway-config",
-      "specFormat": "openapi-yaml",
-      "status": "pass",
-      "validationMode": "legacy-unbound"
-    },
-    {
-      "name": "gateway-label-conflict",
+      "name": "runner",
       "providerType": "",
-      "sourceType": "manual-review",
-      "specFormat": "",
-      "status": "pass",
-      "validationMode": "legacy-unbound"
-    },
-    {
-      "name": "endpoints-explicit-api-id",
-      "providerType": "cloud-endpoints",
-      "sourceType": "cloud-endpoints-config",
-      "specFormat": "openapi-yaml",
-      "status": "pass",
-      "validationMode": "legacy-unbound"
-    },
-    {
-      "name": "endpoints-discovery",
-      "providerType": "cloud-endpoints",
-      "sourceType": "cloud-endpoints-config",
-      "specFormat": "openapi-yaml",
-      "status": "pass",
-      "validationMode": "legacy-unbound"
-    },
-    {
-      "name": "apigee-discovery",
-      "providerType": "apigee",
-      "sourceType": "apigee-proxy",
-      "specFormat": "openapi-yaml",
-      "status": "pass",
-      "validationMode": "legacy-unbound"
-    },
-    {
-      "name": "discover-many",
-      "providerType": "api-gateway",
       "sourceType": "",
-      "specFormat": "openapi-yaml",
-      "status": "pass",
-      "validationMode": "legacy-unbound"
-    },
-    {
-      "name": "iac-single",
-      "providerType": "iac-local",
-      "sourceType": "iac-embedded",
-      "specFormat": "openapi-yaml",
-      "status": "pass",
-      "validationMode": "legacy-unbound"
-    },
-    {
-      "name": "ambiguity",
-      "providerType": "",
-      "sourceType": "manual-review",
       "specFormat": "",
-      "status": "pass",
-      "validationMode": "legacy-unbound"
+      "status": "fail",
+      "validationMode": "",
+      "reasonCode": "cli-failed"
     }
   ]
 }

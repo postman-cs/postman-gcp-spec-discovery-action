@@ -21,6 +21,13 @@ export const LIVE_COVERAGE_MATRIX: readonly LiveCoverageSlot[];
 
 export interface LiveFlags { provision: boolean; teardown: boolean }
 export interface LiveEnv { projectId: string; location: string; apigeeOrg: string; apigeeEnv: string }
+export type ManifestResourceKey = 'gateway' | 'endpoints' | 'apigee';
+
+export interface ManifestResourceState {
+  attempted: boolean;
+  created: boolean;
+}
+
 export interface LiveManifest {
   runId: string;
   runMarker: string;
@@ -32,6 +39,7 @@ export interface LiveManifest {
   repoLabel?: string;
   conflictSlug?: string;
   conflictLabel?: string;
+  resources?: Record<ManifestResourceKey, ManifestResourceState>;
 }
 
 export type EvidenceStatus = 'pass' | 'fail' | 'substitute';
@@ -100,8 +108,21 @@ export function requiredEnv(env: Record<string, string | undefined>): LiveEnv;
 export function verifyRemoteGatewayOwnership(manifest: LiveManifest, described: { labels?: Record<string, string> } | undefined): boolean;
 export function verifyRemoteEndpointsOwnership(manifest: LiveManifest, serviceName: string | undefined): boolean;
 export function verifyRemoteApigeeOwnership(manifest: LiveManifest, described: { name?: string } | undefined): boolean;
+export const MANIFEST_RESOURCE_KEYS: readonly ManifestResourceKey[];
+export function createEmptyResourceStates(): Record<ManifestResourceKey, ManifestResourceState>;
+export function ensureManifestResources(manifest: LiveManifest): Record<ManifestResourceKey, ManifestResourceState>;
+export function getResourceState(manifest: LiveManifest, key: ManifestResourceKey): ManifestResourceState;
+export function markResourceAttempted(manifest: LiveManifest, key: ManifestResourceKey): ManifestResourceState;
+export function markResourceCreated(manifest: LiveManifest, key: ManifestResourceKey): ManifestResourceState;
 export function classifyProbeError(message: unknown): 'fatal' | 'retryable';
 export function isResourceNotFoundError(error: unknown): boolean;
+export function proveExactNameAbsent(probe: () => unknown): true;
+export function provision(options: {
+  runner: (command: string, args: string[], options?: Record<string, unknown>) => unknown;
+  token: string;
+  env: LiveEnv;
+  manifest: LiveManifest;
+}): Promise<{ endpointsConfigId: string }>;
 export function assertProviderMatrixAligned(matrix?: readonly LiveCoverageSlot[], retained?: readonly string[]): boolean;
 export function confinePathWithinRoot(rootPath: string, targetPath: string, fieldName?: string): string;
 export function parseLiveFixtures(raw: unknown, options?: { projectId?: string; apigeeOrg?: string; repoRoot?: string }): LiveFixture[];

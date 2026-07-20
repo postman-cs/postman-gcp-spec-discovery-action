@@ -61,6 +61,8 @@ export const FAIL_REASON_CODES = Object.freeze([
   'probe-inconclusive',
   'teardown-failed',
   'residue-detected',
+  'absence-unprovable',
+  'iam-denied',
   'dist-missing',
   'dist-dirty',
   'fixture-schema-invalid'
@@ -172,8 +174,11 @@ export function verifyRemoteGatewayOwnership(manifest, described) {
 }
 
 export function verifyRemoteEndpointsOwnership(manifest, serviceName) {
-  if (serviceName !== manifest.endpointsService || !serviceName.startsWith(`postman-live-${manifest.runId}.`)) {
-    throw new Error('REFUSING Endpoints deletion: remote name is not run-scoped');
+  const expectedMarker = `postman-live-${manifest.runId}`;
+  if (manifest.runMarker !== expectedMarker
+    || serviceName !== manifest.endpointsService
+    || !serviceName.startsWith(`${expectedMarker}.`)) {
+    throw new Error('REFUSING Endpoints deletion: remote name/marker is not current-run scoped');
   }
   return true;
 }
@@ -186,6 +191,52 @@ export function verifyRemoteApigeeOwnership(manifest, described) {
   return true;
 }
 
+/** Resource keys tracked for partial-provisioning teardown. */
+export const MANIFEST_RESOURCE_KEYS = Object.freeze(['gateway', 'endpoints', 'apigee']);
+
+export function createEmptyResourceStates() {
+  return {
+    gateway: { attempted: false, created: false },
+    endpoints: { attempted: false, created: false },
+    apigee: { attempted: false, created: false }
+  };
+}
+
+/** Ensure manifest.resources exists with per-surface attempted/created flags. */
+export function ensureManifestResources(manifest) {
+  if (!manifest.resources || typeof manifest.resources !== 'object') {
+    manifest.resources = createEmptyResourceStates();
+  }
+  for (const key of MANIFEST_RESOURCE_KEYS) {
+    const current = manifest.resources[key];
+    if (!current || typeof current !== 'object') {
+      manifest.resources[key] = { attempted: false, created: false };
+      continue;
+    }
+    current.attempted = Boolean(current.attempted);
+    current.created = Boolean(current.created);
+  }
+  return manifest.resources;
+}
+
+export function getResourceState(manifest, key) {
+  const resources = ensureManifestResources(manifest);
+  return resources[key] ?? { attempted: false, created: false };
+}
+
+export function markResourceAttempted(manifest, key) {
+  const state = getResourceState(manifest, key);
+  state.attempted = true;
+  return state;
+}
+
+export function markResourceCreated(manifest, key) {
+  const state = getResourceState(manifest, key);
+  state.attempted = true;
+  state.created = true;
+  return state;
+}
+
 export function classifyProbeError(message) {
   const text = String(message ?? '');
   if (/\b(400|401|403)\b|invalid argument|unauthenticated|permission denied|forbidden/i.test(text)) return 'fatal';
@@ -195,6 +246,26 @@ export function classifyProbeError(message) {
 export function isResourceNotFoundError(error) {
   const text = error instanceof Error ? error.message : String(error ?? '');
   return /\b404\b|not found|does not exist/i.test(text);
+}
+
+/**
+ * Exact-name absence proof for attempted-but-unconfirmed resources.
+ * 404/not-found proves clean; any other error (including IAM) fails teardown.
+ * Never lists or deletes.
+ */
+export function proveExactNameAbsent(probe) {
+  try {
+    probe();
+  } catch (error) {
+    if (isResourceNotFoundError(error)) return true;
+    const wrapped = new Error('absence-unprovable');
+    wrapped.reasonCode = classifyProbeError(error) === 'fatal' ? 'iam-denied' : 'absence-unprovable';
+    wrapped.cause = error;
+    throw wrapped;
+  }
+  const error = new Error('residue-detected');
+  error.reasonCode = 'residue-detected';
+  throw error;
 }
 
 /** Assert live matrix covers every retained provider; throws on drift. */
@@ -679,6 +750,14 @@ export function isHistoricalEvidence(evidence) {
     || evidence?.gitCommit === LEGACY_UNBOUND;
 }
 
+function hasExactHistoricalBindings(evidence) {
+  return evidence?.evidenceKind === 'historical'
+    && evidence?.actionVersion === LEGACY_UNBOUND
+    && evidence?.gitCommit === LEGACY_UNBOUND
+    && evidence?.distCliSha256 === LEGACY_UNBOUND
+    && evidence?.distIndexSha256 === LEGACY_UNBOUND;
+}
+
 function isBoundDigest(value) {
   return typeof value === 'string' && BINDING_HEX_RE.test(value) && value !== LEGACY_UNBOUND;
 }
@@ -740,8 +819,8 @@ export function assertAcceptableLiveEvidence(evidence, matrix = LIVE_COVERAGE_MA
   }
 
   if (historical) {
-    if (evidence.evidenceKind && evidence.evidenceKind !== 'historical') {
-      throw new Error('evidence-unacceptable: historical receipt must declare evidenceKind historical');
+    if (!hasExactHistoricalBindings(evidence)) {
+      throw new Error('evidence-unacceptable: historical receipt requires exact legacy-unbound bindings');
     }
     if (matrixSlotsMissingCoverage(evidence.results, matrix).length === 0 && (evidence.results?.length ?? 0) >= matrix.length) {
       throw new Error('evidence-unacceptable: unbound complete claim (historical cannot claim full matrix)');
@@ -758,8 +837,8 @@ export function assertAcceptableLiveEvidence(evidence, matrix = LIVE_COVERAGE_MA
   }
 
   // Current complete receipt.
-  if (evidence.evidenceKind === 'historical') {
-    throw new Error('evidence-unacceptable: bound receipt cannot declare evidenceKind historical');
+  if (evidence.evidenceKind !== 'current') {
+    throw new Error('evidence-unacceptable: bound receipt must declare evidenceKind current');
   }
   if (!hasOnlyClosedResultStates(evidence.results, ['pass', 'substitute'])) {
     throw new Error('evidence-unacceptable: current receipt contains failed or pending result state');
@@ -953,7 +1032,8 @@ async function seedAmbiguity(workspace) {
   await cp(path.join(repoRoot, 'validation/fixtures/gcp/openapi.yaml'), path.join(workspace, 'infra/bravo-doc.yaml'));
 }
 
-async function provision({ runner, token, env, manifest }) {
+export async function provision({ runner, token, env, manifest }) {
+  ensureManifestResources(manifest);
   gcloud(runner, ['services', 'enable', 'apigateway.googleapis.com', 'servicemanagement.googleapis.com', 'servicecontrol.googleapis.com', '--project', env.projectId]);
   const spec = path.join(repoRoot, 'validation/fixtures/gcp/openapi.yaml');
   const managed = await mkdtemp(path.join(os.tmpdir(), 'gcp-managed-'));
@@ -961,14 +1041,21 @@ async function provision({ runner, token, env, manifest }) {
   try {
     const gatewaySpecPath = path.join(managed, 'gateway.yaml');
     await writeFile(gatewaySpecPath, swagger2Document({ title: manifest.gatewayName, backend: true }));
+    // Gateway API/config set: mark attempted before create; created once the API exists.
+    markResourceAttempted(manifest, 'gateway');
     gcloud(runner, ['api-gateway', 'apis', 'create', manifest.gatewayName, '--project', env.projectId, '--labels', `postman-run-marker=${manifest.runMarker}`]);
+    markResourceCreated(manifest, 'gateway');
     gcloud(runner, ['api-gateway', 'api-configs', 'create', manifest.gatewayConfigName, '--api', manifest.gatewayName, '--openapi-spec', gatewaySpecPath, '--project', env.projectId, '--labels', `postman-run-marker=${manifest.runMarker},postman-project-name=${manifest.gatewayName},postman-repo=${manifest.repoLabel}`]);
     gcloud(runner, ['api-gateway', 'api-configs', 'create', `${manifest.gatewayConfigName}-b`, '--api', manifest.gatewayName, '--openapi-spec', gatewaySpecPath, '--project', env.projectId, '--labels', `postman-run-marker=${manifest.runMarker},postman-project-name=${manifest.gatewayName}-alt,postman-repo=${manifest.conflictLabel}`]);
     gcloud(runner, ['api-gateway', 'api-configs', 'create', `${manifest.gatewayConfigName}-c`, '--api', manifest.gatewayName, '--openapi-spec', gatewaySpecPath, '--project', env.projectId, '--labels', `postman-run-marker=${manifest.runMarker},postman-project-name=${manifest.gatewayName}-alt,postman-repo=${manifest.conflictLabel}`]);
+
     const endpointsPath = path.join(managed, 'endpoints.yaml');
     await writeFile(endpointsPath, swagger2Document({ title: manifest.endpointsService, host: manifest.endpointsService }));
+    markResourceAttempted(manifest, 'endpoints');
     gcloud(runner, ['endpoints', 'services', 'deploy', endpointsPath, '--project', env.projectId]);
+    markResourceCreated(manifest, 'endpoints');
     endpointsConfigId = String(gcloud(runner, ['endpoints', 'configs', 'list', '--service', manifest.endpointsService, '--project', env.projectId, '--format', 'value(id)', '--limit', '1'])).trim().split('\n')[0] ?? '';
+
     const proxyZip = await mkdtemp(path.join(os.tmpdir(), 'gcp-apigee-'));
     await mkdir(path.join(proxyZip, 'apiproxy/resources/oas'), { recursive: true });
     await mkdir(path.join(proxyZip, 'apiproxy/proxies'), { recursive: true });
@@ -978,7 +1065,9 @@ async function provision({ runner, token, env, manifest }) {
     const zip = path.join(proxyZip, 'proxy.zip');
     runner('zip', ['-qr', zip, 'apiproxy'], { cwd: proxyZip });
     try {
+      markResourceAttempted(manifest, 'apigee');
       restUploadZip(runner, token, `https://apigee.googleapis.com/v1/organizations/${env.apigeeOrg}/apis?action=import&name=${manifest.proxyName}`, zip);
+      markResourceCreated(manifest, 'apigee');
     } finally { await rm(proxyZip, { recursive: true, force: true }); }
   } finally { await rm(managed, { recursive: true, force: true }); }
   return { endpointsConfigId };
@@ -1046,53 +1135,86 @@ export async function probeProviderSurface({ runner, token, env, providerType, p
 
 export async function teardown({ runner, env, manifest, log }) {
   const token = accessToken(runner);
-  let gatewayExists = true;
-  try {
-    const described = JSON.parse(gcloud(runner, ['api-gateway', 'apis', 'describe', manifest.gatewayName, '--project', env.projectId, '--format', 'json']));
-    verifyRemoteGatewayOwnership(manifest, described);
-  } catch (error) {
-    if (isResourceNotFoundError(error)) gatewayExists = false;
-    else throw error;
-  }
-  if (gatewayExists) {
-    try { gcloud(runner, ['api-gateway', 'api-configs', 'delete', `${manifest.gatewayConfigName}-c`, '--api', manifest.gatewayName, '--project', env.projectId, '--quiet']); } catch (error) { if (!isResourceNotFoundError(error)) throw error; }
-    try { gcloud(runner, ['api-gateway', 'api-configs', 'delete', `${manifest.gatewayConfigName}-b`, '--api', manifest.gatewayName, '--project', env.projectId, '--quiet']); } catch (error) { if (!isResourceNotFoundError(error)) throw error; }
-    try { gcloud(runner, ['api-gateway', 'api-configs', 'delete', manifest.gatewayConfigName, '--api', manifest.gatewayName, '--project', env.projectId, '--quiet']); } catch (error) { if (!isResourceNotFoundError(error)) throw error; }
-    try { gcloud(runner, ['api-gateway', 'apis', 'delete', manifest.gatewayName, '--project', env.projectId, '--quiet']); } catch (error) { if (!isResourceNotFoundError(error)) throw error; }
-  }
-  verifyRemoteEndpointsOwnership(manifest, manifest.endpointsService);
-  try { gcloud(runner, ['endpoints', 'services', 'delete', manifest.endpointsService, '--project', env.projectId, '--quiet']); } catch (error) { if (!isResourceNotFoundError(error)) throw error; }
-  let apigeeExists = true;
-  try {
-    const described = JSON.parse(rest(runner, token, 'GET', `https://apigee.googleapis.com/v1/organizations/${env.apigeeOrg}/apis/${manifest.proxyName}`));
-    verifyRemoteApigeeOwnership(manifest, described);
-  } catch (error) {
-    if (isResourceNotFoundError(error)) apigeeExists = false;
-    else throw error;
-  }
-  if (apigeeExists) {
-    try { rest(runner, token, 'DELETE', `https://apigee.googleapis.com/v1/organizations/${env.apigeeOrg}/apis/${manifest.proxyName}`); } catch (error) { if (!isResourceNotFoundError(error)) throw error; }
+  ensureManifestResources(manifest);
+  const gateway = getResourceState(manifest, 'gateway');
+  const endpoints = getResourceState(manifest, 'endpoints');
+  const apigee = getResourceState(manifest, 'apigee');
+
+  // Unattempted surfaces are never probed or deleted — unavailable Apigee must
+  // not poison a Gateway-only permission failure that never reached Apigee.
+  if (gateway.created) {
+    let gatewayExists = true;
+    try {
+      const described = JSON.parse(gcloud(runner, ['api-gateway', 'apis', 'describe', manifest.gatewayName, '--project', env.projectId, '--format', 'json']));
+      verifyRemoteGatewayOwnership(manifest, described);
+    } catch (error) {
+      if (isResourceNotFoundError(error)) gatewayExists = false;
+      else throw error;
+    }
+    if (gatewayExists) {
+      try { gcloud(runner, ['api-gateway', 'api-configs', 'delete', `${manifest.gatewayConfigName}-c`, '--api', manifest.gatewayName, '--project', env.projectId, '--quiet']); } catch (error) { if (!isResourceNotFoundError(error)) throw error; }
+      try { gcloud(runner, ['api-gateway', 'api-configs', 'delete', `${manifest.gatewayConfigName}-b`, '--api', manifest.gatewayName, '--project', env.projectId, '--quiet']); } catch (error) { if (!isResourceNotFoundError(error)) throw error; }
+      try { gcloud(runner, ['api-gateway', 'api-configs', 'delete', manifest.gatewayConfigName, '--api', manifest.gatewayName, '--project', env.projectId, '--quiet']); } catch (error) { if (!isResourceNotFoundError(error)) throw error; }
+      try { gcloud(runner, ['api-gateway', 'apis', 'delete', manifest.gatewayName, '--project', env.projectId, '--quiet']); } catch (error) { if (!isResourceNotFoundError(error)) throw error; }
+    }
+  } else if (gateway.attempted) {
+    proveExactNameAbsent(() => {
+      gcloud(runner, ['api-gateway', 'apis', 'describe', manifest.gatewayName, '--project', env.projectId, '--format', 'json']);
+    });
   }
 
-  // Prove no residue for resources this runner created (exact run-scoped names only).
+  if (endpoints.created) {
+    verifyRemoteEndpointsOwnership(manifest, manifest.endpointsService);
+    try { gcloud(runner, ['endpoints', 'services', 'delete', manifest.endpointsService, '--project', env.projectId, '--quiet']); } catch (error) { if (!isResourceNotFoundError(error)) throw error; }
+  } else if (endpoints.attempted) {
+    proveExactNameAbsent(() => {
+      gcloud(runner, ['endpoints', 'services', 'describe', manifest.endpointsService, '--project', env.projectId, '--format', 'json']);
+    });
+  }
+
+  if (apigee.created) {
+    let apigeeExists = true;
+    try {
+      const described = JSON.parse(rest(runner, token, 'GET', `https://apigee.googleapis.com/v1/organizations/${env.apigeeOrg}/apis/${manifest.proxyName}`));
+      verifyRemoteApigeeOwnership(manifest, described);
+    } catch (error) {
+      if (isResourceNotFoundError(error)) apigeeExists = false;
+      else throw error;
+    }
+    if (apigeeExists) {
+      try { rest(runner, token, 'DELETE', `https://apigee.googleapis.com/v1/organizations/${env.apigeeOrg}/apis/${manifest.proxyName}`); } catch (error) { if (!isResourceNotFoundError(error)) throw error; }
+    }
+  } else if (apigee.attempted) {
+    proveExactNameAbsent(() => {
+      rest(runner, token, 'GET', `https://apigee.googleapis.com/v1/organizations/${env.apigeeOrg}/apis/${manifest.proxyName}`);
+    });
+  }
+
+  // Post-delete absence proof only for confirmed-created resources.
   const residue = [];
-  try {
-    gcloud(runner, ['api-gateway', 'apis', 'describe', manifest.gatewayName, '--project', env.projectId, '--format', 'json']);
-    residue.push('gateway');
-  } catch (error) {
-    if (!isResourceNotFoundError(error)) throw error;
+  if (gateway.created) {
+    try {
+      gcloud(runner, ['api-gateway', 'apis', 'describe', manifest.gatewayName, '--project', env.projectId, '--format', 'json']);
+      residue.push('gateway');
+    } catch (error) {
+      if (!isResourceNotFoundError(error)) throw error;
+    }
   }
-  try {
-    gcloud(runner, ['endpoints', 'services', 'describe', manifest.endpointsService, '--project', env.projectId, '--format', 'json']);
-    residue.push('endpoints');
-  } catch (error) {
-    if (!isResourceNotFoundError(error)) throw error;
+  if (endpoints.created) {
+    try {
+      gcloud(runner, ['endpoints', 'services', 'describe', manifest.endpointsService, '--project', env.projectId, '--format', 'json']);
+      residue.push('endpoints');
+    } catch (error) {
+      if (!isResourceNotFoundError(error)) throw error;
+    }
   }
-  try {
-    rest(runner, token, 'GET', `https://apigee.googleapis.com/v1/organizations/${env.apigeeOrg}/apis/${manifest.proxyName}`);
-    residue.push('apigee');
-  } catch (error) {
-    if (!isResourceNotFoundError(error)) throw error;
+  if (apigee.created) {
+    try {
+      rest(runner, token, 'GET', `https://apigee.googleapis.com/v1/organizations/${env.apigeeOrg}/apis/${manifest.proxyName}`);
+      residue.push('apigee');
+    } catch (error) {
+      if (!isResourceNotFoundError(error)) throw error;
+    }
   }
   if (residue.length) {
     const error = new Error('residue-detected');
@@ -1403,7 +1525,7 @@ export async function runLiveValidation({ argv = process.argv.slice(2), env: raw
   const suffix = randomBytes(4).toString('hex');
   const manifest = {
     runId: suffix,
-    runMarker: `postman-${suffix}`,
+    runMarker: `postman-live-${suffix}`,
     gatewayName: `postman-live-${suffix}`,
     gatewayConfigName: `postman-live-config-${suffix}`,
     endpointsService: `postman-live-${suffix}.endpoints.${env.projectId}.cloud.goog`,
@@ -1411,7 +1533,8 @@ export async function runLiveValidation({ argv = process.argv.slice(2), env: raw
     repoSlug: `postman-live/${suffix}`,
     repoLabel: `postman-live--${suffix}`,
     conflictSlug: `postman-conflict/${suffix}`,
-    conflictLabel: `postman-conflict--${suffix}`
+    conflictLabel: `postman-conflict--${suffix}`,
+    resources: createEmptyResourceStates()
   };
 
   let teardownResult = { status: 'fail', reasonCode: 'teardown-failed' };
