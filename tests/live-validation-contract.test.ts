@@ -59,6 +59,7 @@ import {
   resolveReceiptPath,
   resolveStatePath,
   runLiveValidation,
+  runMatrixCoverage,
   runPhaseAssemble,
   runPhasePreflight,
   runPhaseProvision,
@@ -98,6 +99,36 @@ describe('GCP live validation contract', () => {
       'apigateway.googleapis.com',
       'servicemanagement.googleapis.com',
       'servicecontrol.googleapis.com'
+    ]);
+  });
+
+  it('records provision-satisfied matrix slots without probing unrelated providers', async () => {
+    const slot = LIVE_COVERAGE_MATRIX.find((item) => item.name === 'api-gateway')!;
+    const results = await runMatrixCoverage({
+      runner: () => {
+        throw new Error('satisfied matrix slot must not run a command');
+      },
+      token: 'token',
+      cliPath: 'dist/cli.cjs',
+      env: { projectId: 'sample-project', location: 'global', apigeeOrg: 'sample-project', apigeeEnv: 'test-env' },
+      fixtures: [],
+      provisionedResults: [toEvidenceResult('gateway-explicit-api-id', 'pass', {
+        providerType: 'api-gateway',
+        sourceType: 'api-gateway-config',
+        specFormat: 'openapi-yaml',
+        validationMode: 'exact-bytes'
+      })],
+      slots: [slot],
+      log: () => undefined
+    });
+    expect(results).toEqual([
+      expect.objectContaining({
+        name: 'api-gateway',
+        status: 'pass',
+        providerType: 'api-gateway',
+        sourceType: 'api-gateway-config',
+        specFormat: 'openapi-yaml'
+      })
     ]);
   });
   it('requires project and both destructive lifecycle flags', () => {

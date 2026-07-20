@@ -197,6 +197,16 @@ export function writePhaseReceipt(receiptPath: string, receipt: Partial<PhaseRec
 export function loadPhaseReceipt(receiptPath: string, root?: string): PhaseReceipt;
 export function classifyPhaseFailure(error: unknown): string;
 export function mergeCompletedSlots(prior?: EvidenceResult[], next?: EvidenceResult[]): EvidenceResult[];
+export function runMatrixCoverage(options: {
+  runner: (command: string, args: string[], options?: Record<string, unknown>) => unknown;
+  token: string;
+  cliPath: string;
+  env: Record<string, string>;
+  fixtures: LiveFixture[];
+  provisionedResults: EvidenceResult[];
+  slots?: readonly LiveCoverageSlot[];
+  log: (message: string) => void;
+}): Promise<EvidenceResult[]>;
 export function assertValidateSlotsAllowed(requestedSlots: string[] | null | undefined, matrix?: readonly LiveCoverageSlot[]): string[];
 export function assembleFromPhaseReceipts(options: {
   receipts: PhaseReceipt[];
