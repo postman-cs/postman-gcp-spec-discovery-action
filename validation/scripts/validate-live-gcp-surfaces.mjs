@@ -1737,7 +1737,10 @@ export async function probeProviderSurface({ runner, token, env, providerType, p
     else if (providerType === 'apigee-portal') {
       try {
         const body = JSON.parse(String(captured.body ?? '{}'));
-        if (Array.isArray(body.sites) && body.sites.length === 0) availableReason = 'api-unavailable';
+        if (
+          (Array.isArray(body.sites) && body.sites.length === 0)
+          || (body.status === 'success' && body.sites === undefined)
+        ) availableReason = 'api-unavailable';
       } catch { /* A malformed successful response remains inconclusive. */ }
     }
   }
