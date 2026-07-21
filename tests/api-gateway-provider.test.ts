@@ -243,17 +243,20 @@ describe('API Gateway provider', () => {
       })
     });
     const exported = await provider.exportSpec(candidate);
-    expect(exported).toEqual({
+    expect(exported).toMatchObject({
       content: proto,
       format: 'protobuf',
       filename: 'service.proto',
+      completeness: 'full',
+      rootPath: 'payments/v1/api.proto',
       evidence: expect.arrayContaining([
         'Exported original API Gateway protobuf source payments/v1/api.proto'
       ])
     });
+    expect(exported.artifacts).toBeUndefined();
   });
 
-  it('GCP-GATEWAY-010: descriptor-only / message-only / multi-entrypoint / imported protobuf stay unsupported', async () => {
+  it('GCP-GATEWAY-010: descriptor-only / message-only / multi-entrypoint / missing-import protobuf stay unsupported', async () => {
     const service = 'syntax = "proto3";\nservice A { rpc X(M) returns (M); }\nmessage M { string id = 1; }\n';
     const variants = [
       fullConfig({
@@ -279,9 +282,8 @@ describe('API Gateway provider', () => {
           source: [
             {
               path: 'service.proto',
-              contents: Buffer.from(`syntax = "proto3";\nimport "types.proto";\n${service}`).toString('base64')
-            },
-            { path: 'types.proto', contents: Buffer.from('syntax = "proto3";\nmessage T {}\n').toString('base64') }
+              contents: Buffer.from(`syntax = "proto3";\nimport "missing.proto";\n${service}`).toString('base64')
+            }
           ]
         }]
       })
@@ -295,6 +297,36 @@ describe('API Gateway provider', () => {
       expect(candidate.supported).toBe(false);
       await expect(provider.exportSpec(candidate)).rejects.toThrow();
     }
+  });
+
+  it('GCP-GATEWAY-012: exports a complete sibling-import proto set with exact member artifacts', async () => {
+    const types = 'syntax = "proto3";\nmessage Money { int64 units = 1; }\n';
+    const root = 'syntax = "proto3";\nimport "types.proto";\nservice Payments { rpc Get(GetReq) returns (GetRes); }\nmessage GetReq { string id = 1; }\nmessage GetRes { string id = 1; }\n';
+    const config = fullConfig({
+      openapiDocuments: [],
+      grpcServices: [{
+        source: [
+          { path: 'service.proto', contents: Buffer.from(root).toString('base64') },
+          { path: 'types.proto', contents: Buffer.from(types).toString('base64') }
+        ]
+      }]
+    });
+    const provider = new ApiGatewayProvider(fakeClient(config), {
+      projectId: 'sample-project-123',
+      location: 'global'
+    });
+    const candidate = (await provider.listCandidates())[0]!;
+    expect(candidate.supported).toBe(true);
+    const exported = await provider.exportSpec(candidate);
+    expect(exported.format).toBe('protobuf');
+    expect(exported.completeness).toBe('full');
+    expect(exported.rootPath).toBe('service.proto');
+    expect(exported.filename).toBe('service.proto');
+    expect(exported.content).toBe(root);
+    expect(exported.artifacts).toEqual([
+      { path: 'service.proto', role: 'root', content: root, originalPath: 'service.proto' },
+      { path: 'types.proto', role: 'dependency', content: types, originalPath: 'types.proto' }
+    ]);
   });
 
   it('GCP-GATEWAY-011: OpenAPI remains authoritative and protobuf variant uses a distinct #protobuf id', async () => {

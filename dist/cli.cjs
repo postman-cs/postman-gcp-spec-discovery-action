@@ -845,14 +845,14 @@ var require_util = __commonJS({
         }
         const port = url.port != null ? url.port : url.protocol === "https:" ? 443 : 80;
         let origin = url.origin != null ? url.origin : `${url.protocol || ""}//${url.hostname || ""}:${port}`;
-        let path8 = url.path != null ? url.path : `${url.pathname || ""}${url.search || ""}`;
+        let path9 = url.path != null ? url.path : `${url.pathname || ""}${url.search || ""}`;
         if (origin[origin.length - 1] === "/") {
           origin = origin.slice(0, origin.length - 1);
         }
-        if (path8 && path8[0] !== "/") {
-          path8 = `/${path8}`;
+        if (path9 && path9[0] !== "/") {
+          path9 = `/${path9}`;
         }
-        return new URL(`${origin}${path8}`);
+        return new URL(`${origin}${path9}`);
       }
       if (!isHttpOrHttpsPrefixed(url.origin || url.protocol)) {
         throw new InvalidArgumentError("Invalid URL protocol: the URL must start with `http:` or `https:`.");
@@ -1303,39 +1303,39 @@ var require_diagnostics = __commonJS({
       });
       diagnosticsChannel.channel("undici:client:sendHeaders").subscribe((evt) => {
         const {
-          request: { method, path: path8, origin }
+          request: { method, path: path9, origin }
         } = evt;
-        debuglog("sending request to %s %s/%s", method, origin, path8);
+        debuglog("sending request to %s %s/%s", method, origin, path9);
       });
       diagnosticsChannel.channel("undici:request:headers").subscribe((evt) => {
         const {
-          request: { method, path: path8, origin },
+          request: { method, path: path9, origin },
           response: { statusCode }
         } = evt;
         debuglog(
           "received response to %s %s/%s - HTTP %d",
           method,
           origin,
-          path8,
+          path9,
           statusCode
         );
       });
       diagnosticsChannel.channel("undici:request:trailers").subscribe((evt) => {
         const {
-          request: { method, path: path8, origin }
+          request: { method, path: path9, origin }
         } = evt;
-        debuglog("trailers received from %s %s/%s", method, origin, path8);
+        debuglog("trailers received from %s %s/%s", method, origin, path9);
       });
       diagnosticsChannel.channel("undici:request:error").subscribe((evt) => {
         const {
-          request: { method, path: path8, origin },
+          request: { method, path: path9, origin },
           error
         } = evt;
         debuglog(
           "request to %s %s/%s errored - %s",
           method,
           origin,
-          path8,
+          path9,
           error.message
         );
       });
@@ -1384,9 +1384,9 @@ var require_diagnostics = __commonJS({
         });
         diagnosticsChannel.channel("undici:client:sendHeaders").subscribe((evt) => {
           const {
-            request: { method, path: path8, origin }
+            request: { method, path: path9, origin }
           } = evt;
-          debuglog("sending request to %s %s/%s", method, origin, path8);
+          debuglog("sending request to %s %s/%s", method, origin, path9);
         });
       }
       diagnosticsChannel.channel("undici:websocket:open").subscribe((evt) => {
@@ -1449,7 +1449,7 @@ var require_request = __commonJS({
     var kHandler = /* @__PURE__ */ Symbol("handler");
     var Request2 = class {
       constructor(origin, {
-        path: path8,
+        path: path9,
         method,
         body,
         headers,
@@ -1464,11 +1464,11 @@ var require_request = __commonJS({
         expectContinue,
         servername
       }, handler) {
-        if (typeof path8 !== "string") {
+        if (typeof path9 !== "string") {
           throw new InvalidArgumentError("path must be a string");
-        } else if (path8[0] !== "/" && !(path8.startsWith("http://") || path8.startsWith("https://")) && method !== "CONNECT") {
+        } else if (path9[0] !== "/" && !(path9.startsWith("http://") || path9.startsWith("https://")) && method !== "CONNECT") {
           throw new InvalidArgumentError("path must be an absolute URL or start with a slash");
-        } else if (invalidPathRegex.test(path8)) {
+        } else if (invalidPathRegex.test(path9)) {
           throw new InvalidArgumentError("invalid request path");
         }
         if (typeof method !== "string") {
@@ -1534,7 +1534,7 @@ var require_request = __commonJS({
         this.completed = false;
         this.aborted = false;
         this.upgrade = upgrade || null;
-        this.path = query ? buildURL(path8, query) : path8;
+        this.path = query ? buildURL(path9, query) : path9;
         this.origin = origin;
         this.idempotent = idempotent == null ? method === "HEAD" || method === "GET" : idempotent;
         this.blocking = blocking == null ? false : blocking;
@@ -6156,7 +6156,7 @@ var require_client_h1 = __commonJS({
       return method !== "GET" && method !== "HEAD" && method !== "OPTIONS" && method !== "TRACE" && method !== "CONNECT";
     }
     function writeH1(client, request) {
-      const { method, path: path8, host, upgrade, blocking, reset } = request;
+      const { method, path: path9, host, upgrade, blocking, reset } = request;
       let { body, headers, contentLength } = request;
       const expectsPayload = method === "PUT" || method === "POST" || method === "PATCH" || method === "QUERY" || method === "PROPFIND" || method === "PROPPATCH";
       if (util.isFormDataLike(body)) {
@@ -6223,7 +6223,7 @@ var require_client_h1 = __commonJS({
       if (blocking) {
         socket[kBlocking] = true;
       }
-      let header = `${method} ${path8} HTTP/1.1\r
+      let header = `${method} ${path9} HTTP/1.1\r
 `;
       if (typeof host === "string") {
         header += `host: ${host}\r
@@ -6552,7 +6552,7 @@ var require_client_h2 = __commonJS({
   "node_modules/undici/lib/dispatcher/client-h2.js"(exports2, module2) {
     "use strict";
     var assert = require("node:assert");
-    var { pipeline: pipeline2 } = require("node:stream");
+    var { pipeline: pipeline3 } = require("node:stream");
     var util = require_util();
     var {
       RequestContentLengthMismatchError,
@@ -6749,7 +6749,7 @@ var require_client_h2 = __commonJS({
     }
     function writeH2(client, request) {
       const session = client[kHTTP2Session];
-      const { method, path: path8, host, upgrade, expectContinue, signal, headers: reqHeaders } = request;
+      const { method, path: path9, host, upgrade, expectContinue, signal, headers: reqHeaders } = request;
       let { body } = request;
       if (upgrade) {
         util.errorRequest(client, request, new Error("Upgrade not supported for H2"));
@@ -6816,7 +6816,7 @@ var require_client_h2 = __commonJS({
         });
         return true;
       }
-      headers[HTTP2_HEADER_PATH] = path8;
+      headers[HTTP2_HEADER_PATH] = path9;
       headers[HTTP2_HEADER_SCHEME] = "https";
       const expectsPayload = method === "PUT" || method === "POST" || method === "PATCH";
       if (body && typeof body.read === "function") {
@@ -6999,7 +6999,7 @@ var require_client_h2 = __commonJS({
     }
     function writeStream(abort, socket, expectsPayload, h2stream, body, client, request, contentLength) {
       assert(contentLength !== 0 || client[kRunning] === 0, "stream body cannot be pipelined");
-      const pipe = pipeline2(
+      const pipe = pipeline3(
         body,
         h2stream,
         (err) => {
@@ -7169,9 +7169,9 @@ var require_redirect_handler = __commonJS({
           return this.handler.onHeaders(statusCode, headers, resume, statusText);
         }
         const { origin, pathname, search } = util.parseURL(new URL(this.location, this.opts.origin && new URL(this.opts.path, this.opts.origin)));
-        const path8 = search ? `${pathname}${search}` : pathname;
+        const path9 = search ? `${pathname}${search}` : pathname;
         this.opts.headers = cleanRequestHeaders(this.opts.headers, statusCode === 303, this.opts.origin !== origin);
-        this.opts.path = path8;
+        this.opts.path = path9;
         this.opts.origin = origin;
         this.opts.maxRedirections = 0;
         this.opts.query = null;
@@ -8406,10 +8406,10 @@ var require_proxy_agent = __commonJS({
         };
         const {
           origin,
-          path: path8 = "/",
+          path: path9 = "/",
           headers = {}
         } = opts;
-        opts.path = origin + path8;
+        opts.path = origin + path9;
         if (!("host" in headers) && !("Host" in headers)) {
           const { host } = new URL2(origin);
           headers.host = host;
@@ -9043,7 +9043,7 @@ var require_readable = __commonJS({
   "node_modules/undici/lib/api/readable.js"(exports2, module2) {
     "use strict";
     var assert = require("node:assert");
-    var { Readable } = require("node:stream");
+    var { Readable: Readable2 } = require("node:stream");
     var { RequestAbortedError, NotSupportedError, InvalidArgumentError, AbortError: AbortError2 } = require_errors();
     var util = require_util();
     var { ReadableStreamFrom } = require_util();
@@ -9055,7 +9055,7 @@ var require_readable = __commonJS({
     var kContentLength = /* @__PURE__ */ Symbol("kContentLength");
     var noop2 = () => {
     };
-    var BodyReadable = class extends Readable {
+    var BodyReadable = class extends Readable2 {
       constructor({
         resume,
         abort,
@@ -9397,7 +9397,7 @@ var require_api_request = __commonJS({
   "node_modules/undici/lib/api/api-request.js"(exports2, module2) {
     "use strict";
     var assert = require("node:assert");
-    var { Readable } = require_readable();
+    var { Readable: Readable2 } = require_readable();
     var { InvalidArgumentError, RequestAbortedError } = require_errors();
     var util = require_util();
     var { getResolveErrorBodyCallback } = require_util3();
@@ -9492,7 +9492,7 @@ var require_api_request = __commonJS({
         const parsedHeaders = responseHeaders === "raw" ? util.parseHeaders(rawHeaders) : headers;
         const contentType = parsedHeaders["content-type"];
         const contentLength = parsedHeaders["content-length"];
-        const res = new Readable({
+        const res = new Readable2({
           resume,
           abort,
           contentType,
@@ -9807,7 +9807,7 @@ var require_api_pipeline = __commonJS({
   "node_modules/undici/lib/api/api-pipeline.js"(exports2, module2) {
     "use strict";
     var {
-      Readable,
+      Readable: Readable2,
       Duplex,
       PassThrough: PassThrough3
     } = require("node:stream");
@@ -9821,7 +9821,7 @@ var require_api_pipeline = __commonJS({
     var { addSignal, removeSignal } = require_abort_signal();
     var assert = require("node:assert");
     var kResume = /* @__PURE__ */ Symbol("resume");
-    var PipelineRequest = class extends Readable {
+    var PipelineRequest = class extends Readable2 {
       constructor() {
         super({ autoDestroy: true });
         this[kResume] = null;
@@ -9838,7 +9838,7 @@ var require_api_pipeline = __commonJS({
         callback(err);
       }
     };
-    var PipelineResponse = class extends Readable {
+    var PipelineResponse = class extends Readable2 {
       constructor(resume) {
         super({ autoDestroy: true });
         this[kResume] = resume;
@@ -9989,7 +9989,7 @@ var require_api_pipeline = __commonJS({
         util.destroy(ret, err);
       }
     };
-    function pipeline2(opts, handler) {
+    function pipeline3(opts, handler) {
       try {
         const pipelineHandler = new PipelineHandler(opts, handler);
         this.dispatch({ ...opts, body: pipelineHandler.req }, pipelineHandler);
@@ -9998,7 +9998,7 @@ var require_api_pipeline = __commonJS({
         return new PassThrough3().destroy(err);
       }
     }
-    module2.exports = pipeline2;
+    module2.exports = pipeline3;
   }
 });
 
@@ -10330,20 +10330,20 @@ var require_mock_utils = __commonJS({
       }
       return true;
     }
-    function safeUrl(path8) {
-      if (typeof path8 !== "string") {
-        return path8;
+    function safeUrl(path9) {
+      if (typeof path9 !== "string") {
+        return path9;
       }
-      const pathSegments = path8.split("?");
+      const pathSegments = path9.split("?");
       if (pathSegments.length !== 2) {
-        return path8;
+        return path9;
       }
       const qp = new URLSearchParams(pathSegments.pop());
       qp.sort();
       return [...pathSegments, qp.toString()].join("?");
     }
-    function matchKey(mockDispatch2, { path: path8, method, body, headers }) {
-      const pathMatch = matchValue(mockDispatch2.path, path8);
+    function matchKey(mockDispatch2, { path: path9, method, body, headers }) {
+      const pathMatch = matchValue(mockDispatch2.path, path9);
       const methodMatch = matchValue(mockDispatch2.method, method);
       const bodyMatch = typeof mockDispatch2.body !== "undefined" ? matchValue(mockDispatch2.body, body) : true;
       const headersMatch = matchHeaders(mockDispatch2, headers);
@@ -10365,7 +10365,7 @@ var require_mock_utils = __commonJS({
     function getMockDispatch(mockDispatches, key) {
       const basePath = key.query ? buildURL(key.path, key.query) : key.path;
       const resolvedPath = typeof basePath === "string" ? safeUrl(basePath) : basePath;
-      let matchedMockDispatches = mockDispatches.filter(({ consumed }) => !consumed).filter(({ path: path8 }) => matchValue(safeUrl(path8), resolvedPath));
+      let matchedMockDispatches = mockDispatches.filter(({ consumed }) => !consumed).filter(({ path: path9 }) => matchValue(safeUrl(path9), resolvedPath));
       if (matchedMockDispatches.length === 0) {
         throw new MockNotMatchedError(`Mock dispatch not matched for path '${resolvedPath}'`);
       }
@@ -10403,9 +10403,9 @@ var require_mock_utils = __commonJS({
       }
     }
     function buildKey(opts) {
-      const { path: path8, method, body, headers, query } = opts;
+      const { path: path9, method, body, headers, query } = opts;
       return {
-        path: path8,
+        path: path9,
         method,
         body,
         headers,
@@ -10868,10 +10868,10 @@ var require_pending_interceptors_formatter = __commonJS({
       }
       format(pendingInterceptors) {
         const withPrettyHeaders = pendingInterceptors.map(
-          ({ method, path: path8, data: { statusCode }, persist, times, timesInvoked, origin }) => ({
+          ({ method, path: path9, data: { statusCode }, persist, times, timesInvoked, origin }) => ({
             Method: method,
             Origin: origin,
-            Path: path8,
+            Path: path9,
             "Status code": statusCode,
             Persistent: persist ? PERSISTENT : NOT_PERSISTENT,
             Invocations: timesInvoked,
@@ -13163,7 +13163,7 @@ var require_fetch = __commonJS({
       subresourceSet
     } = require_constants3();
     var EE = require("node:events");
-    var { Readable, pipeline: pipeline2, finished } = require("node:stream");
+    var { Readable: Readable2, pipeline: pipeline3, finished } = require("node:stream");
     var { addAbortListener, isErrored, isReadable, bufferToLowerCasedHeaderName } = require_util();
     var { dataURLProcessor, serializeAMimeType, minimizeSupportedMimeType } = require_data_url();
     var { getGlobalDispatcher } = require_global2();
@@ -14064,7 +14064,7 @@ var require_fetch = __commonJS({
                 headersList.append(bufferToLowerCasedHeaderName(rawHeaders[i2]), rawHeaders[i2 + 1].toString("latin1"), true);
               }
               location = headersList.get("location", true);
-              this.body = new Readable({ read: resume });
+              this.body = new Readable2({ read: resume });
               const decoders = [];
               const willFollow = location && request.redirect === "follow" && redirectStatusSet.has(status);
               if (request.method !== "HEAD" && request.method !== "CONNECT" && !nullBodyStatus.includes(status) && !willFollow) {
@@ -14107,7 +14107,7 @@ var require_fetch = __commonJS({
                 status,
                 statusText,
                 headersList,
-                body: decoders.length ? pipeline2(this.body, ...decoders, (err) => {
+                body: decoders.length ? pipeline3(this.body, ...decoders, (err) => {
                   if (err) {
                     this.onError(err);
                   }
@@ -15752,9 +15752,9 @@ var require_util6 = __commonJS({
         }
       }
     }
-    function validateCookiePath(path8) {
-      for (let i2 = 0; i2 < path8.length; ++i2) {
-        const code = path8.charCodeAt(i2);
+    function validateCookiePath(path9) {
+      for (let i2 = 0; i2 < path9.length; ++i2) {
+        const code = path9.charCodeAt(i2);
         if (code < 32 || // exclude CTLs (0-31)
         code === 127 || // DEL
         code === 59) {
@@ -18087,7 +18087,7 @@ ${value}`;
 var require_eventsource = __commonJS({
   "node_modules/undici/lib/web/eventsource/eventsource.js"(exports2, module2) {
     "use strict";
-    var { pipeline: pipeline2 } = require("node:stream");
+    var { pipeline: pipeline3 } = require("node:stream");
     var { fetching } = require_fetch();
     var { makeRequest } = require_request2();
     var { webidl } = require_webidl();
@@ -18245,7 +18245,7 @@ var require_eventsource = __commonJS({
               ));
             }
           });
-          pipeline2(
+          pipeline3(
             response.body.stream,
             eventSourceStream,
             (error) => {
@@ -18447,11 +18447,11 @@ var require_undici = __commonJS({
           if (typeof opts.path !== "string") {
             throw new InvalidArgumentError("invalid opts.path");
           }
-          let path8 = opts.path;
+          let path9 = opts.path;
           if (!opts.path.startsWith("/")) {
-            path8 = `/${path8}`;
+            path9 = `/${path9}`;
           }
-          url = new URL(util.parseOrigin(url).origin + path8);
+          url = new URL(util.parseOrigin(url).origin + path9);
         } else {
           if (!opts) {
             opts = typeof url === "object" ? url : {};
@@ -25131,22 +25131,22 @@ var init_from = __esm({
     init_file();
     init_fetch_blob();
     ({ stat } = import_node_fs3.promises);
-    blobFromSync = (path8, type) => fromBlob((0, import_node_fs3.statSync)(path8), path8, type);
-    blobFrom = (path8, type) => stat(path8).then((stat4) => fromBlob(stat4, path8, type));
-    fileFrom = (path8, type) => stat(path8).then((stat4) => fromFile(stat4, path8, type));
-    fileFromSync = (path8, type) => fromFile((0, import_node_fs3.statSync)(path8), path8, type);
-    fromBlob = (stat4, path8, type = "") => new fetch_blob_default([new BlobDataItem({
-      path: path8,
-      size: stat4.size,
-      lastModified: stat4.mtimeMs,
+    blobFromSync = (path9, type) => fromBlob((0, import_node_fs3.statSync)(path9), path9, type);
+    blobFrom = (path9, type) => stat(path9).then((stat5) => fromBlob(stat5, path9, type));
+    fileFrom = (path9, type) => stat(path9).then((stat5) => fromFile(stat5, path9, type));
+    fileFromSync = (path9, type) => fromFile((0, import_node_fs3.statSync)(path9), path9, type);
+    fromBlob = (stat5, path9, type = "") => new fetch_blob_default([new BlobDataItem({
+      path: path9,
+      size: stat5.size,
+      lastModified: stat5.mtimeMs,
       start: 0
     })], { type });
-    fromFile = (stat4, path8, type = "") => new file_default([new BlobDataItem({
-      path: path8,
-      size: stat4.size,
-      lastModified: stat4.mtimeMs,
+    fromFile = (stat5, path9, type = "") => new file_default([new BlobDataItem({
+      path: path9,
+      size: stat5.size,
+      lastModified: stat5.mtimeMs,
       start: 0
-    })], (0, import_node_path3.basename)(path8), { type, lastModified: stat4.mtimeMs });
+    })], (0, import_node_path3.basename)(path9), { type, lastModified: stat5.mtimeMs });
     BlobDataItem = class _BlobDataItem {
       #path;
       #start;
@@ -27692,7 +27692,7 @@ var require_bignumber = __commonJS({
             return arr.reverse();
           }
           return function(str, baseIn, baseOut, sign, callerIsToString) {
-            var alphabet, d, e2, k, r2, x2, xc, y, i2 = str.indexOf("."), dp = DECIMAL_PLACES, rm = ROUNDING_MODE;
+            var alphabet, d, e2, k, r2, x2, xc, y, i2 = str.indexOf("."), dp = DECIMAL_PLACES, rm2 = ROUNDING_MODE;
             if (i2 >= 0) {
               k = POW_PRECISION;
               POW_PRECISION = 0;
@@ -27718,7 +27718,7 @@ var require_bignumber = __commonJS({
               x2.c = xc;
               x2.e = e2;
               x2.s = sign;
-              x2 = div(x2, y, dp, rm, baseOut);
+              x2 = div(x2, y, dp, rm2, baseOut);
               xc = x2.c;
               r2 = x2.r;
               e2 = x2.e;
@@ -27727,7 +27727,7 @@ var require_bignumber = __commonJS({
             i2 = xc[d];
             k = baseOut / 2;
             r2 = r2 || d < 0 || xc[d + 1] != null;
-            r2 = rm < 4 ? (i2 != null || r2) && (rm == 0 || rm == (x2.s < 0 ? 3 : 2)) : i2 > k || i2 == k && (rm == 4 || r2 || rm == 6 && xc[d - 1] & 1 || rm == (x2.s < 0 ? 8 : 7));
+            r2 = rm2 < 4 ? (i2 != null || r2) && (rm2 == 0 || rm2 == (x2.s < 0 ? 3 : 2)) : i2 > k || i2 == k && (rm2 == 4 || r2 || rm2 == 6 && xc[d - 1] & 1 || rm2 == (x2.s < 0 ? 8 : 7));
             if (d < 1 || !xc[0]) {
               str = r2 ? toFixedPoint(alphabet.charAt(1), -dp, alphabet.charAt(0)) : alphabet.charAt(0);
             } else {
@@ -27785,7 +27785,7 @@ var require_bignumber = __commonJS({
             }
             for (; !a[0] && a.length > 1; a.splice(0, 1)) ;
           }
-          return function(x2, y, dp, rm, base) {
+          return function(x2, y, dp, rm2, base) {
             var cmp, e2, i2, more, n, prod, prodL, q, qc, rem, remL, rem0, xi, xL, yc0, yL, yz, s2 = x2.s == y.s ? 1 : -1, xc = x2.c, yc = y.c;
             if (!xc || !xc[0] || !yc || !yc[0]) {
               return new BigNumber2(
@@ -27882,7 +27882,7 @@ var require_bignumber = __commonJS({
             }
             if (base == BASE) {
               for (i2 = 1, s2 = qc[0]; s2 >= 10; s2 /= 10, i2++) ;
-              round(q, dp + (q.e = i2 + e2 * LOG_BASE - 1) + 1, rm, more);
+              round(q, dp + (q.e = i2 + e2 * LOG_BASE - 1) + 1, rm2, more);
             } else {
               q.e = e2;
               q.r = +more;
@@ -27890,10 +27890,10 @@ var require_bignumber = __commonJS({
             return q;
           };
         })();
-        function format(n, i2, rm, id) {
+        function format(n, i2, rm2, id) {
           var c0, e2, ne, len, str;
-          if (rm == null) rm = ROUNDING_MODE;
-          else intCheck(rm, 0, 8);
+          if (rm2 == null) rm2 = ROUNDING_MODE;
+          else intCheck(rm2, 0, 8);
           if (!n.c) return n.toString();
           c0 = n.c[0];
           ne = n.e;
@@ -27901,7 +27901,7 @@ var require_bignumber = __commonJS({
             str = coeffToString(n.c);
             str = id == 1 || id == 2 && (ne <= TO_EXP_NEG || ne >= TO_EXP_POS) ? toExponential(str, ne) : toFixedPoint(str, ne, "0");
           } else {
-            n = round(new BigNumber2(n), i2, rm);
+            n = round(new BigNumber2(n), i2, rm2);
             e2 = n.e;
             str = coeffToString(n.c);
             len = str.length;
@@ -27974,7 +27974,7 @@ var require_bignumber = __commonJS({
             x2.c = x2.e = null;
           };
         })();
-        function round(x2, sd, rm, r2) {
+        function round(x2, sd, rm2, r2) {
           var d, i2, j, k, n, ni, rd, xc = x2.c, pows10 = POWS_TEN;
           if (xc) {
             out: {
@@ -28009,8 +28009,8 @@ var require_bignumber = __commonJS({
               // The expression  n % pows10[d - j - 1]  returns all digits of n to the right
               // of the digit at j, e.g. if n is 908714 and j is 2, the expression gives 714.
               xc[ni + 1] != null || (j < 0 ? n : n % pows10[d - j - 1]);
-              r2 = rm < 4 ? (rd || r2) && (rm == 0 || rm == (x2.s < 0 ? 3 : 2)) : rd > 5 || rd == 5 && (rm == 4 || r2 || rm == 6 && // Check whether the digit to the left of the rounding digit is odd.
-              (i2 > 0 ? j > 0 ? n / pows10[d - j] : 0 : xc[ni - 1]) % 10 & 1 || rm == (x2.s < 0 ? 8 : 7));
+              r2 = rm2 < 4 ? (rd || r2) && (rm2 == 0 || rm2 == (x2.s < 0 ? 3 : 2)) : rd > 5 || rd == 5 && (rm2 == 4 || r2 || rm2 == 6 && // Check whether the digit to the left of the rounding digit is odd.
+              (i2 > 0 ? j > 0 ? n / pows10[d - j] : 0 : xc[ni - 1]) % 10 & 1 || rm2 == (x2.s < 0 ? 8 : 7));
               if (sd < 1 || !xc[0]) {
                 xc.length = 0;
                 if (r2) {
@@ -28075,13 +28075,13 @@ var require_bignumber = __commonJS({
         P.comparedTo = function(y, b) {
           return compare(this, new BigNumber2(y, b));
         };
-        P.decimalPlaces = P.dp = function(dp, rm) {
+        P.decimalPlaces = P.dp = function(dp, rm2) {
           var c, n, v, x2 = this;
           if (dp != null) {
             intCheck(dp, 0, MAX);
-            if (rm == null) rm = ROUNDING_MODE;
-            else intCheck(rm, 0, 8);
-            return round(new BigNumber2(x2), dp + x2.e + 1, rm);
+            if (rm2 == null) rm2 = ROUNDING_MODE;
+            else intCheck(rm2, 0, 8);
+            return round(new BigNumber2(x2), dp + x2.e + 1, rm2);
           }
           if (!(c = x2.c)) return null;
           n = ((v = c.length - 1) - bitFloor(this.e / LOG_BASE)) * LOG_BASE;
@@ -28164,11 +28164,11 @@ var require_bignumber = __commonJS({
           if (nIsNeg) y = ONE.div(y);
           return m2 ? y.mod(m2) : k ? round(y, POW_PRECISION, ROUNDING_MODE, more) : y;
         };
-        P.integerValue = function(rm) {
+        P.integerValue = function(rm2) {
           var n = new BigNumber2(this);
-          if (rm == null) rm = ROUNDING_MODE;
-          else intCheck(rm, 0, 8);
-          return round(n, n.e + 1, rm);
+          if (rm2 == null) rm2 = ROUNDING_MODE;
+          else intCheck(rm2, 0, 8);
+          return round(n, n.e + 1, rm2);
         };
         P.isEqualTo = P.eq = function(y, b) {
           return compare(this, new BigNumber2(y, b)) === 0;
@@ -28395,13 +28395,13 @@ var require_bignumber = __commonJS({
           }
           return normalise(y, xc, ye);
         };
-        P.precision = P.sd = function(sd, rm) {
+        P.precision = P.sd = function(sd, rm2) {
           var c, n, v, x2 = this;
           if (sd != null && sd !== !!sd) {
             intCheck(sd, 1, MAX);
-            if (rm == null) rm = ROUNDING_MODE;
-            else intCheck(rm, 0, 8);
-            return round(new BigNumber2(x2), sd, rm);
+            if (rm2 == null) rm2 = ROUNDING_MODE;
+            else intCheck(rm2, 0, 8);
+            return round(new BigNumber2(x2), sd, rm2);
           }
           if (!(c = x2.c)) return null;
           v = c.length - 1;
@@ -28471,36 +28471,36 @@ var require_bignumber = __commonJS({
           }
           return round(r2, r2.e + DECIMAL_PLACES + 1, ROUNDING_MODE, m2);
         };
-        P.toExponential = function(dp, rm) {
+        P.toExponential = function(dp, rm2) {
           if (dp != null) {
             intCheck(dp, 0, MAX);
             dp++;
           }
-          return format(this, dp, rm, 1);
+          return format(this, dp, rm2, 1);
         };
-        P.toFixed = function(dp, rm) {
+        P.toFixed = function(dp, rm2) {
           if (dp != null) {
             intCheck(dp, 0, MAX);
             dp = dp + this.e + 1;
           }
-          return format(this, dp, rm);
+          return format(this, dp, rm2);
         };
-        P.toFormat = function(dp, rm, format2) {
+        P.toFormat = function(dp, rm2, format2) {
           var str, x2 = this;
           if (format2 == null) {
-            if (dp != null && rm && typeof rm == "object") {
-              format2 = rm;
-              rm = null;
+            if (dp != null && rm2 && typeof rm2 == "object") {
+              format2 = rm2;
+              rm2 = null;
             } else if (dp && typeof dp == "object") {
               format2 = dp;
-              dp = rm = null;
+              dp = rm2 = null;
             } else {
               format2 = FORMAT;
             }
           } else if (typeof format2 != "object") {
             throw Error(bignumberError + "Argument not an object: " + format2);
           }
-          str = x2.toFixed(dp, rm);
+          str = x2.toFixed(dp, rm2);
           if (x2.c) {
             var i2, arr = str.split("."), g1 = +format2.groupSize, g2 = +format2.secondaryGroupSize, groupSeparator = format2.groupSeparator || "", intPart = arr[0], fractionPart = arr[1], isNeg = x2.s < 0, intDigits = isNeg ? intPart.slice(1) : intPart, len = intDigits.length;
             if (g2) {
@@ -28568,9 +28568,9 @@ var require_bignumber = __commonJS({
         P.toNumber = function() {
           return +valueOf(this);
         };
-        P.toPrecision = function(sd, rm) {
+        P.toPrecision = function(sd, rm2) {
           if (sd != null) intCheck(sd, 1, MAX);
-          return format(this, sd, rm, 2);
+          return format(this, sd, rm2, 2);
         };
         P.toString = function(b) {
           var str, n = this, s2 = n.s, e2 = n.e;
@@ -30327,7 +30327,7 @@ var require_util10 = __commonJS({
     exports2.getWellKnownCertificateConfigFileLocation = getWellKnownCertificateConfigFileLocation;
     var fs2 = require("fs");
     var os = require("os");
-    var path8 = require("path");
+    var path9 = require("path");
     var WELL_KNOWN_CERTIFICATE_CONFIG_FILE = "certificate_config.json";
     var CLOUDSDK_CONFIG_DIRECTORY = "gcloud";
     function snakeToCamel(str) {
@@ -30420,8 +30420,8 @@ var require_util10 = __commonJS({
       }
     }
     function getWellKnownCertificateConfigFileLocation() {
-      const configDir = process.env.CLOUDSDK_CONFIG || (_isWindows() ? path8.join(process.env.APPDATA || "", CLOUDSDK_CONFIG_DIRECTORY) : path8.join(process.env.HOME || "", ".config", CLOUDSDK_CONFIG_DIRECTORY));
-      return path8.join(configDir, WELL_KNOWN_CERTIFICATE_CONFIG_FILE);
+      const configDir = process.env.CLOUDSDK_CONFIG || (_isWindows() ? path9.join(process.env.APPDATA || "", CLOUDSDK_CONFIG_DIRECTORY) : path9.join(process.env.HOME || "", ".config", CLOUDSDK_CONFIG_DIRECTORY));
+      return path9.join(configDir, WELL_KNOWN_CERTIFICATE_CONFIG_FILE);
     }
     function _isWindows() {
       return os.platform().startsWith("win");
@@ -32367,11 +32367,11 @@ var require_getCredentials = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.getCredentials = getCredentials;
-    var path8 = require("path");
+    var path9 = require("path");
     var fs2 = require("fs");
     var util_1 = require("util");
     var errorWithCode_1 = require_errorWithCode();
-    var readFile4 = fs2.readFile ? (0, util_1.promisify)(fs2.readFile) : async () => {
+    var readFile5 = fs2.readFile ? (0, util_1.promisify)(fs2.readFile) : async () => {
       throw new errorWithCode_1.ErrorWithCode("use key rather than keyFile.", "MISSING_CREDENTIALS");
     };
     var ExtensionFiles;
@@ -32393,7 +32393,7 @@ var require_getCredentials = __commonJS({
        * @returns A promise that resolves with the credentials.
        */
       async getCredentials() {
-        const key = await readFile4(this.keyFilePath, "utf8");
+        const key = await readFile5(this.keyFilePath, "utf8");
         let body;
         try {
           body = JSON.parse(key);
@@ -32419,7 +32419,7 @@ var require_getCredentials = __commonJS({
        * @returns A promise that resolves with the private key.
        */
       async getCredentials() {
-        const privateKey = await readFile4(this.keyFilePath, "utf8");
+        const privateKey = await readFile5(this.keyFilePath, "utf8");
         return { privateKey };
       }
     };
@@ -32439,7 +32439,7 @@ var require_getCredentials = __commonJS({
        * @returns An instance of a class that implements ICredentialsProvider.
        */
       static create(keyFilePath) {
-        const keyFileExtension = path8.extname(keyFilePath);
+        const keyFileExtension = path9.extname(keyFilePath);
         switch (keyFileExtension) {
           case ExtensionFiles.JSON:
             return new JsonCredentialsProvider(keyFilePath);
@@ -34049,7 +34049,7 @@ var require_filesubjecttokensupplier = __commonJS({
     exports2.FileSubjectTokenSupplier = void 0;
     var util_1 = require("util");
     var fs2 = require("fs");
-    var readFile4 = (0, util_1.promisify)(fs2.readFile ?? (() => {
+    var readFile5 = (0, util_1.promisify)(fs2.readFile ?? (() => {
     }));
     var realpath2 = (0, util_1.promisify)(fs2.realpath ?? (() => {
     }));
@@ -34089,7 +34089,7 @@ var require_filesubjecttokensupplier = __commonJS({
           throw err;
         }
         let subjectToken;
-        const rawText = await readFile4(parsedFilePath, { encoding: "utf8" });
+        const rawText = await readFile5(parsedFilePath, { encoding: "utf8" });
         if (this.formatType === "text") {
           subjectToken = rawText;
         } else if (this.formatType === "json" && this.subjectTokenFieldName) {
@@ -35808,7 +35808,7 @@ var require_googleauth = __commonJS({
     var gaxios_1 = require_src2();
     var gcpMetadata = require_src4();
     var os = require("os");
-    var path8 = require("path");
+    var path9 = require("path");
     var crypto_1 = require_crypto3();
     var computeclient_1 = require_computeclient();
     var idtokenclient_1 = require_idtokenclient();
@@ -36095,11 +36095,11 @@ var require_googleauth = __commonJS({
         } else {
           const home = process.env["HOME"];
           if (home) {
-            location = path8.join(home, ".config");
+            location = path9.join(home, ".config");
           }
         }
         if (location) {
-          location = path8.join(location, "gcloud", "application_default_credentials.json");
+          location = path9.join(location, "gcloud", "application_default_credentials.json");
           if (!fs2.existsSync(location)) {
             location = null;
           }
@@ -36458,7 +36458,7 @@ var require_googleauth = __commonJS({
         if (this.jsonContent) {
           return this._cacheClientFromJSON(this.jsonContent, this.clientOptions);
         } else if (this.keyFilename) {
-          const filePath = path8.resolve(this.keyFilename);
+          const filePath = path9.resolve(this.keyFilename);
           const stream = fs2.createReadStream(filePath);
           return await this.fromStreamAsync(stream, this.clientOptions);
         } else if (this.apiKey) {
@@ -37082,17 +37082,17 @@ var require_visit = __commonJS({
     visit.BREAK = BREAK;
     visit.SKIP = SKIP;
     visit.REMOVE = REMOVE;
-    function visit_(key, node, visitor, path8) {
-      const ctrl = callVisitor(key, node, visitor, path8);
+    function visit_(key, node, visitor, path9) {
+      const ctrl = callVisitor(key, node, visitor, path9);
       if (identity.isNode(ctrl) || identity.isPair(ctrl)) {
-        replaceNode(key, path8, ctrl);
-        return visit_(key, ctrl, visitor, path8);
+        replaceNode(key, path9, ctrl);
+        return visit_(key, ctrl, visitor, path9);
       }
       if (typeof ctrl !== "symbol") {
         if (identity.isCollection(node)) {
-          path8 = Object.freeze(path8.concat(node));
+          path9 = Object.freeze(path9.concat(node));
           for (let i2 = 0; i2 < node.items.length; ++i2) {
-            const ci = visit_(i2, node.items[i2], visitor, path8);
+            const ci = visit_(i2, node.items[i2], visitor, path9);
             if (typeof ci === "number")
               i2 = ci - 1;
             else if (ci === BREAK)
@@ -37103,13 +37103,13 @@ var require_visit = __commonJS({
             }
           }
         } else if (identity.isPair(node)) {
-          path8 = Object.freeze(path8.concat(node));
-          const ck = visit_("key", node.key, visitor, path8);
+          path9 = Object.freeze(path9.concat(node));
+          const ck = visit_("key", node.key, visitor, path9);
           if (ck === BREAK)
             return BREAK;
           else if (ck === REMOVE)
             node.key = null;
-          const cv = visit_("value", node.value, visitor, path8);
+          const cv = visit_("value", node.value, visitor, path9);
           if (cv === BREAK)
             return BREAK;
           else if (cv === REMOVE)
@@ -37130,17 +37130,17 @@ var require_visit = __commonJS({
     visitAsync.BREAK = BREAK;
     visitAsync.SKIP = SKIP;
     visitAsync.REMOVE = REMOVE;
-    async function visitAsync_(key, node, visitor, path8) {
-      const ctrl = await callVisitor(key, node, visitor, path8);
+    async function visitAsync_(key, node, visitor, path9) {
+      const ctrl = await callVisitor(key, node, visitor, path9);
       if (identity.isNode(ctrl) || identity.isPair(ctrl)) {
-        replaceNode(key, path8, ctrl);
-        return visitAsync_(key, ctrl, visitor, path8);
+        replaceNode(key, path9, ctrl);
+        return visitAsync_(key, ctrl, visitor, path9);
       }
       if (typeof ctrl !== "symbol") {
         if (identity.isCollection(node)) {
-          path8 = Object.freeze(path8.concat(node));
+          path9 = Object.freeze(path9.concat(node));
           for (let i2 = 0; i2 < node.items.length; ++i2) {
-            const ci = await visitAsync_(i2, node.items[i2], visitor, path8);
+            const ci = await visitAsync_(i2, node.items[i2], visitor, path9);
             if (typeof ci === "number")
               i2 = ci - 1;
             else if (ci === BREAK)
@@ -37151,13 +37151,13 @@ var require_visit = __commonJS({
             }
           }
         } else if (identity.isPair(node)) {
-          path8 = Object.freeze(path8.concat(node));
-          const ck = await visitAsync_("key", node.key, visitor, path8);
+          path9 = Object.freeze(path9.concat(node));
+          const ck = await visitAsync_("key", node.key, visitor, path9);
           if (ck === BREAK)
             return BREAK;
           else if (ck === REMOVE)
             node.key = null;
-          const cv = await visitAsync_("value", node.value, visitor, path8);
+          const cv = await visitAsync_("value", node.value, visitor, path9);
           if (cv === BREAK)
             return BREAK;
           else if (cv === REMOVE)
@@ -37184,23 +37184,23 @@ var require_visit = __commonJS({
       }
       return visitor;
     }
-    function callVisitor(key, node, visitor, path8) {
+    function callVisitor(key, node, visitor, path9) {
       if (typeof visitor === "function")
-        return visitor(key, node, path8);
+        return visitor(key, node, path9);
       if (identity.isMap(node))
-        return visitor.Map?.(key, node, path8);
+        return visitor.Map?.(key, node, path9);
       if (identity.isSeq(node))
-        return visitor.Seq?.(key, node, path8);
+        return visitor.Seq?.(key, node, path9);
       if (identity.isPair(node))
-        return visitor.Pair?.(key, node, path8);
+        return visitor.Pair?.(key, node, path9);
       if (identity.isScalar(node))
-        return visitor.Scalar?.(key, node, path8);
+        return visitor.Scalar?.(key, node, path9);
       if (identity.isAlias(node))
-        return visitor.Alias?.(key, node, path8);
+        return visitor.Alias?.(key, node, path9);
       return void 0;
     }
-    function replaceNode(key, path8, node) {
-      const parent = path8[path8.length - 1];
+    function replaceNode(key, path9, node) {
+      const parent = path9[path9.length - 1];
       if (identity.isCollection(parent)) {
         parent.items[key] = node;
       } else if (identity.isPair(parent)) {
@@ -37810,10 +37810,10 @@ var require_Collection = __commonJS({
     var createNode = require_createNode();
     var identity = require_identity();
     var Node = require_Node();
-    function collectionFromPath(schema, path8, value) {
+    function collectionFromPath(schema, path9, value) {
       let v = value;
-      for (let i2 = path8.length - 1; i2 >= 0; --i2) {
-        const k = path8[i2];
+      for (let i2 = path9.length - 1; i2 >= 0; --i2) {
+        const k = path9[i2];
         if (typeof k === "number" && Number.isInteger(k) && k >= 0) {
           const a = [];
           a[k] = v;
@@ -37832,7 +37832,7 @@ var require_Collection = __commonJS({
         sourceObjects: /* @__PURE__ */ new Map()
       });
     }
-    var isEmptyPath = (path8) => path8 == null || typeof path8 === "object" && !!path8[Symbol.iterator]().next().done;
+    var isEmptyPath = (path9) => path9 == null || typeof path9 === "object" && !!path9[Symbol.iterator]().next().done;
     var Collection = class extends Node.NodeBase {
       constructor(type, schema) {
         super(type);
@@ -37862,11 +37862,11 @@ var require_Collection = __commonJS({
        * be a Pair instance or a `{ key, value }` object, which may not have a key
        * that already exists in the map.
        */
-      addIn(path8, value) {
-        if (isEmptyPath(path8))
+      addIn(path9, value) {
+        if (isEmptyPath(path9))
           this.add(value);
         else {
-          const [key, ...rest] = path8;
+          const [key, ...rest] = path9;
           const node = this.get(key, true);
           if (identity.isCollection(node))
             node.addIn(rest, value);
@@ -37880,8 +37880,8 @@ var require_Collection = __commonJS({
        * Removes a value from the collection.
        * @returns `true` if the item was found and removed.
        */
-      deleteIn(path8) {
-        const [key, ...rest] = path8;
+      deleteIn(path9) {
+        const [key, ...rest] = path9;
         if (rest.length === 0)
           return this.delete(key);
         const node = this.get(key, true);
@@ -37895,8 +37895,8 @@ var require_Collection = __commonJS({
        * scalar values from their surrounding node; to disable set `keepScalar` to
        * `true` (collections are always returned intact).
        */
-      getIn(path8, keepScalar) {
-        const [key, ...rest] = path8;
+      getIn(path9, keepScalar) {
+        const [key, ...rest] = path9;
         const node = this.get(key, true);
         if (rest.length === 0)
           return !keepScalar && identity.isScalar(node) ? node.value : node;
@@ -37914,8 +37914,8 @@ var require_Collection = __commonJS({
       /**
        * Checks if the collection includes a value with the key `key`.
        */
-      hasIn(path8) {
-        const [key, ...rest] = path8;
+      hasIn(path9) {
+        const [key, ...rest] = path9;
         if (rest.length === 0)
           return this.has(key);
         const node = this.get(key, true);
@@ -37925,8 +37925,8 @@ var require_Collection = __commonJS({
        * Sets a value in this collection. For `!!set`, `value` needs to be a
        * boolean to add/remove the item from the set.
        */
-      setIn(path8, value) {
-        const [key, ...rest] = path8;
+      setIn(path9, value) {
+        const [key, ...rest] = path9;
         if (rest.length === 0) {
           this.set(key, value);
         } else {
@@ -40441,9 +40441,9 @@ var require_Document = __commonJS({
           this.contents.add(value);
       }
       /** Adds a value to the document. */
-      addIn(path8, value) {
+      addIn(path9, value) {
         if (assertCollection(this.contents))
-          this.contents.addIn(path8, value);
+          this.contents.addIn(path9, value);
       }
       /**
        * Create a new `Alias` node, ensuring that the target `node` has the required anchor.
@@ -40518,14 +40518,14 @@ var require_Document = __commonJS({
        * Removes a value from the document.
        * @returns `true` if the item was found and removed.
        */
-      deleteIn(path8) {
-        if (Collection.isEmptyPath(path8)) {
+      deleteIn(path9) {
+        if (Collection.isEmptyPath(path9)) {
           if (this.contents == null)
             return false;
           this.contents = null;
           return true;
         }
-        return assertCollection(this.contents) ? this.contents.deleteIn(path8) : false;
+        return assertCollection(this.contents) ? this.contents.deleteIn(path9) : false;
       }
       /**
        * Returns item at `key`, or `undefined` if not found. By default unwraps
@@ -40540,10 +40540,10 @@ var require_Document = __commonJS({
        * scalar values from their surrounding node; to disable set `keepScalar` to
        * `true` (collections are always returned intact).
        */
-      getIn(path8, keepScalar) {
-        if (Collection.isEmptyPath(path8))
+      getIn(path9, keepScalar) {
+        if (Collection.isEmptyPath(path9))
           return !keepScalar && identity.isScalar(this.contents) ? this.contents.value : this.contents;
-        return identity.isCollection(this.contents) ? this.contents.getIn(path8, keepScalar) : void 0;
+        return identity.isCollection(this.contents) ? this.contents.getIn(path9, keepScalar) : void 0;
       }
       /**
        * Checks if the document includes a value with the key `key`.
@@ -40554,10 +40554,10 @@ var require_Document = __commonJS({
       /**
        * Checks if the document includes a value at `path`.
        */
-      hasIn(path8) {
-        if (Collection.isEmptyPath(path8))
+      hasIn(path9) {
+        if (Collection.isEmptyPath(path9))
           return this.contents !== void 0;
-        return identity.isCollection(this.contents) ? this.contents.hasIn(path8) : false;
+        return identity.isCollection(this.contents) ? this.contents.hasIn(path9) : false;
       }
       /**
        * Sets a value in this document. For `!!set`, `value` needs to be a
@@ -40574,13 +40574,13 @@ var require_Document = __commonJS({
        * Sets a value in this document. For `!!set`, `value` needs to be a
        * boolean to add/remove the item from the set.
        */
-      setIn(path8, value) {
-        if (Collection.isEmptyPath(path8)) {
+      setIn(path9, value) {
+        if (Collection.isEmptyPath(path9)) {
           this.contents = value;
         } else if (this.contents == null) {
-          this.contents = Collection.collectionFromPath(this.schema, Array.from(path8), value);
+          this.contents = Collection.collectionFromPath(this.schema, Array.from(path9), value);
         } else if (assertCollection(this.contents)) {
-          this.contents.setIn(path8, value);
+          this.contents.setIn(path9, value);
         }
       }
       /**
@@ -42540,9 +42540,9 @@ var require_cst_visit = __commonJS({
     visit.BREAK = BREAK;
     visit.SKIP = SKIP;
     visit.REMOVE = REMOVE;
-    visit.itemAtPath = (cst, path8) => {
+    visit.itemAtPath = (cst, path9) => {
       let item = cst;
-      for (const [field, index] of path8) {
+      for (const [field, index] of path9) {
         const tok = item?.[field];
         if (tok && "items" in tok) {
           item = tok.items[index];
@@ -42551,23 +42551,23 @@ var require_cst_visit = __commonJS({
       }
       return item;
     };
-    visit.parentCollection = (cst, path8) => {
-      const parent = visit.itemAtPath(cst, path8.slice(0, -1));
-      const field = path8[path8.length - 1][0];
+    visit.parentCollection = (cst, path9) => {
+      const parent = visit.itemAtPath(cst, path9.slice(0, -1));
+      const field = path9[path9.length - 1][0];
       const coll = parent?.[field];
       if (coll && "items" in coll)
         return coll;
       throw new Error("Parent collection not found");
     };
-    function _visit(path8, item, visitor) {
-      let ctrl = visitor(item, path8);
+    function _visit(path9, item, visitor) {
+      let ctrl = visitor(item, path9);
       if (typeof ctrl === "symbol")
         return ctrl;
       for (const field of ["key", "value"]) {
         const token = item[field];
         if (token && "items" in token) {
           for (let i2 = 0; i2 < token.items.length; ++i2) {
-            const ci = _visit(Object.freeze(path8.concat([[field, i2]])), token.items[i2], visitor);
+            const ci = _visit(Object.freeze(path9.concat([[field, i2]])), token.items[i2], visitor);
             if (typeof ci === "number")
               i2 = ci - 1;
             else if (ci === BREAK)
@@ -42578,10 +42578,10 @@ var require_cst_visit = __commonJS({
             }
           }
           if (typeof ctrl === "function" && field === "key")
-            ctrl = ctrl(item, path8);
+            ctrl = ctrl(item, path9);
         }
       }
-      return typeof ctrl === "function" ? ctrl(item, path8) : ctrl;
+      return typeof ctrl === "function" ? ctrl(item, path9) : ctrl;
     }
     exports2.visit = visit;
   }
@@ -44340,9 +44340,9 @@ __export(cli_exports, {
   toDotenv: () => toDotenv
 });
 module.exports = __toCommonJS(cli_exports);
-var import_node_fs4 = require("node:fs");
-var import_promises6 = require("node:fs/promises");
-var import_node_path9 = __toESM(require("node:path"), 1);
+var import_node_fs5 = require("node:fs");
+var import_promises8 = require("node:fs/promises");
+var import_node_path10 = __toESM(require("node:path"), 1);
 
 // src/lib/utils/resolve-path-within-root.ts
 var import_node_fs = require("node:fs");
@@ -44539,8 +44539,8 @@ function normalizeRepoUrl(url) {
   const sshMatch = raw.match(/^git@([^:]+):(.+?)(?:\.git)?$/);
   if (sshMatch) {
     const host = sshMatch[1];
-    const path8 = sshMatch[2];
-    return `https://${host}/${path8}`;
+    const path9 = sshMatch[2];
+    return `https://${host}/${path9}`;
   }
   return raw.replace(/\.git$/, "");
 }
@@ -46741,8 +46741,8 @@ async function prepareTelemetryCredentials(options) {
 }
 
 // src/runtime.ts
-var import_promises5 = require("node:fs/promises");
-var import_node_path8 = __toESM(require("node:path"), 1);
+var import_promises7 = require("node:fs/promises");
+var import_node_path9 = __toESM(require("node:path"), 1);
 
 // src/contracts.ts
 function isResolvableAuthority(authority) {
@@ -46837,6 +46837,9 @@ var actionContract = {
     "spec-path": {
       description: "Path to the resolved or generated specification when available."
     },
+    "spec-files-json": {
+      description: "Optional JSON inventory of the authoritative multi-file definition set (schemaVersion 1). Empty for single-file, unresolved, and discover-many results."
+    },
     "api-id": {
       description: "Full resource name of the exported cloud source (API Gateway config, Cloud Endpoints config, Apigee proxy revision, Apigee archive deployment, API Hub spec, legacy Apigee Registry spec, Apigee portal apidoc, Vertex extension, Dialogflow tool, or CES tool/toolset); empty for repo, generated, or IaC-local resolutions."
     },
@@ -46906,8 +46909,8 @@ function normalizeRepoUrl2(url) {
   const sshMatch = raw.match(/^git@([^:]+):(.+?)(?:\.git)?$/);
   if (sshMatch) {
     const host = sshMatch[1];
-    const path8 = sshMatch[2];
-    return `https://${host}/${path8}`;
+    const path9 = sshMatch[2];
+    return `https://${host}/${path9}`;
   }
   return raw.replace(/\.git$/, "");
 }
@@ -47329,9 +47332,9 @@ async function scanGCPIac(repoRoot, outputDir) {
   };
 }
 async function readUtf8WithinByteCeiling(absolutePath, maxBytes) {
-  const stat4 = await (0, import_promises4.lstat)(absolutePath).catch(() => void 0);
-  if (!stat4 || !stat4.isFile() || stat4.isSymbolicLink()) return void 0;
-  if (stat4.size > maxBytes) return void 0;
+  const stat5 = await (0, import_promises4.lstat)(absolutePath).catch(() => void 0);
+  if (!stat5 || !stat5.isFile() || stat5.isSymbolicLink()) return void 0;
+  if (stat5.size > maxBytes) return void 0;
   return (0, import_promises4.readFile)(absolutePath, "utf8").catch(() => void 0);
 }
 async function collectIacFiles(root, current, outputRoot, depth = 0, count = { value: 0 }) {
@@ -47343,13 +47346,13 @@ async function collectIacFiles(root, current, outputRoot, depth = 0, count = { v
     if (SKIP_DIRS3.has(entry)) continue;
     const fullPath = import_node_path7.default.join(current, entry);
     if (fullPath === outputRoot || fullPath.startsWith(`${outputRoot}${import_node_path7.default.sep}`)) continue;
-    const stat4 = await (0, import_promises4.lstat)(fullPath).catch(() => void 0);
-    if (!stat4 || stat4.isSymbolicLink()) continue;
-    if (stat4.isDirectory()) {
+    const stat5 = await (0, import_promises4.lstat)(fullPath).catch(() => void 0);
+    if (!stat5 || stat5.isSymbolicLink()) continue;
+    if (stat5.isDirectory()) {
       results.push(...await collectIacFiles(root, fullPath, outputRoot, depth + 1, count));
       continue;
     }
-    if (!stat4.isFile() || !CANDIDATE_EXTENSIONS.has(import_node_path7.default.extname(entry).toLowerCase())) continue;
+    if (!stat5.isFile() || !CANDIDATE_EXTENSIONS.has(import_node_path7.default.extname(entry).toLowerCase())) continue;
     count.value += 1;
     results.push(import_node_path7.default.relative(root, fullPath).split(import_node_path7.default.sep).join("/"));
   }
@@ -47988,6 +47991,208 @@ async function runNarrowingPipeline(context, candidates) {
   return void 0;
 }
 
+// src/lib/spec/definition-file-inventory.ts
+var import_node_crypto3 = require("node:crypto");
+var import_node_fs4 = require("node:fs");
+var import_promises5 = require("node:fs/promises");
+var import_node_path8 = __toESM(require("node:path"), 1);
+var import_promises6 = require("node:stream/promises");
+var import_node_stream3 = require("node:stream");
+function sha256HexOfString(content) {
+  return (0, import_node_crypto3.createHash)("sha256").update(content, "utf8").digest("hex");
+}
+function caseFoldPathKey(path9) {
+  return path9.normalize("NFC").toLocaleLowerCase("en-US");
+}
+function assertSafeRelativePath(value, label) {
+  const normalized = value.trim().replace(/\\/g, "/").normalize("NFC");
+  if (!normalized || normalized.startsWith("/") || /^[A-Za-z]:\//.test(normalized) || normalized.includes("\0")) {
+    throw new Error(`${label} path is unsafe: ${value}`);
+  }
+  const parts = normalized.split("/");
+  if (parts.some((part) => part === "" || part === "." || part === "..")) {
+    throw new Error(`${label} path is unsafe: ${value}`);
+  }
+  return parts.join("/");
+}
+function assertUniquePathIdentities(paths, label) {
+  const seen = /* @__PURE__ */ new Map();
+  for (const pathKey of paths) {
+    const identity = caseFoldPathKey(pathKey);
+    const prior = seen.get(identity);
+    if (prior !== void 0) {
+      throw new Error(`${label} paths collide under NFC/case-fold (${prior} vs ${pathKey}); refusing to merge`);
+    }
+    seen.set(identity, pathKey);
+  }
+}
+function buildDefinitionFileInventory(args) {
+  const root = assertSafeRelativePath(args.root, "inventory root");
+  const files = args.members.map((member) => {
+    const memberPath = assertSafeRelativePath(member.path, "inventory member");
+    const bytes = Buffer.byteLength(member.content, "utf8");
+    return {
+      path: memberPath,
+      role: member.role,
+      bytes,
+      sha256: sha256HexOfString(member.content)
+    };
+  }).sort((a, b) => a.path.localeCompare(b.path));
+  assertUniquePathIdentities(
+    files.map((file) => file.path),
+    "Inventory member"
+  );
+  const roots = files.filter((file) => file.role === "root");
+  if (roots.length !== 1) {
+    throw new Error(`Inventory must contain exactly one root, found ${roots.length}`);
+  }
+  if (roots[0].path !== root) {
+    throw new Error(`Inventory root path mismatch: expected ${root}, found ${roots[0].path}`);
+  }
+  return {
+    schemaVersion: 1,
+    root,
+    format: args.format,
+    completeness: args.completeness,
+    provenance: { kind: "provider", provider: "gcp" },
+    files
+  };
+}
+function serializeDefinitionFileInventory(inventory) {
+  return JSON.stringify(inventory);
+}
+async function validateStagedMembers(stageDirAbs, members) {
+  for (const member of members) {
+    const relativePath = assertSafeRelativePath(member.relativePath, "staged member");
+    const absolute = import_node_path8.default.join(stageDirAbs, ...relativePath.split("/"));
+    const onDisk = await (0, import_promises5.readFile)(absolute);
+    const expected = Buffer.from(member.content, "utf8");
+    if (!onDisk.equals(expected)) {
+      throw new Error(`Staged member byte mismatch at ${relativePath}`);
+    }
+    if ((0, import_node_crypto3.createHash)("sha256").update(onDisk).digest("hex") !== sha256HexOfString(member.content)) {
+      throw new Error(`Staged member hash mismatch at ${relativePath}`);
+    }
+  }
+}
+async function fsyncFile(absolutePath) {
+  const handle = await (0, import_promises5.open)(absolutePath, "r+");
+  try {
+    await handle.sync();
+  } finally {
+    await handle.close();
+  }
+}
+async function writeExactFile(absolutePath, content) {
+  await (0, import_promises5.mkdir)(import_node_path8.default.dirname(absolutePath), { recursive: true });
+  const bytes = Buffer.from(content, "utf8");
+  await (0, import_promises6.pipeline)(import_node_stream3.Readable.from(bytes), (0, import_node_fs4.createWriteStream)(absolutePath));
+  await fsyncFile(absolutePath);
+}
+async function walkFiles(rootAbs) {
+  const out = [];
+  async function walk(currentAbs, relative) {
+    const entries = await (0, import_promises5.readdir)(currentAbs, { withFileTypes: true });
+    for (const entry of entries) {
+      const childRel = relative ? `${relative}/${entry.name}` : entry.name;
+      const childAbs = import_node_path8.default.join(currentAbs, entry.name);
+      if (entry.isDirectory()) {
+        await walk(childAbs, childRel);
+      } else if (entry.isFile()) {
+        out.push(childRel.split(import_node_path8.default.sep).join("/"));
+      }
+    }
+  }
+  await walk(rootAbs, "");
+  return out;
+}
+async function copyPreservedSidecars(canonicalAbs, stageAbs, ownedRelativePaths) {
+  let priorFiles;
+  try {
+    priorFiles = await walkFiles(canonicalAbs);
+  } catch {
+    return;
+  }
+  for (const relative of priorFiles) {
+    if (ownedRelativePaths.has(relative)) continue;
+    if (relative.endsWith(".proto")) continue;
+    const from = import_node_path8.default.join(canonicalAbs, ...relative.split("/"));
+    const to = import_node_path8.default.join(stageAbs, ...relative.split("/"));
+    await (0, import_promises5.mkdir)(import_node_path8.default.dirname(to), { recursive: true });
+    await (0, import_promises5.copyFile)(from, to);
+  }
+}
+async function pathExists(absolutePath) {
+  try {
+    await (0, import_promises5.stat)(absolutePath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+async function stageAndSwapServiceDirectory(options) {
+  const serviceDirRelative = assertSafeRelativePath(options.serviceDirRelative, "service directory");
+  if (options.members.length === 0) {
+    throw new Error("Refusing to stage an empty definition member set");
+  }
+  const owned = options.members.map((member) => ({
+    relativePath: assertSafeRelativePath(member.relativePath, "owned member"),
+    content: member.content
+  }));
+  assertUniquePathIdentities(
+    owned.map((member) => member.relativePath),
+    "Owned member"
+  );
+  const ownedSet = new Set(owned.map((member) => member.relativePath));
+  const runId = options.runId ?? (0, import_node_crypto3.randomBytes)(8).toString("hex");
+  const canonicalAbs = import_node_path8.default.resolve(options.repoRoot, ...serviceDirRelative.split("/"));
+  const stageAbs = `${canonicalAbs}.stage-${runId}`;
+  const backupAbs = `${canonicalAbs}.backup-${runId}`;
+  await (0, import_promises5.rm)(stageAbs, { recursive: true, force: true });
+  await (0, import_promises5.rm)(backupAbs, { recursive: true, force: true });
+  await (0, import_promises5.mkdir)(stageAbs, { recursive: true });
+  let swappedToCanonical = false;
+  try {
+    for (let index = 0; index < owned.length; index += 1) {
+      const member = owned[index];
+      await options.beforeWriteMember?.(index, member.relativePath);
+      const absolute = import_node_path8.default.join(stageAbs, ...member.relativePath.split("/"));
+      await writeExactFile(absolute, member.content);
+    }
+    if (await pathExists(canonicalAbs)) {
+      await copyPreservedSidecars(canonicalAbs, stageAbs, ownedSet);
+    }
+    await validateStagedMembers(stageAbs, owned);
+    const hadCanonical = await pathExists(canonicalAbs);
+    if (hadCanonical) {
+      await (0, import_promises5.rename)(canonicalAbs, backupAbs);
+    }
+    try {
+      await (0, import_promises5.rename)(stageAbs, canonicalAbs);
+      swappedToCanonical = true;
+    } catch (error) {
+      if (hadCanonical && await pathExists(backupAbs)) {
+        await (0, import_promises5.rename)(backupAbs, canonicalAbs);
+      }
+      throw error;
+    }
+    await options.afterCanonicalSwap?.();
+    await validateStagedMembers(canonicalAbs, owned);
+    if (await pathExists(backupAbs)) {
+      await (0, import_promises5.rm)(backupAbs, { recursive: true, force: true });
+    }
+  } catch (error) {
+    await (0, import_promises5.rm)(stageAbs, { recursive: true, force: true });
+    if (swappedToCanonical) {
+      await (0, import_promises5.rm)(canonicalAbs, { recursive: true, force: true });
+      if (await pathExists(backupAbs)) {
+        await (0, import_promises5.rename)(backupAbs, canonicalAbs);
+      }
+    }
+    throw error;
+  }
+}
+
 // src/lib/spec/oas-derivation.ts
 var import_yaml4 = __toESM(require_dist3(), 1);
 function parseDocument(content) {
@@ -48053,6 +48258,25 @@ function swaggerToOpenApi(parsed, title) {
 }
 
 // src/lib/spec/proto-source-set.ts
+var PROTO_SOURCE_SET_LIMITS = {
+  maxFiles: 101,
+  maxDepth: 20,
+  maxBytesPerFile: 25 * 1024 * 1024,
+  maxTotalBytes: 25 * 1024 * 1024
+};
+function resolveProtoSourceSetLimits(overrides) {
+  const clamp = (value, ceiling, floor) => {
+    const raw = value === void 0 ? ceiling : Math.floor(value);
+    if (!Number.isFinite(raw)) return ceiling;
+    return Math.min(Math.max(raw, floor), ceiling);
+  };
+  return {
+    maxFiles: clamp(overrides?.maxFiles, PROTO_SOURCE_SET_LIMITS.maxFiles, 1),
+    maxDepth: clamp(overrides?.maxDepth, PROTO_SOURCE_SET_LIMITS.maxDepth, 0),
+    maxBytesPerFile: clamp(overrides?.maxBytesPerFile, PROTO_SOURCE_SET_LIMITS.maxBytesPerFile, 1),
+    maxTotalBytes: clamp(overrides?.maxTotalBytes, PROTO_SOURCE_SET_LIMITS.maxTotalBytes, 1)
+  };
+}
 var WELL_KNOWN_IMPORT_PREFIXES = [
   "google/protobuf/",
   "google/api/",
@@ -48072,9 +48296,12 @@ function extractProtoImports(content) {
   }
   return imports;
 }
-function normalizeProtoSourcePath(path8) {
-  if (!path8 || !path8.trim()) return void 0;
-  const normalized = path8.trim().replace(/\\/g, "/");
+function caseFoldPathKey2(path9) {
+  return path9.normalize("NFC").toLocaleLowerCase("en-US");
+}
+function normalizeProtoSourcePath(path9) {
+  if (!path9 || !path9.trim()) return void 0;
+  const normalized = path9.trim().replace(/\\/g, "/").normalize("NFC");
   if (normalized.startsWith("/") || /^[A-Za-z]:\//.test(normalized) || normalized.includes("\0")) {
     return void 0;
   }
@@ -48084,15 +48311,24 @@ function normalizeProtoSourcePath(path8) {
   }
   return parts.join("/");
 }
-function pathBasename(path8) {
-  return path8.split("/").pop() ?? path8;
+function dirnameOfNormalized(normalizedPath) {
+  const idx = normalizedPath.lastIndexOf("/");
+  return idx === -1 ? "" : normalizedPath.slice(0, idx);
 }
-function importMatchesReturnedSource(imp, returned) {
-  if (returned.has(imp)) return true;
-  for (const path8 of returned) {
-    if (path8.endsWith(`/${imp}`) || pathBasename(path8) === imp) return true;
+function resolveImportToReturnedSource(imp, importerNormalizedPath, byNormalized) {
+  const asRootKey = normalizeProtoSourcePath(imp);
+  if (asRootKey) {
+    const exact = byNormalized.get(asRootKey);
+    if (exact) return exact;
   }
-  return false;
+  const importerDir = dirnameOfNormalized(importerNormalizedPath);
+  const joined = importerDir ? `${importerDir}/${imp}` : imp;
+  const relativeKey = normalizeProtoSourcePath(joined);
+  if (relativeKey && relativeKey !== asRootKey) {
+    const relative = byNormalized.get(relativeKey);
+    if (relative) return relative;
+  }
+  return void 0;
 }
 function classifyProtobufContent(content) {
   try {
@@ -48104,8 +48340,87 @@ function classifyProtobufContent(content) {
     return "invalid";
   }
 }
+function unsupportedLimit(evidence, detail) {
+  return {
+    status: "unsupported",
+    authority: "unsupported-format",
+    evidence: [...evidence, detail]
+  };
+}
+function collectClosure(root, byNormalized, limits) {
+  if (root.byteLength > limits.maxBytesPerFile) {
+    return {
+      limitExceeded: `Protobuf source ${root.normalizedPath} exceeds maxBytesPerFile=${limits.maxBytesPerFile}`
+    };
+  }
+  if (root.byteLength > limits.maxTotalBytes) {
+    return {
+      limitExceeded: `Protobuf source set decoded UTF-8 bytes exceed maxTotalBytes=${limits.maxTotalBytes}`
+    };
+  }
+  const ordered = [
+    {
+      content: root.content,
+      originalPath: root.originalPath,
+      normalizedPath: root.normalizedPath,
+      role: "root"
+    }
+  ];
+  const seen = /* @__PURE__ */ new Set([root.normalizedPath]);
+  let totalBytes = root.byteLength;
+  const queue = root.imports.map(
+    (imp) => ({
+      imp,
+      importerPath: root.normalizedPath,
+      depth: 1
+    })
+  );
+  while (queue.length > 0) {
+    const { imp, importerPath, depth } = queue.shift();
+    if (isWellKnownImport(imp)) continue;
+    const matched = resolveImportToReturnedSource(imp, importerPath, byNormalized);
+    if (!matched) {
+      return { missing: imp };
+    }
+    if (seen.has(matched.normalizedPath)) continue;
+    if (depth > limits.maxDepth) {
+      return {
+        limitExceeded: `Protobuf import closure depth exceeded maxDepth=${limits.maxDepth} at ${matched.normalizedPath}`
+      };
+    }
+    if (seen.size >= limits.maxFiles) {
+      return {
+        limitExceeded: `Protobuf import closure exceeds maxFiles=${limits.maxFiles} (including root) at ${matched.normalizedPath}`
+      };
+    }
+    if (matched.byteLength > limits.maxBytesPerFile || totalBytes + matched.byteLength > limits.maxTotalBytes) {
+      return {
+        limitExceeded: `Protobuf import closure decoded UTF-8 bytes exceed maxTotalBytes=${limits.maxTotalBytes} (or maxBytesPerFile=${limits.maxBytesPerFile}) at ${matched.normalizedPath}`
+      };
+    }
+    seen.add(matched.normalizedPath);
+    totalBytes += matched.byteLength;
+    ordered.push({
+      content: matched.content,
+      originalPath: matched.originalPath,
+      normalizedPath: matched.normalizedPath,
+      role: "dependency"
+    });
+    for (const nextImp of matched.imports) {
+      queue.push({
+        imp: nextImp,
+        importerPath: matched.normalizedPath,
+        depth: depth + 1
+      });
+    }
+  }
+  const rootMember = ordered.find((member) => member.role === "root");
+  const deps = ordered.filter((member) => member.role === "dependency").sort((a, b) => a.normalizedPath.localeCompare(b.normalizedPath));
+  return { members: [rootMember, ...deps] };
+}
 function resolveProtoSourceSet(inputs, options = {}) {
   const evidence = [...options.evidencePrefix ?? []];
+  const limits = resolveProtoSourceSetLimits(options.limits);
   if (inputs.length === 0) {
     if (options.descriptorOnly) {
       return {
@@ -48123,8 +48438,15 @@ function resolveProtoSourceSet(inputs, options = {}) {
       evidence: [...evidence, "No protobuf source files were returned"]
     };
   }
+  if (inputs.length > limits.maxFiles) {
+    return unsupportedLimit(
+      evidence,
+      `Protobuf source set has ${inputs.length} files which exceeds maxFiles=${limits.maxFiles} (including root); refusing unbounded decode`
+    );
+  }
   const decoded = [];
-  const normalizedSeen = /* @__PURE__ */ new Map();
+  const identitySeen = /* @__PURE__ */ new Map();
+  let totalDecodedBytes = 0;
   for (const input of inputs) {
     const normalizedPath = normalizeProtoSourcePath(input.path);
     if (!normalizedPath) {
@@ -48137,18 +48459,19 @@ function resolveProtoSourceSet(inputs, options = {}) {
         ]
       };
     }
-    const prior = normalizedSeen.get(normalizedPath);
+    const identityKey = caseFoldPathKey2(normalizedPath);
+    const prior = identitySeen.get(identityKey);
     if (prior) {
       return {
         status: "unsupported",
         authority: "unsupported-format",
         evidence: [
           ...evidence,
-          `Protobuf source paths collide at ${normalizedPath}; refusing to merge or guess`
+          `Protobuf source paths collide at ${normalizedPath} (identity ${prior}); refusing to merge or guess`
         ]
       };
     }
-    normalizedSeen.set(normalizedPath, input.path ?? normalizedPath);
+    identitySeen.set(identityKey, normalizedPath);
     let content;
     try {
       content = decodeBoundedBase64Utf8(input.contentsBase64);
@@ -48160,6 +48483,20 @@ function resolveProtoSourceSet(inputs, options = {}) {
         evidence: [...evidence, `Protobuf source ${normalizedPath} decode failed: ${detail}`]
       };
     }
+    const byteLength = Buffer.byteLength(content, "utf8");
+    if (byteLength > limits.maxBytesPerFile) {
+      return unsupportedLimit(
+        evidence,
+        `Protobuf source ${normalizedPath} exceeds maxBytesPerFile=${limits.maxBytesPerFile}`
+      );
+    }
+    if (totalDecodedBytes + byteLength > limits.maxTotalBytes) {
+      return unsupportedLimit(
+        evidence,
+        `Protobuf source set decoded UTF-8 bytes exceed maxTotalBytes=${limits.maxTotalBytes}`
+      );
+    }
+    totalDecodedBytes += byteLength;
     const kind = classifyProtobufContent(content);
     if (kind === "invalid") {
       return {
@@ -48176,12 +48513,13 @@ function resolveProtoSourceSet(inputs, options = {}) {
       normalizedPath,
       content,
       serviceBearing: kind === "service",
-      imports: extractProtoImports(content)
+      imports: extractProtoImports(content),
+      byteLength
     });
   }
   decoded.sort((a, b) => a.normalizedPath.localeCompare(b.normalizedPath));
   const serviceBearing = decoded.filter((entry) => entry.serviceBearing);
-  const returnedPaths = new Set(decoded.map((entry) => entry.normalizedPath));
+  const byNormalized = new Map(decoded.map((entry) => [entry.normalizedPath, entry]));
   if (serviceBearing.length === 0) {
     if (options.descriptorOnly) {
       return {
@@ -48213,31 +48551,29 @@ function resolveProtoSourceSet(inputs, options = {}) {
     };
   }
   const primary = serviceBearing[0];
-  for (const imp of primary.imports) {
-    if (isWellKnownImport(imp)) continue;
-    if (importMatchesReturnedSource(imp, returnedPaths)) {
-      return {
-        status: "unsupported",
-        authority: "unsupported-format",
-        evidence: [
-          ...evidence,
-          `Protobuf entrypoint ${primary.normalizedPath} imports sibling source ${imp}; bootstrap cannot load proto closure`
-        ]
-      };
-    }
+  const closure = collectClosure(primary, byNormalized, limits);
+  if ("missing" in closure) {
     return {
       status: "unsupported",
       authority: "unsupported-format",
       evidence: [
         ...evidence,
-        `Protobuf entrypoint ${primary.normalizedPath} has unresolved local import ${imp}`
+        `Protobuf entrypoint ${primary.normalizedPath} has unresolved local import ${closure.missing}`
       ]
     };
   }
-  const ignored = decoded.filter((entry) => entry.normalizedPath !== primary.normalizedPath).map((entry) => entry.normalizedPath);
+  if ("limitExceeded" in closure) {
+    return unsupportedLimit(evidence, closure.limitExceeded);
+  }
+  const closurePaths = new Set(closure.members.map((member) => member.normalizedPath));
+  const ignored = decoded.filter((entry) => !closurePaths.has(entry.normalizedPath)).map((entry) => entry.normalizedPath);
   if (ignored.length > 0) {
     evidence.push(
       `Selected sole service/rpc-bearing protobuf entrypoint ${primary.normalizedPath}; ignored non-imported sources (${ignored.join(", ")})`
+    );
+  } else if (closure.members.length > 1) {
+    evidence.push(
+      `Selected sole service/rpc-bearing protobuf entrypoint ${primary.normalizedPath} with ${closure.members.length - 1} provider dependency(ies)`
     );
   } else {
     evidence.push(`Selected sole service/rpc-bearing protobuf entrypoint ${primary.normalizedPath}`);
@@ -48247,6 +48583,9 @@ function resolveProtoSourceSet(inputs, options = {}) {
     export: {
       content: primary.content,
       originalPath: primary.originalPath,
+      rootPath: primary.normalizedPath,
+      completeness: "full",
+      members: closure.members,
       evidence
     }
   };
@@ -48429,8 +48768,19 @@ var ApiGatewayProvider = class {
       const resolved = resolveGatewayProtobuf(config, []);
       if (resolved.status !== "exportable") throw new Error(resolved.evidence.at(-1));
       const decoded2 = decodeUtf8NativeFamily(resolved.export.content, "protobuf");
+      const multiFile = resolved.export.members.length > 1;
       return {
-        ...decoded2,
+        content: resolved.export.content,
+        format: "protobuf",
+        filename: multiFile ? resolved.export.rootPath : decoded2.filename,
+        completeness: "full",
+        rootPath: resolved.export.rootPath,
+        artifacts: multiFile ? resolved.export.members.map((member) => ({
+          path: member.normalizedPath,
+          role: member.role,
+          content: member.content,
+          originalPath: member.originalPath
+        })) : void 0,
         evidence: [
           `Exported original API Gateway protobuf source ${resolved.export.originalPath}`,
           ...resolved.export.evidence.filter((line) => !line.startsWith("Selected sole"))
@@ -48656,8 +49006,19 @@ var CloudEndpointsProvider = class {
       const resolved = resolveEndpointsProtobuf(config);
       if (resolved.status !== "exportable") throw new Error(resolved.evidence.at(-1));
       const decoded2 = decodeUtf8NativeFamily(resolved.export.content, "protobuf");
+      const multiFile = resolved.export.members.length > 1;
       return {
-        ...decoded2,
+        content: resolved.export.content,
+        format: "protobuf",
+        filename: multiFile ? resolved.export.rootPath : decoded2.filename,
+        completeness: "full",
+        rootPath: resolved.export.rootPath,
+        artifacts: multiFile ? resolved.export.members.map((member) => ({
+          path: member.normalizedPath,
+          role: member.role,
+          content: member.content,
+          originalPath: member.originalPath
+        })) : void 0,
         evidence: [
           `Exported original Cloud Endpoints protobuf source ${resolved.export.originalPath}`,
           ...support2.evidence.filter((line) => line.includes("ignored non-imported"))
@@ -48868,17 +49229,17 @@ function decodeUtf8Text(bytes) {
 }
 function proxyDocuments(bundle) {
   const result = [];
-  for (const [path8, bytes] of inflateZip(bundle)) {
-    if (PROXY_OPENAPI_PATH.test(path8)) {
+  for (const [path9, bytes] of inflateZip(bundle)) {
+    if (PROXY_OPENAPI_PATH.test(path9)) {
       try {
-        result.push({ path: path8, decoded: decodeUtf8OpenApi(decodeUtf8Text(bytes)) });
+        result.push({ path: path9, decoded: decodeUtf8OpenApi(decodeUtf8Text(bytes)) });
       } catch {
       }
       continue;
     }
-    if (PROXY_WSDL_PATH.test(path8)) {
+    if (PROXY_WSDL_PATH.test(path9)) {
       try {
-        result.push({ path: path8, decoded: decodeUtf8NativeFamily(decodeUtf8Text(bytes), "wsdl") });
+        result.push({ path: path9, decoded: decodeUtf8NativeFamily(decodeUtf8Text(bytes), "wsdl") });
       } catch {
       }
     }
@@ -48887,13 +49248,13 @@ function proxyDocuments(bundle) {
 }
 function archiveDocuments(bundle) {
   const result = [];
-  for (const [path8, bytes] of inflateZip(bundle)) {
-    if (isUnsafeZipEntryName(path8)) {
+  for (const [path9, bytes] of inflateZip(bundle)) {
+    if (isUnsafeZipEntryName(path9)) {
       throw new Error("Apigee archive deployment zip contains an unsafe entry name");
     }
-    if (path8.endsWith("/") || !/\.(?:json|ya?ml)$/i.test(path8)) continue;
+    if (path9.endsWith("/") || !/\.(?:json|ya?ml)$/i.test(path9)) continue;
     try {
-      result.push({ path: path8, decoded: decodeUtf8OpenApi(decodeUtf8Text(bytes)) });
+      result.push({ path: path9, decoded: decodeUtf8OpenApi(decodeUtf8Text(bytes)) });
     } catch {
     }
   }
@@ -49500,11 +49861,11 @@ function decodeRegistryContents(bytes, mimeType) {
   }
   if (bytes.byteLength >= 4 && bytes.readUInt32LE(0) === 67324752) {
     const found = [];
-    for (const [path8, entry] of inflateZip(bytes)) {
-      if (path8.includes("\0") || path8.startsWith("/") || path8.includes("..") || /^[A-Za-z]:/.test(path8)) {
+    for (const [path9, entry] of inflateZip(bytes)) {
+      if (path9.includes("\0") || path9.startsWith("/") || path9.includes("..") || /^[A-Za-z]:/.test(path9)) {
         throw new Error("Legacy Apigee Registry multi-file bundle contains an unsafe entry name");
       }
-      if (!NATIVE_ZIP_ENTRY.test(path8)) continue;
+      if (!NATIVE_ZIP_ENTRY.test(path9)) continue;
       const decoded2 = tryDecodeNativeBytes(entry, hint);
       if (decoded2) found.push(decoded2);
     }
@@ -50170,8 +50531,8 @@ function resolveInputs(env = process.env) {
   };
 }
 async function defaultWriteSpecFile(outputPath, content) {
-  await (0, import_promises5.mkdir)(import_node_path8.default.dirname(outputPath), { recursive: true });
-  await (0, import_promises5.writeFile)(outputPath, content, "utf8");
+  await (0, import_promises7.mkdir)(import_node_path9.default.dirname(outputPath), { recursive: true });
+  await (0, import_promises7.writeFile)(outputPath, content, "utf8");
 }
 function projectFolderName(projectName) {
   const safe = projectName.trim().replace(/[\\/]+/g, "-").replace(/^\.+$/, "service").replace(/[^A-Za-z0-9._-]+/g, "-").replace(/^-+|-+$/g, "");
@@ -50203,14 +50564,63 @@ function sourceTypeForProvider(provider, candidateSourceType) {
   if (provider === "ces-toolsets") return "ces-toolset-schema";
   return "iac-embedded";
 }
-async function writeSpecExport(inputs, serviceName, exportResult, writeSpecFile) {
+function isFullMultiFileExport(exportResult) {
+  return exportResult.completeness === "full" && Array.isArray(exportResult.artifacts) && exportResult.artifacts.length > 1 && typeof exportResult.rootPath === "string" && exportResult.rootPath.length > 0;
+}
+async function writeSpecExport(inputs, serviceName, exportResult, dependencies) {
   const folder = projectFolderName(serviceName);
-  const relativeSpecPath = import_node_path8.default.posix.join(inputs.outputDir.split(import_node_path8.default.sep).join("/"), folder, exportResult.filename);
-  const absoluteSpecPath = resolvePathWithinRoot(inputs.repoRoot, relativeSpecPath, "output-dir");
-  if (!inputs.dryRun) {
-    await writeSpecFile(absoluteSpecPath, exportResult.content);
+  const outputDirPosix = inputs.outputDir.split(import_node_path9.default.sep).join("/");
+  const serviceDirRelative = import_node_path9.default.posix.join(outputDirPosix, folder);
+  const writeSpecFile = dependencies.writeSpecFile;
+  let relativeSpecPath;
+  let specFilesJson;
+  if (isFullMultiFileExport(exportResult)) {
+    const artifacts = exportResult.artifacts;
+    const rootPath = exportResult.rootPath;
+    relativeSpecPath = import_node_path9.default.posix.join(serviceDirRelative, rootPath);
+    resolvePathWithinRoot(inputs.repoRoot, relativeSpecPath, "output-dir");
+    for (const artifact of artifacts) {
+      resolvePathWithinRoot(
+        inputs.repoRoot,
+        import_node_path9.default.posix.join(serviceDirRelative, artifact.path),
+        "output-dir"
+      );
+    }
+    const inventory = buildDefinitionFileInventory({
+      root: relativeSpecPath,
+      format: exportResult.format,
+      completeness: "full",
+      members: artifacts.map((artifact) => ({
+        path: import_node_path9.default.posix.join(serviceDirRelative, artifact.path),
+        role: artifact.role,
+        content: artifact.content
+      }))
+    });
+    specFilesJson = serializeDefinitionFileInventory(inventory);
+    if (!inputs.dryRun) {
+      await stageAndSwapServiceDirectory({
+        repoRoot: inputs.repoRoot,
+        serviceDirRelative,
+        members: artifacts.map((artifact) => ({
+          relativePath: artifact.path,
+          content: artifact.content
+        })),
+        runId: dependencies.stageRunId,
+        beforeWriteMember: dependencies.beforeStageWriteMember
+      });
+    }
+  } else {
+    relativeSpecPath = import_node_path9.default.posix.join(serviceDirRelative, exportResult.filename);
+    const absoluteSpecPath = resolvePathWithinRoot(inputs.repoRoot, relativeSpecPath, "output-dir");
+    if (!inputs.dryRun) {
+      await writeSpecFile(absoluteSpecPath, exportResult.content);
+    }
   }
-  const written = { specPath: relativeSpecPath, specFormat: exportResult.format };
+  const written = {
+    specPath: relativeSpecPath,
+    specFormat: exportResult.format,
+    specFilesJson
+  };
   const derivation = deriveOpenApiDocument({ content: exportResult.content, format: exportResult.format, title: serviceName });
   if (derivation) {
     if (derivation.completeness === "full" && exportResult.format === "openapi-json") {
@@ -50222,7 +50632,7 @@ async function writeSpecExport(inputs, serviceName, exportResult, writeSpecFile)
         evidence: derivation.evidence
       };
     } else {
-      const derivedRelative = import_node_path8.default.posix.join(inputs.outputDir.split(import_node_path8.default.sep).join("/"), folder, "openapi.derived.json");
+      const derivedRelative = import_node_path9.default.posix.join(serviceDirRelative, "openapi.derived.json");
       const derivedAbsolute = resolvePathWithinRoot(inputs.repoRoot, derivedRelative, "output-dir");
       if (!inputs.dryRun) {
         await writeSpecFile(derivedAbsolute, derivation.content);
@@ -50365,7 +50775,7 @@ async function runResolveOne(inputs, dependencies) {
     const provider = new IacLocalProvider(iacScan);
     const exportResult = await provider.exportSpec(only);
     const serviceName = resolveServiceName(only, inputs.serviceMapping);
-    const written = await writeSpecExport(inputs, serviceName, exportResult, dependencies.writeSpecFile);
+    const written = await writeSpecExport(inputs, serviceName, exportResult, dependencies);
     const resolution2 = {
       status: "resolved",
       sourceType: "iac-embedded",
@@ -50373,6 +50783,7 @@ async function runResolveOne(inputs, dependencies) {
       confidence: 100,
       authority: "stored-authoritative",
       specPath: written.specPath,
+      specFilesJson: written.specFilesJson,
       providerType: "iac-local",
       specFormat: written.specFormat,
       ...written.derived ? {
@@ -50456,7 +50867,7 @@ async function runResolveOne(inputs, dependencies) {
       if (provider) {
         const exportResult = await provider.exportSpec(target);
         const serviceName = resolveServiceName(target, inputs.serviceMapping);
-        const written = await writeSpecExport(inputs, serviceName, exportResult, dependencies.writeSpecFile);
+        const written = await writeSpecExport(inputs, serviceName, exportResult, dependencies);
         const resolution3 = {
           status: "resolved",
           sourceType: sourceTypeForProvider(target.providerType, target.sourceType),
@@ -50464,6 +50875,7 @@ async function runResolveOne(inputs, dependencies) {
           confidence: 100,
           authority: resolveCandidateAuthority(target),
           specPath: written.specPath,
+          specFilesJson: written.specFilesJson,
           ...target.apiId ? { apiId: target.apiId } : {},
           providerType: target.providerType,
           specFormat: written.specFormat,
@@ -50541,7 +50953,7 @@ async function runResolveOne(inputs, dependencies) {
       try {
         const exportResult = await provider.exportSpec(target);
         const serviceName = resolveServiceName(target, inputs.serviceMapping);
-        const written = await writeSpecExport(inputs, serviceName, exportResult, dependencies.writeSpecFile);
+        const written = await writeSpecExport(inputs, serviceName, exportResult, dependencies);
         const resolution2 = {
           status: "resolved",
           sourceType: sourceTypeForProvider(target.providerType, target.sourceType),
@@ -50549,6 +50961,7 @@ async function runResolveOne(inputs, dependencies) {
           confidence: best.confidence,
           authority: best.authority,
           specPath: written.specPath,
+          specFilesJson: written.specFilesJson,
           ...target.apiId ? { apiId: target.apiId } : {},
           providerType: target.providerType,
           specFormat: written.specFormat,
@@ -50644,12 +51057,12 @@ async function runDiscoverMany(inputs, dependencies) {
     try {
       const exportResult = await provider.exportSpec(candidate);
       const serviceName = resolveServiceName(candidate, inputs.serviceMapping);
-      const targetPath = import_node_path8.default.posix.join(inputs.outputDir.split(import_node_path8.default.sep).join("/"), projectFolderName(serviceName), exportResult.filename);
+      const targetPath = import_node_path9.default.posix.join(inputs.outputDir.split(import_node_path9.default.sep).join("/"), projectFolderName(serviceName), exportResult.filename);
       const priorOwner = writtenPaths.get(targetPath);
       if (priorOwner && priorOwner !== candidate.id) {
         throw new Error(`Spec path collision at ${targetPath}: already written by ${priorOwner}`);
       }
-      const written = await writeSpecExport(inputs, serviceName, exportResult, dependencies.writeSpecFile);
+      const written = await writeSpecExport(inputs, serviceName, exportResult, dependencies);
       writtenPaths.set(written.specPath, candidate.id);
       discovered.push({
         serviceName,
@@ -50700,6 +51113,7 @@ function buildExecutionOutputs(result) {
       "source-type": "discover-many",
       "mapping-confidence": unresolved ? "0" : discovered.length > 0 ? "100" : "0",
       "spec-path": "",
+      "spec-files-json": "",
       "api-id": "",
       "service-name": "",
       "services-json": JSON.stringify(discovered),
@@ -50740,6 +51154,7 @@ function buildExecutionOutputs(result) {
     "source-type": resolution.sourceType,
     "mapping-confidence": String(resolution.confidence),
     "spec-path": resolution.specPath ?? "",
+    "spec-files-json": resolution.specFilesJson ?? "",
     "api-id": resolution.apiId ?? "",
     "service-name": resolution.serviceName,
     "services-json": "[]",
@@ -50917,6 +51332,7 @@ function toDotenv(outputs) {
     POSTMAN_GCP_SPEC_SOURCE_TYPE: outputs["source-type"] ?? "",
     POSTMAN_GCP_SPEC_MAPPING_CONFIDENCE: outputs["mapping-confidence"] ?? "",
     POSTMAN_GCP_SPEC_PATH: outputs["spec-path"] ?? "",
+    POSTMAN_GCP_SPEC_FILES_JSON: outputs["spec-files-json"] ?? "",
     POSTMAN_GCP_SPEC_API_ID: outputs["api-id"] ?? "",
     POSTMAN_GCP_SPEC_SERVICE_NAME: outputs["service-name"] ?? "",
     POSTMAN_GCP_SPEC_SERVICES_JSON: outputs["services-json"] ?? "",
@@ -50942,8 +51358,8 @@ async function writeOptionalFile(rootPath, filePath, content) {
     return;
   }
   const resolved = resolvePathWithinRoot(rootPath, filePath, "Output path");
-  await (0, import_promises6.mkdir)(import_node_path9.default.dirname(resolved), { recursive: true });
-  await (0, import_promises6.writeFile)(resolved, content, "utf8");
+  await (0, import_promises8.mkdir)(import_node_path10.default.dirname(resolved), { recursive: true });
+  await (0, import_promises8.writeFile)(resolved, content, "utf8");
 }
 async function runCli(argv = process.argv.slice(2), runtime = {}) {
   const env = runtime.env ?? process.env;
@@ -51007,9 +51423,9 @@ function shouldRunMain() {
     return false;
   }
   try {
-    return (0, import_node_fs4.realpathSync)(currentModulePath) === (0, import_node_fs4.realpathSync)(entrypointPath);
+    return (0, import_node_fs5.realpathSync)(currentModulePath) === (0, import_node_fs5.realpathSync)(entrypointPath);
   } catch {
-    return import_node_path9.default.resolve(currentModulePath) === import_node_path9.default.resolve(entrypointPath);
+    return import_node_path10.default.resolve(currentModulePath) === import_node_path10.default.resolve(entrypointPath);
   }
 }
 if (shouldRunMain()) {

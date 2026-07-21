@@ -59,6 +59,8 @@ outputs:
     description: Numeric confidence score for the selected service candidate.
   spec-path:
     description: Path to the resolved or generated specification when available.
+  spec-files-json:
+    description: Optional JSON inventory of the authoritative multi-file definition set (schemaVersion 1). Empty for single-file, unresolved, and discover-many results.
   api-id:
     description: Full resource name of the exported cloud source (API Gateway config, Cloud Endpoints config, Apigee proxy revision, Apigee archive deployment, API Hub spec, legacy Apigee Registry spec, Apigee portal apidoc, Vertex extension, Dialogflow tool, or CES tool/toolset); empty for repo, generated, or IaC-local resolutions.
   service-name:

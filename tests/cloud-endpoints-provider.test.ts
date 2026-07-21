@@ -158,7 +158,7 @@ describe('Cloud Endpoints provider', () => {
     expect(exported.content).toBe(proto);
   });
 
-  it('GCP-ENDPOINTS-006: descriptor-only / message-only / multi-entrypoint / imported PROTO_FILE stay unsupported', async () => {
+  it('GCP-ENDPOINTS-006: descriptor-only / message-only / multi-entrypoint / missing-import PROTO_FILE stay unsupported', async () => {
     const service = 'syntax = "proto3";\nservice A { rpc X(M) returns (M); }\nmessage M { string id = 1; }\n';
     const variants = [
       config({
@@ -201,12 +201,7 @@ describe('Cloud Endpoints provider', () => {
             {
               fileType: 'PROTO_FILE',
               filePath: 'service.proto',
-              fileContents: Buffer.from(`syntax = "proto3";\nimport "types.proto";\n${service}`).toString('base64')
-            },
-            {
-              fileType: 'PROTO_FILE',
-              filePath: 'types.proto',
-              fileContents: Buffer.from('syntax = "proto3";\nmessage T {}\n').toString('base64')
+              fileContents: Buffer.from(`syntax = "proto3";\nimport "missing.proto";\n${service}`).toString('base64')
             }
           ]
         }
@@ -218,6 +213,42 @@ describe('Cloud Endpoints provider', () => {
       expect(candidate.supported).toBe(false);
       await expect(provider.exportSpec(candidate)).rejects.toThrow();
     }
+  });
+
+  it('GCP-ENDPOINTS-008: exports a complete sibling-import PROTO_FILE set with exact member artifacts', async () => {
+    const types = 'syntax = "proto3";\nmessage Money { int64 units = 1; }\n';
+    const root = 'syntax = "proto3";\nimport "types.proto";\nservice Payments { rpc Get(M) returns (M); }\nmessage M { string id = 1; }\n';
+    const value = config({
+      sourceInfo: {
+        sourceFiles: [
+          {
+            fileType: 'PROTO_FILE',
+            filePath: 'service.proto',
+            fileContents: Buffer.from(root).toString('base64')
+          },
+          {
+            fileType: 'PROTO_FILE',
+            filePath: 'types.proto',
+            fileContents: Buffer.from(types).toString('base64')
+          }
+        ]
+      }
+    });
+    const provider = new CloudEndpointsProvider(fakeClient(value), { projectId: 'sample-project-123' });
+    const candidate = (await provider.listCandidates())[0]!;
+    expect(candidate.supported).toBe(true);
+    const exported = await provider.exportSpec(candidate);
+    expect(exported).toMatchObject({
+      format: 'protobuf',
+      filename: 'service.proto',
+      completeness: 'full',
+      rootPath: 'service.proto',
+      content: root
+    });
+    expect(exported.artifacts).toEqual([
+      { path: 'service.proto', role: 'root', content: root, originalPath: 'service.proto' },
+      { path: 'types.proto', role: 'dependency', content: types, originalPath: 'types.proto' }
+    ]);
   });
 
   it('GCP-ENDPOINTS-007: OpenAPI + PROTO_FILE emits distinct candidates without overwrite', async () => {
