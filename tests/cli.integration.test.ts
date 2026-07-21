@@ -29,7 +29,7 @@ describe('CLI argument parsing', () => {
 });
 
 describe('dotenv serialization', () => {
-  it('GCP-CLI-002: all 22 outputs serialize as unique POSTMAN_GCP_SPEC_* lines with JSON-quoted values', () => {
+  it('GCP-CLI-002: all 23 outputs serialize as unique POSTMAN_GCP_SPEC_* lines with JSON-quoted values', () => {
     const outputs: Record<string, string> = {};
     for (const name of contractOutputNames) {
       outputs[name] = `value-of-${name}`;
@@ -37,13 +37,15 @@ describe('dotenv serialization', () => {
     const dotenv = toDotenv(outputs);
     const lines = dotenv.split('\n');
 
-    expect(lines).toHaveLength(22);
+    expect(lines).toHaveLength(23);
     const keys = lines.map((line) => line.split('=')[0]);
-    expect(new Set(keys).size).toBe(22);
+    expect(new Set(keys).size).toBe(23);
     for (const key of keys) {
       expect(key).toMatch(/^POSTMAN_GCP_SPEC_/);
     }
     expect(keys).toContain('POSTMAN_GCP_SPEC_API_ID');
+    expect(keys).toContain('POSTMAN_GCP_SPEC_FILES_JSON');
+    expect(keys.indexOf('POSTMAN_GCP_SPEC_PATH')).toBeLessThan(keys.indexOf('POSTMAN_GCP_SPEC_FILES_JSON'));
     expect(dotenv).not.toContain('POSTMAN_AWS_');
     expect(dotenv).not.toContain('GATEWAY_ID');
     for (const line of lines) {
@@ -98,7 +100,7 @@ describe('runCli side effects', () => {
     }
 
     const dotenv = await readFile(path.join(workspace, 'out/outputs.env'), 'utf8');
-    expect(dotenv.split('\n')).toHaveLength(22);
+    expect(dotenv.split('\n')).toHaveLength(23);
     expect(dotenv).toContain('POSTMAN_GCP_SPEC_RESOLUTION_STATUS="resolved"');
   });
 });

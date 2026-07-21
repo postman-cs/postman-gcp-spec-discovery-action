@@ -93,7 +93,7 @@ describe('adapter parity', () => {
     vi.unstubAllEnvs();
   });
 
-  it('GCP-ENTRY-001: action shell and CLI-shaped env produce byte-equal outputs for all 22 outputs', async () => {
+  it('GCP-ENTRY-001: action shell and CLI-shaped env produce byte-equal outputs for all 23 outputs', async () => {
     // Hermetic repo root: empty temp dir so neither adapter picks up repo
     // specs/IaC from the action checkout or CI workspace, and both adapters
     // see identical ambient env (CI sets GITHUB_WORKSPACE; locally unset).

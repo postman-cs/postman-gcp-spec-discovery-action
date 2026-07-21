@@ -178,8 +178,21 @@ export class CloudEndpointsProvider implements SpecProvider {
       const resolved = resolveEndpointsProtobuf(config);
       if (resolved.status !== 'exportable') throw new Error(resolved.evidence.at(-1));
       const decoded = decodeUtf8NativeFamily(resolved.export.content, 'protobuf');
+      const multiFile = resolved.export.members.length > 1;
       return {
-        ...decoded,
+        content: resolved.export.content,
+        format: 'protobuf',
+        filename: multiFile ? resolved.export.rootPath : decoded.filename,
+        completeness: 'full',
+        rootPath: resolved.export.rootPath,
+        artifacts: multiFile
+          ? resolved.export.members.map((member) => ({
+              path: member.normalizedPath,
+              role: member.role,
+              content: member.content,
+              originalPath: member.originalPath
+            }))
+          : undefined,
         evidence: [
           `Exported original Cloud Endpoints protobuf source ${resolved.export.originalPath}`,
           ...support.evidence.filter((line) => line.includes('ignored non-imported'))

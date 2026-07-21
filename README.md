@@ -113,6 +113,7 @@ npx @postman-cse/onboarding-gcp-spec-discovery \
 | `source-type` | Resolved source type: repo-spec, api-gateway-config, cloud-endpoints-config, apigee-proxy, apigee-archive-deployment, api-hub-spec, api-hub-boosted-spec, api-hub-gateway-openapi-spec, apigee-registry-spec, app-integration-trigger, connectors-custom-spec, apigee-portal-doc, vertex-extension-manifest, dialogflow-tool-schema, ces-tool-schema, ces-toolset-schema, iac-embedded, manual-review, or discover-many. |
 | `mapping-confidence` | Numeric confidence score for the selected service candidate. |
 | `spec-path` | Path to the resolved or generated specification when available. |
+| `spec-files-json` | Optional JSON inventory of the authoritative multi-file definition set (schemaVersion 1). Empty for single-file, unresolved, and discover-many results. |
 | `api-id` | Full resource name of the exported cloud source (API Gateway config, Cloud Endpoints config, Apigee proxy revision, Apigee archive deployment, API Hub spec, legacy Apigee Registry spec, Apigee portal apidoc, Vertex extension, Dialogflow tool, or CES tool/toolset); empty for repo, generated, or IaC-local resolutions. |
 | `service-name` | Resolved service name. |
 | `services-json` | discover-many output: JSON array of exported services. |

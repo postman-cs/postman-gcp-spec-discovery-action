@@ -30,6 +30,11 @@ import {
   type RankedServiceCandidate
 } from './lib/resolve/service-resolver.js';
 import { canonicalRepoLabelValue, runNarrowingPipeline, type NarrowingCandidate, type NarrowingResult } from './lib/resolve/narrowing-pipeline.js';
+import {
+  buildDefinitionFileInventory,
+  serializeDefinitionFileInventory,
+  stageAndSwapServiceDirectory
+} from './lib/spec/definition-file-inventory.js';
 import { deriveOpenApiDocument } from './lib/spec/oas-derivation.js';
 import { ApiGatewayProvider, parseApiGatewayConfigName } from './lib/providers/api-gateway.js';
 import { CloudEndpointsProvider, parseEndpointConfigName } from './lib/providers/cloud-endpoints.js';
@@ -81,6 +86,10 @@ export interface GCPDependencies {
   client: GcpDiscoveryClient;
   writeSpecFile: (outputPath: string, content: string) => Promise<void>;
   providers?: SpecProvider[];
+  /** Optional stable run id for stage/backup directory suffixes (tests). */
+  stageRunId?: string;
+  /** Optional test hook invoked before each staged owned-member write. */
+  beforeStageWriteMember?: (index: number, relativePath: string) => void | Promise<void>;
 }
 
 export interface ExecutionResult {
@@ -329,6 +338,8 @@ function sourceTypeForProvider(
 interface WrittenExport {
   specPath: string;
   specFormat: SpecFormat;
+  /** Serialized R2 inventory for full multi-file exports; otherwise undefined/empty. */
+  specFilesJson?: string;
   derived?: {
     path: string;
     version: '3.0.3' | '3.1.0';
@@ -338,20 +349,81 @@ interface WrittenExport {
   };
 }
 
+function isFullMultiFileExport(exportResult: SpecExportResult): boolean {
+  return (
+    exportResult.completeness === 'full' &&
+    Array.isArray(exportResult.artifacts) &&
+    exportResult.artifacts.length > 1 &&
+    typeof exportResult.rootPath === 'string' &&
+    exportResult.rootPath.length > 0
+  );
+}
+
 async function writeSpecExport(
   inputs: ResolvedInputs,
   serviceName: string,
   exportResult: SpecExportResult,
-  writeSpecFile: (outputPath: string, content: string) => Promise<void>
+  dependencies: Pick<GCPDependencies, 'writeSpecFile' | 'stageRunId' | 'beforeStageWriteMember'>
 ): Promise<WrittenExport> {
   const folder = projectFolderName(serviceName);
-  const relativeSpecPath = path.posix.join(inputs.outputDir.split(path.sep).join('/'), folder, exportResult.filename);
-  const absoluteSpecPath = resolvePathWithinRoot(inputs.repoRoot, relativeSpecPath, 'output-dir');
-  if (!inputs.dryRun) {
-    await writeSpecFile(absoluteSpecPath, exportResult.content);
+  const outputDirPosix = inputs.outputDir.split(path.sep).join('/');
+  const serviceDirRelative = path.posix.join(outputDirPosix, folder);
+  const writeSpecFile = dependencies.writeSpecFile;
+
+  let relativeSpecPath: string;
+  let specFilesJson: string | undefined;
+
+  if (isFullMultiFileExport(exportResult)) {
+    const artifacts = exportResult.artifacts!;
+    const rootPath = exportResult.rootPath!;
+    relativeSpecPath = path.posix.join(serviceDirRelative, rootPath);
+    // Ensure root path resolves inside the service directory.
+    resolvePathWithinRoot(inputs.repoRoot, relativeSpecPath, 'output-dir');
+    for (const artifact of artifacts) {
+      resolvePathWithinRoot(
+        inputs.repoRoot,
+        path.posix.join(serviceDirRelative, artifact.path),
+        'output-dir'
+      );
+    }
+
+    const inventory = buildDefinitionFileInventory({
+      root: relativeSpecPath,
+      format: exportResult.format,
+      completeness: 'full',
+      members: artifacts.map((artifact) => ({
+        path: path.posix.join(serviceDirRelative, artifact.path),
+        role: artifact.role,
+        content: artifact.content
+      }))
+    });
+    specFilesJson = serializeDefinitionFileInventory(inventory);
+
+    if (!inputs.dryRun) {
+      await stageAndSwapServiceDirectory({
+        repoRoot: inputs.repoRoot,
+        serviceDirRelative,
+        members: artifacts.map((artifact) => ({
+          relativePath: artifact.path,
+          content: artifact.content
+        })),
+        runId: dependencies.stageRunId,
+        beforeWriteMember: dependencies.beforeStageWriteMember
+      });
+    }
+  } else {
+    relativeSpecPath = path.posix.join(serviceDirRelative, exportResult.filename);
+    const absoluteSpecPath = resolvePathWithinRoot(inputs.repoRoot, relativeSpecPath, 'output-dir');
+    if (!inputs.dryRun) {
+      await writeSpecFile(absoluteSpecPath, exportResult.content);
+    }
   }
 
-  const written: WrittenExport = { specPath: relativeSpecPath, specFormat: exportResult.format };
+  const written: WrittenExport = {
+    specPath: relativeSpecPath,
+    specFormat: exportResult.format,
+    specFilesJson
+  };
 
   const derivation = deriveOpenApiDocument({ content: exportResult.content, format: exportResult.format, title: serviceName });
   if (derivation) {
@@ -365,7 +437,7 @@ async function writeSpecExport(
         evidence: derivation.evidence
       };
     } else {
-      const derivedRelative = path.posix.join(inputs.outputDir.split(path.sep).join('/'), folder, 'openapi.derived.json');
+      const derivedRelative = path.posix.join(serviceDirRelative, 'openapi.derived.json');
       const derivedAbsolute = resolvePathWithinRoot(inputs.repoRoot, derivedRelative, 'output-dir');
       if (!inputs.dryRun) {
         await writeSpecFile(derivedAbsolute, derivation.content);
@@ -537,7 +609,7 @@ async function runResolveOne(inputs: ResolvedInputs, dependencies: GCPDependenci
     const provider = new IacLocalProvider(iacScan);
     const exportResult = await provider.exportSpec(only);
     const serviceName = resolveServiceName(only, inputs.serviceMapping);
-    const written = await writeSpecExport(inputs, serviceName, exportResult, dependencies.writeSpecFile);
+    const written = await writeSpecExport(inputs, serviceName, exportResult, dependencies);
     const resolution: ResolutionResult = {
       status: 'resolved',
       sourceType: 'iac-embedded',
@@ -545,6 +617,7 @@ async function runResolveOne(inputs: ResolvedInputs, dependencies: GCPDependenci
       confidence: 100,
       authority: 'stored-authoritative',
       specPath: written.specPath,
+      specFilesJson: written.specFilesJson,
       providerType: 'iac-local',
       specFormat: written.specFormat,
       ...(written.derived
@@ -640,7 +713,7 @@ async function runResolveOne(inputs: ResolvedInputs, dependencies: GCPDependenci
       if (provider) {
         const exportResult = await provider.exportSpec(target);
         const serviceName = resolveServiceName(target, inputs.serviceMapping);
-        const written = await writeSpecExport(inputs, serviceName, exportResult, dependencies.writeSpecFile);
+        const written = await writeSpecExport(inputs, serviceName, exportResult, dependencies);
         const resolution: ResolutionResult = {
           status: 'resolved',
           sourceType: sourceTypeForProvider(target.providerType, target.sourceType),
@@ -648,6 +721,7 @@ async function runResolveOne(inputs: ResolvedInputs, dependencies: GCPDependenci
           confidence: 100,
           authority: resolveCandidateAuthority(target),
           specPath: written.specPath,
+          specFilesJson: written.specFilesJson,
           ...(target.apiId ? { apiId: target.apiId } : {}),
           providerType: target.providerType,
           specFormat: written.specFormat,
@@ -747,7 +821,7 @@ async function runResolveOne(inputs: ResolvedInputs, dependencies: GCPDependenci
       try {
         const exportResult = await provider.exportSpec(target);
         const serviceName = resolveServiceName(target, inputs.serviceMapping);
-        const written = await writeSpecExport(inputs, serviceName, exportResult, dependencies.writeSpecFile);
+        const written = await writeSpecExport(inputs, serviceName, exportResult, dependencies);
         const resolution: ResolutionResult = {
           status: 'resolved',
           sourceType: sourceTypeForProvider(target.providerType, target.sourceType),
@@ -755,6 +829,7 @@ async function runResolveOne(inputs: ResolvedInputs, dependencies: GCPDependenci
           confidence: best.confidence,
           authority: best.authority,
           specPath: written.specPath,
+          specFilesJson: written.specFilesJson,
           ...(target.apiId ? { apiId: target.apiId } : {}),
           providerType: target.providerType,
           specFormat: written.specFormat,
@@ -874,7 +949,7 @@ async function runDiscoverMany(inputs: ResolvedInputs, dependencies: GCPDependen
         // still counted both. Fail this one loudly instead.
         throw new Error(`Spec path collision at ${targetPath}: already written by ${priorOwner}`);
       }
-      const written = await writeSpecExport(inputs, serviceName, exportResult, dependencies.writeSpecFile);
+      const written = await writeSpecExport(inputs, serviceName, exportResult, dependencies);
       writtenPaths.set(written.specPath, candidate.id);
       discovered.push({
         serviceName,
@@ -937,6 +1012,7 @@ export function buildExecutionOutputs(result: {
       'source-type': 'discover-many',
       'mapping-confidence': unresolved ? '0' : discovered.length > 0 ? '100' : '0',
       'spec-path': '',
+      'spec-files-json': '',
       'api-id': '',
       'service-name': '',
       'services-json': JSON.stringify(discovered),
@@ -978,6 +1054,7 @@ export function buildExecutionOutputs(result: {
     'source-type': resolution.sourceType,
     'mapping-confidence': String(resolution.confidence),
     'spec-path': resolution.specPath ?? '',
+    'spec-files-json': resolution.specFilesJson ?? '',
     'api-id': resolution.apiId ?? '',
     'service-name': resolution.serviceName,
     'services-json': '[]',

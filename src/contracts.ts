@@ -154,6 +154,8 @@ export interface ResolutionResult {
   confidence: number;
   authority?: SourceAuthority;
   specPath?: string;
+  /** Optional R2 inventory JSON; empty/absent for single-file and unresolved results. */
+  specFilesJson?: string;
   apiId?: string;
   providerType?: ProviderType;
   specFormat?: SpecFormat;
@@ -264,6 +266,10 @@ export const actionContract: GCPSpecDiscoveryActionContract = {
     },
     'spec-path': {
       description: 'Path to the resolved or generated specification when available.'
+    },
+    'spec-files-json': {
+      description:
+        'Optional JSON inventory of the authoritative multi-file definition set (schemaVersion 1). Empty for single-file, unresolved, and discover-many results.'
     },
     'api-id': {
       description: 'Full resource name of the exported cloud source (API Gateway config, Cloud Endpoints config, Apigee proxy revision, Apigee archive deployment, API Hub spec, legacy Apigee Registry spec, Apigee portal apidoc, Vertex extension, Dialogflow tool, or CES tool/toolset); empty for repo, generated, or IaC-local resolutions.'

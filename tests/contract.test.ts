@@ -18,6 +18,7 @@ const LOCKED_OUTPUT_ORDER = [
   'source-type',
   'mapping-confidence',
   'spec-path',
+  'spec-files-json',
   'api-id',
   'service-name',
   'services-json',
@@ -110,7 +111,7 @@ describe('action contract', () => {
     expect(() => resolveInputs({ ...base, INPUT_API_ID: 'projects/other-project/locations/us-central1/extensions/e' })).toThrow(/Vertex extension registry/);
   });
 
-  it('GCP-CONTRACT-005: buildExecutionOutputs emits all 22 keys in both modes with locked empty behavior', () => {
+  it('GCP-CONTRACT-005: buildExecutionOutputs emits all 23 keys in both modes with locked empty behavior', () => {
     const resolveOne = buildExecutionOutputs({
       mode: 'resolve-one',
       discovered: [],
@@ -126,7 +127,8 @@ describe('action contract', () => {
         evidence: ['test']
       }
     });
-    expect(Object.keys(resolveOne).sort()).toEqual([...LOCKED_OUTPUT_ORDER].sort());
+    expect(Object.keys(resolveOne)).toEqual(LOCKED_OUTPUT_ORDER);
+    expect(resolveOne['spec-files-json']).toBe('');
     expect(resolveOne['services-json']).toBe('[]');
     expect(resolveOne['service-count']).toBe('0');
     expect(resolveOne['export-summary-json']).toBe(JSON.stringify({ attempted: 0, exported: 0, failed: 0, skipped: 0 }));
@@ -148,7 +150,8 @@ describe('action contract', () => {
       ],
       exportSummary: { attempted: 1, exported: 1, failed: 0, skipped: 0 }
     });
-    expect(Object.keys(discoverMany).sort()).toEqual([...LOCKED_OUTPUT_ORDER].sort());
+    expect(Object.keys(discoverMany)).toEqual(LOCKED_OUTPUT_ORDER);
+    expect(discoverMany['spec-files-json']).toBe('');
     expect(discoverMany['source-type']).toBe('discover-many');
     expect(discoverMany['resolution-status']).toBe('resolved');
     expect(discoverMany['mapping-confidence']).toBe('100');
