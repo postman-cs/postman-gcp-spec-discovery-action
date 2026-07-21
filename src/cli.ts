@@ -201,6 +201,7 @@ export function toDotenv(outputs: Record<string, string>): string {
     POSTMAN_GCP_SPEC_SOURCE_TYPE: outputs['source-type'] ?? '',
     POSTMAN_GCP_SPEC_MAPPING_CONFIDENCE: outputs['mapping-confidence'] ?? '',
     POSTMAN_GCP_SPEC_PATH: outputs['spec-path'] ?? '',
+    POSTMAN_GCP_SPEC_FILES_JSON: outputs['spec-files-json'] ?? '',
     POSTMAN_GCP_SPEC_API_ID: outputs['api-id'] ?? '',
     POSTMAN_GCP_SPEC_SERVICE_NAME: outputs['service-name'] ?? '',
     POSTMAN_GCP_SPEC_SERVICES_JSON: outputs['services-json'] ?? '',

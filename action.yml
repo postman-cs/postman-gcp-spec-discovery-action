@@ -59,6 +59,8 @@ outputs:
     description: Numeric confidence score for the selected service candidate.
   spec-path:
     description: Path to the resolved or generated specification when available.
+  spec-files-json:
+    description: Optional JSON inventory of the authoritative multi-file definition set (schemaVersion 1). Empty for single-file, unresolved, and discover-many results.
   api-id:
     description: Full resource name of the exported cloud source (API Gateway config, Cloud Endpoints config, Apigee proxy revision, Apigee archive deployment, API Hub spec, legacy Apigee Registry spec, Apigee portal apidoc, Vertex extension, Dialogflow tool, or CES tool/toolset); empty for repo, generated, or IaC-local resolutions.
   service-name:
@@ -74,7 +76,7 @@ outputs:
   provider-type:
     description: 'Provider that produced the resolved spec: api-gateway, cloud-endpoints, apigee, api-hub, apigee-registry, app-integration, connectors-custom, apigee-portal, vertex-extensions, dialogflow-tools, ces-toolsets, or iac-local.'
   spec-format:
-    description: 'Format of the resolved spec: openapi-yaml or openapi-json.'
+    description: 'Format of the resolved spec: openapi-yaml, openapi-json, asyncapi-yaml, asyncapi-json, graphql-sdl, graphql-introspection-json, protobuf, wsdl, or mcp-json.'
   contract-origin:
     description: Compatibility output; always empty in v1.
   contract-metadata-path:

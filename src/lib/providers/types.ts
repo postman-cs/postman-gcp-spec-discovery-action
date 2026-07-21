@@ -1,5 +1,6 @@
 import type { ProviderType, ProviderProbeStatus, SourceAuthority, SourceType, SpecFormat } from '../../contracts.js';
 import { isResolvableAuthority } from '../../contracts.js';
+import type { NativeExportFilename } from '../spec/native-formats.js';
 
 export interface SpecCandidate {
   id: string; // full Google resource name, or stable repo-relative IaC candidate ID
@@ -15,11 +16,34 @@ export interface SpecCandidate {
   meta: Record<string, string>;
 }
 
+export type SpecExportCompleteness = 'full' | 'partial';
+
+/** Provider-owned definition member retained for authoritative multi-file exports. */
+export interface SpecExportArtifact {
+  /** Normalized provider-relative POSIX path under the service directory. */
+  path: string;
+  role: 'root' | 'dependency';
+  /** Exact decoded UTF-8 text; no newline rewrite. */
+  content: string;
+  /** Original provider-returned path for evidence. */
+  originalPath: string;
+}
+
 export interface SpecExportResult {
   content: string;
   format: SpecFormat;
-  filename: 'index.json' | 'index.yaml';
+  /** Single-file canonical name, or the root's provider-relative path for multi-file sets. */
+  filename: NativeExportFilename | string;
   evidence: string[];
+  /** Present for provider-owned sets that declare completeness. */
+  completeness?: SpecExportCompleteness;
+  /** Provider-relative root identity when artifacts are present. */
+  rootPath?: string;
+  /**
+   * Full authoritative member set for multi-file exports (`completeness:'full'`).
+   * Omitted for ordinary single-file results so inventory stays empty.
+   */
+  artifacts?: SpecExportArtifact[];
 }
 
 export interface SpecProvider {

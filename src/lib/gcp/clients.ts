@@ -3,6 +3,8 @@ import { TextDecoder } from 'node:util';
 
 import { GoogleAuth } from 'google-auth-library';
 
+import { decodeBoundedBase64Utf8 } from '../providers/source-document.js';
+
 export interface GcpClientOptions {
   requestTimeoutMs: number;
   maxAttempts: number;
@@ -87,7 +89,17 @@ export interface ApiGatewayApi {
 
 export interface GcpSourceFile {
   path?: string;
+  /** Base64-encoded file bytes (API Gateway File.contents). */
   contents?: string;
+}
+
+/**
+ * API Gateway GrpcServiceDefinition from FULL ApiConfig.
+ * `fileDescriptorSet` is input-only / non-exportable; `source[]` holds uncompiled .proto files.
+ */
+export interface ApiGatewayGrpcServiceDefinition {
+  fileDescriptorSet?: GcpSourceFile;
+  source: GcpSourceFile[];
 }
 
 export interface ApiGatewayConfig {
@@ -98,7 +110,8 @@ export interface ApiGatewayConfig {
   createTime?: string;
   updateTime?: string;
   openapiDocuments: Array<{ document?: GcpSourceFile }>;
-  grpcServices: unknown[];
+  grpcServices: ApiGatewayGrpcServiceDefinition[];
+  /** google.api.Service YAML/JSON configs — managed/generated; not exportable as bootstrap specs. */
   managedServiceConfigs: GcpSourceFile[];
 }
 
@@ -107,10 +120,29 @@ export interface ManagedService {
   producerProjectId?: string;
 }
 
+/**
+ * Service Management ConfigFile.FileType values observed on FULL sourceInfo.sourceFiles.
+ * Descriptor sets and service-config YAML remain non-exportable.
+ */
+export type EndpointSourceFileType =
+  | 'FILE_TYPE_UNSPECIFIED'
+  | 'SERVICE_CONFIG_YAML'
+  | 'OPEN_API_JSON'
+  | 'OPEN_API_YAML'
+  | 'FILE_DESCRIPTOR_SET_PROTO'
+  | 'PROTO_FILE'
+  | string;
+
+/**
+ * Service Management ConfigFile as returned inside sourceInfo.sourceFiles (FULL view).
+ * Wire may include `@type` when packed as google.protobuf.Any.
+ */
 export interface EndpointSourceFile {
+  '@type'?: string;
   filePath?: string;
+  /** Base64-encoded file bytes (ConfigFile.file_contents). */
   fileContents?: string;
-  fileType?: string;
+  fileType?: EndpointSourceFileType;
 }
 
 export interface EndpointServiceConfig {
@@ -152,7 +184,96 @@ export interface ApigeeArchiveDeploymentSummary {
 
 export interface ApigeePortalSite { id: string; name?: string; }
 export interface ApigeePortalApidoc { id: string; title?: string; specId?: string; apiProductName?: string; }
-export interface ApigeePortalDocumentation { type: 'oasDocumentation' | 'graphqlDocumentation' | 'asyncapiDocumentation' | 'missing'; contents?: string; }
+
+/** Exact wire union arms from ApiDocDocumentation (note capital A in asyncApi). */
+export type ApigeePortalDocumentationType =
+  | 'oasDocumentation'
+  | 'graphqlDocumentation'
+  | 'asyncApiDocumentation'
+  | 'missing'
+  | 'malformed';
+
+export type ApigeePortalDocumentationFamily = 'openapi' | 'graphql' | 'asyncapi';
+
+export interface ApigeePortalDocumentation {
+  type: ApigeePortalDocumentationType;
+  /** Decoded UTF-8 source text after bounded strict base64 decode of DocumentationFile.contents. */
+  contents?: string;
+  family?: ApigeePortalDocumentationFamily;
+}
+
+function documentationFileContents(value: unknown): string | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  const contents = (value as { contents?: unknown }).contents;
+  return typeof contents === 'string' ? contents : undefined;
+}
+
+/**
+ * Map ApiDocDocumentationResponse / ApiDocDocumentation wire union arms to decoded UTF-8.
+ * Paths: oasDocumentation.spec.contents, graphqlDocumentation.schema.contents,
+ * asyncApiDocumentation.spec.contents (base64 DocumentationFile.contents).
+ */
+export function parseApigeePortalDocumentationBody(body: Record<string, unknown>): ApigeePortalDocumentation {
+  const data =
+    body.data && typeof body.data === 'object' && !Array.isArray(body.data)
+      ? (body.data as Record<string, unknown>)
+      : body;
+
+  const arms: Array<{
+    type: 'oasDocumentation' | 'graphqlDocumentation' | 'asyncApiDocumentation';
+    family: ApigeePortalDocumentationFamily;
+    base64: string | undefined;
+    present: boolean;
+  }> = [
+    {
+      type: 'oasDocumentation',
+      family: 'openapi',
+      present: data.oasDocumentation !== undefined && data.oasDocumentation !== null,
+      base64: documentationFileContents(
+        data.oasDocumentation && typeof data.oasDocumentation === 'object'
+          ? (data.oasDocumentation as { spec?: unknown }).spec
+          : undefined
+      )
+    },
+    {
+      type: 'graphqlDocumentation',
+      family: 'graphql',
+      present: data.graphqlDocumentation !== undefined && data.graphqlDocumentation !== null,
+      base64: documentationFileContents(
+        data.graphqlDocumentation && typeof data.graphqlDocumentation === 'object'
+          ? (data.graphqlDocumentation as { schema?: unknown }).schema
+          : undefined
+      )
+    },
+    {
+      type: 'asyncApiDocumentation',
+      family: 'asyncapi',
+      present: data.asyncApiDocumentation !== undefined && data.asyncApiDocumentation !== null,
+      base64: documentationFileContents(
+        data.asyncApiDocumentation && typeof data.asyncApiDocumentation === 'object'
+          ? (data.asyncApiDocumentation as { spec?: unknown }).spec
+          : undefined
+      )
+    }
+  ];
+
+  const present = arms.filter((arm) => arm.present);
+  if (present.length === 0) return { type: 'missing' };
+  if (present.length > 1) return { type: 'malformed' };
+
+  const arm = present[0]!;
+  if (arm.base64 === undefined) return { type: 'malformed' };
+  try {
+    return {
+      type: arm.type,
+      family: arm.family,
+      contents: decodeBoundedBase64Utf8(arm.base64)
+    };
+  } catch {
+    return { type: 'malformed' };
+  }
+}
+
 export interface VertexExtensionSummary { name: string; displayName?: string; openApiYaml?: string; openApiGcsUri?: string; }
 export interface AgentEngineSummary { name: string; displayName?: string; classMethods: Array<Record<string, unknown>>; }
 export interface DialogflowAgentSummary { name: string; displayName?: string; }
@@ -706,7 +827,13 @@ export class GcpSdkClient implements GcpDiscoveryClient {
   public async probeApigeePortal(org: string): Promise<void> { await this.getJson(resourceUrl('https://apigee.googleapis.com/', `organizations/${org}/sites`), 'Apigee portal probe'); }
   public async listApigeePortalSites(org: string): Promise<ApigeePortalSite[]> { return this.collectPages(() => resourceUrl('https://apigee.googleapis.com/', `organizations/${org}/sites`), 'Apigee portal site list', (body: { sites?: Array<{ id?: string; name?: string }>; nextPageToken?: string }) => ({ items: (body.sites ?? []).map((x) => ({ id: x.id ?? x.name?.split('/').pop() ?? '', name: x.name })).filter((x) => x.id), nextPageToken: body.nextPageToken })); }
   public async listApigeePortalApidocs(org: string, siteId: string): Promise<ApigeePortalApidoc[]> { return this.collectPages(() => resourceUrl('https://apigee.googleapis.com/', `organizations/${org}/sites/${siteId}/apidocs`), 'Apigee portal apidoc list', (body: { data?: ApigeePortalApidoc[]; nextPageToken?: string }) => ({ items: body.data ?? [], nextPageToken: body.nextPageToken })); }
-  public async getApigeePortalDocumentation(org: string, siteId: string, apidocId: string): Promise<ApigeePortalDocumentation> { const body = await this.getJson<{ data?: Record<string, unknown> }>(resourceUrl('https://apigee.googleapis.com/', `organizations/${org}/sites/${siteId}/apidocs/${apidocId}/documentation`), 'Apigee portal documentation get'); const data = body.data ?? {}; for (const type of ['oasDocumentation', 'graphqlDocumentation', 'asyncapiDocumentation'] as const) { if (data[type]) return { type, contents: type === 'oasDocumentation' ? (data[type] as { spec?: { contents?: string } }).spec?.contents : undefined }; } return { type: 'missing' }; }
+  public async getApigeePortalDocumentation(org: string, siteId: string, apidocId: string): Promise<ApigeePortalDocumentation> {
+    const body = await this.getJson<Record<string, unknown>>(
+      resourceUrl('https://apigee.googleapis.com/', `organizations/${org}/sites/${siteId}/apidocs/${apidocId}/documentation`),
+      'Apigee portal documentation get'
+    );
+    return parseApigeePortalDocumentationBody(body);
+  }
   public async probeVertexExtensions(projectId: string, location: string): Promise<void> {
     const url = resourceUrl(
       `https://${location}-aiplatform.googleapis.com/`,
@@ -1286,6 +1413,36 @@ export class GcpSdkClient implements GcpDiscoveryClient {
     };
   }
 
+  private toGatewaySourceFile(value: unknown): GcpSourceFile {
+    const item = (value ?? {}) as Record<string, unknown>;
+    return {
+      path: typeof item.path === 'string' ? item.path : undefined,
+      contents: typeof item.contents === 'string' ? item.contents : undefined
+    };
+  }
+
+  private toGatewayOpenApiDocument(value: unknown): { document?: GcpSourceFile } {
+    const item = (value ?? {}) as Record<string, unknown>;
+    if (!item.document || typeof item.document !== 'object' || Array.isArray(item.document)) {
+      return {};
+    }
+    return { document: this.toGatewaySourceFile(item.document) };
+  }
+
+  private toGatewayGrpcService(value: unknown): ApiGatewayGrpcServiceDefinition {
+    const item = (value ?? {}) as Record<string, unknown>;
+    const fileDescriptorSet =
+      item.fileDescriptorSet && typeof item.fileDescriptorSet === 'object' && !Array.isArray(item.fileDescriptorSet)
+        ? this.toGatewaySourceFile(item.fileDescriptorSet)
+        : undefined;
+    const source = Array.isArray(item.source)
+      ? item.source
+          .filter((entry) => entry && typeof entry === 'object' && !Array.isArray(entry))
+          .map((entry) => this.toGatewaySourceFile(entry))
+      : [];
+    return { fileDescriptorSet, source };
+  }
+
   private toGatewayConfig(value: unknown): ApiGatewayConfig {
     const item = (value ?? {}) as Record<string, unknown>;
     return {
@@ -1296,11 +1453,15 @@ export class GcpSdkClient implements GcpDiscoveryClient {
       createTime: typeof item.createTime === 'string' ? item.createTime : undefined,
       updateTime: typeof item.updateTime === 'string' ? item.updateTime : undefined,
       openapiDocuments: Array.isArray(item.openapiDocuments)
-        ? item.openapiDocuments as Array<{ document?: GcpSourceFile }>
+        ? item.openapiDocuments.map((entry) => this.toGatewayOpenApiDocument(entry))
         : [],
-      grpcServices: Array.isArray(item.grpcServices) ? item.grpcServices : [],
+      grpcServices: Array.isArray(item.grpcServices)
+        ? item.grpcServices.map((entry) => this.toGatewayGrpcService(entry))
+        : [],
       managedServiceConfigs: Array.isArray(item.managedServiceConfigs)
-        ? item.managedServiceConfigs as GcpSourceFile[]
+        ? item.managedServiceConfigs
+            .filter((entry) => entry && typeof entry === 'object' && !Array.isArray(entry))
+            .map((entry) => this.toGatewaySourceFile(entry))
         : []
     };
   }
@@ -1313,6 +1474,19 @@ export class GcpSdkClient implements GcpDiscoveryClient {
     };
   }
 
+  private toEndpointSourceFile(value: unknown): EndpointSourceFile {
+    const item = (value ?? {}) as Record<string, unknown>;
+    const mapped: EndpointSourceFile = {
+      filePath: typeof item.filePath === 'string' ? item.filePath : undefined,
+      fileContents: typeof item.fileContents === 'string' ? item.fileContents : undefined,
+      fileType: typeof item.fileType === 'string' ? item.fileType : undefined
+    };
+    if (typeof item['@type'] === 'string') {
+      mapped['@type'] = item['@type'];
+    }
+    return mapped;
+  }
+
   private toEndpointConfig(value: unknown): EndpointServiceConfig {
     const item = (value ?? {}) as Record<string, unknown>;
     const sourceInfo = item.sourceInfo as { sourceFiles?: unknown[] } | undefined;
@@ -1322,7 +1496,11 @@ export class GcpSdkClient implements GcpDiscoveryClient {
       title: typeof item.title === 'string' ? item.title : undefined,
       producerProjectId: typeof item.producerProjectId === 'string' ? item.producerProjectId : undefined,
       sourceInfo: sourceInfo && Array.isArray(sourceInfo.sourceFiles)
-        ? { sourceFiles: sourceInfo.sourceFiles as EndpointSourceFile[] }
+        ? {
+            sourceFiles: sourceInfo.sourceFiles
+              .filter((entry) => entry && typeof entry === 'object' && !Array.isArray(entry))
+              .map((entry) => this.toEndpointSourceFile(entry))
+          }
         : undefined
     };
   }

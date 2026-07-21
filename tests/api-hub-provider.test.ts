@@ -1,9 +1,25 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { ApiHubProvider, parseApiHubAdditionalSpecName, parseApiHubSpecName } from '../src/lib/providers/api-hub.js';
+import { ApiHubProvider, parseApiHubAdditionalSpecName, parseApiHubSpecName, resolveApiHubNativeFamily } from '../src/lib/providers/api-hub.js';
 import type { ApiHubSpecSummary, GcpDiscoveryClient } from '../src/lib/gcp/clients.js';
-
 const OAS = 'openapi: 3.0.3\ninfo:\n  title: Hub\n  version: "1"\npaths:\n  /health:\n    get:\n      responses:\n        "200":\n          description: ok\n';
+const GRAPHQL = 'type Query { ping: String! }\n';
+const PROTO =
+  'syntax = "proto3";\npackage demo;\nmessage Ping { string id = 1; }\nservice Greeter {\n  rpc SayHello (Ping) returns (Ping);\n}\n';
+const WSDL = `<?xml version="1.0"?>
+<definitions xmlns="http://schemas.xmlsoap.org/wsdl/" name="Orders">
+  <portType name="OrdersPort"/>
+</definitions>
+`;
+const ASYNCAPI = JSON.stringify({
+  asyncapi: '2.6.0',
+  info: { title: 'Events', version: '1.0.0' },
+  channels: { ping: { publish: { message: { payload: { type: 'string' } } } } }
+});
+const MCP = JSON.stringify({ mcpServers: { demo: { command: 'node', args: ['server.js'] } } });
+const INTROSPECTION = JSON.stringify({
+  __schema: { queryType: { name: 'Query' }, types: [{ kind: 'OBJECT', name: 'Query', fields: [] }] }
+});
 const SPEC_NAME = 'projects/sample-project-123/locations/us-central1/apis/payments/versions/v1/specs/openapi';
 
 function spec(overrides: Partial<ApiHubSpecSummary> = {}): ApiHubSpecSummary {
@@ -85,12 +101,12 @@ describe('API Hub provider', () => {
     await expect(provider.exportSpec(candidates[0]!)).resolves.toMatchObject({ content: OAS, format: 'openapi-yaml', filename: 'index.yaml' });
   });
 
-  it('GCP-APIHUB-004: non-OpenAPI spec types are unsupported candidates, not dropped', async () => {
-    const provider = new ApiHubProvider(client({ listApiHubSpecs: vi.fn(async () => [spec({ specTypeIds: ['wsdl'] })]) }), { projectId: 'sample-project-123' });
+  it('GCP-APIHUB-004: unsupported API Hub type IDs stay manual-review', async () => {
+    const provider = new ApiHubProvider(client({ listApiHubSpecs: vi.fn(async () => [spec({ specTypeIds: ['thrift'] })]) }), { projectId: 'sample-project-123' });
     const candidates = await provider.listCandidates();
     expect(candidates).toHaveLength(1);
     expect(candidates[0]).toMatchObject({ supported: false, authority: 'unsupported-format' });
-    expect(candidates[0]!.evidence.join(' ')).toContain('Only OpenAPI-typed API Hub specs');
+    expect(candidates[0]!.evidence.join(' ')).toContain('bootstrap-supported native');
   });
 
   it('GCP-APIHUB-005: explicit api-id must belong to the configured project', async () => {
@@ -187,5 +203,62 @@ describe('API Hub provider', () => {
     const candidates = await provider.listCandidates();
     expect(candidates.map((candidate) => candidate.sourceType)).toEqual(['api-hub-spec', 'api-hub-gateway-openapi-spec']);
     expect(candidates[1]).toMatchObject({ supported: false, authority: 'unsupported-format' });
+  });
+
+  it('GCP-APIHUB-010: exports bootstrap-native stored originals with format-appropriate filenames', async () => {
+    const cases = [
+      ['graphql', GRAPHQL, 'graphql-sdl', 'schema.graphql'],
+      ['protobuf', PROTO, 'protobuf', 'service.proto'],
+      ['wsdl', WSDL, 'wsdl', 'service.wsdl'],
+      ['asyncapi', ASYNCAPI, 'asyncapi-json', 'asyncapi.json'],
+      ['mcp', MCP, 'mcp-json', 'mcp.json'],
+      ['graphql', INTROSPECTION, 'graphql-introspection-json', 'introspection.json']
+    ] as const;
+
+    for (const [typeId, body, format, filename] of cases) {
+      const provider = new ApiHubProvider(client({
+        listApiHubSpecs: vi.fn(async () => [spec({ specTypeIds: [typeId] })]),
+        getApiHubSpecContents: vi.fn(async () => ({ contents: Buffer.from(body).toString('base64') }))
+      }), { projectId: 'sample-project-123' });
+      const candidates = await provider.listCandidates();
+      expect(candidates).toHaveLength(1);
+      expect(candidates[0]).toMatchObject({ supported: true, authority: 'stored-authoritative' });
+      await expect(provider.exportSpec(candidates[0]!)).resolves.toMatchObject({
+        content: body,
+        format,
+        filename
+      });
+    }
+  });
+
+  it('GCP-APIHUB-011: generated additional variants stay OpenAPI-only even when base is native', async () => {
+    const fetchAdditional = vi.fn(async () => ({
+      contents: Buffer.from(GRAPHQL).toString('base64')
+    }));
+    const provider = new ApiHubProvider(client({
+      listApiHubSpecs: vi.fn(async () => [spec({
+        specTypeIds: ['graphql'],
+        additionalSpecContentTypes: ['BOOSTED_SPEC_CONTENT']
+      })]),
+      getApiHubSpecContents: vi.fn(async () => ({ contents: Buffer.from(GRAPHQL).toString('base64') })),
+      fetchApiHubAdditionalSpecContent: fetchAdditional
+    }), { projectId: 'sample-project-123' });
+    const candidates = await provider.listCandidates();
+    // Native base: no Google-generated additional candidates are promoted.
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0]).toMatchObject({ sourceType: 'api-hub-spec', supported: true });
+    expect(fetchAdditional).not.toHaveBeenCalled();
+  });
+
+  it('GCP-APIHUB-012: maps declared type IDs onto bootstrap-native families', () => {
+    expect(resolveApiHubNativeFamily(['openapi'])).toBe('openapi');
+    expect(resolveApiHubNativeFamily(['rest-id'])).toBe('openapi');
+    expect(resolveApiHubNativeFamily(['grpc-id'])).toBe('protobuf');
+    expect(resolveApiHubNativeFamily(['wsdl'])).toBe('wsdl');
+    expect(resolveApiHubNativeFamily(['asyncapi'])).toBe('asyncapi');
+    expect(resolveApiHubNativeFamily(['graphql'])).toBe('graphql');
+    expect(resolveApiHubNativeFamily(['mcp'])).toBe('mcp');
+    expect(resolveApiHubNativeFamily([])).toBe('unspecified');
+    expect(resolveApiHubNativeFamily(['thrift'])).toBe('unsupported');
   });
 });

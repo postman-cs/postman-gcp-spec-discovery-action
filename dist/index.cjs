@@ -1081,14 +1081,14 @@ var require_util = __commonJS({
         }
         const port = url.port != null ? url.port : url.protocol === "https:" ? 443 : 80;
         let origin = url.origin != null ? url.origin : `${url.protocol || ""}//${url.hostname || ""}:${port}`;
-        let path12 = url.path != null ? url.path : `${url.pathname || ""}${url.search || ""}`;
+        let path13 = url.path != null ? url.path : `${url.pathname || ""}${url.search || ""}`;
         if (origin[origin.length - 1] === "/") {
           origin = origin.slice(0, origin.length - 1);
         }
-        if (path12 && path12[0] !== "/") {
-          path12 = `/${path12}`;
+        if (path13 && path13[0] !== "/") {
+          path13 = `/${path13}`;
         }
-        return new URL(`${origin}${path12}`);
+        return new URL(`${origin}${path13}`);
       }
       if (!isHttpOrHttpsPrefixed(url.origin || url.protocol)) {
         throw new InvalidArgumentError("Invalid URL protocol: the URL must start with `http:` or `https:`.");
@@ -1539,39 +1539,39 @@ var require_diagnostics = __commonJS({
       });
       diagnosticsChannel.channel("undici:client:sendHeaders").subscribe((evt) => {
         const {
-          request: { method, path: path12, origin }
+          request: { method, path: path13, origin }
         } = evt;
-        debuglog("sending request to %s %s/%s", method, origin, path12);
+        debuglog("sending request to %s %s/%s", method, origin, path13);
       });
       diagnosticsChannel.channel("undici:request:headers").subscribe((evt) => {
         const {
-          request: { method, path: path12, origin },
+          request: { method, path: path13, origin },
           response: { statusCode }
         } = evt;
         debuglog(
           "received response to %s %s/%s - HTTP %d",
           method,
           origin,
-          path12,
+          path13,
           statusCode
         );
       });
       diagnosticsChannel.channel("undici:request:trailers").subscribe((evt) => {
         const {
-          request: { method, path: path12, origin }
+          request: { method, path: path13, origin }
         } = evt;
-        debuglog("trailers received from %s %s/%s", method, origin, path12);
+        debuglog("trailers received from %s %s/%s", method, origin, path13);
       });
       diagnosticsChannel.channel("undici:request:error").subscribe((evt) => {
         const {
-          request: { method, path: path12, origin },
+          request: { method, path: path13, origin },
           error: error2
         } = evt;
         debuglog(
           "request to %s %s/%s errored - %s",
           method,
           origin,
-          path12,
+          path13,
           error2.message
         );
       });
@@ -1620,9 +1620,9 @@ var require_diagnostics = __commonJS({
         });
         diagnosticsChannel.channel("undici:client:sendHeaders").subscribe((evt) => {
           const {
-            request: { method, path: path12, origin }
+            request: { method, path: path13, origin }
           } = evt;
-          debuglog("sending request to %s %s/%s", method, origin, path12);
+          debuglog("sending request to %s %s/%s", method, origin, path13);
         });
       }
       diagnosticsChannel.channel("undici:websocket:open").subscribe((evt) => {
@@ -1685,7 +1685,7 @@ var require_request = __commonJS({
     var kHandler = /* @__PURE__ */ Symbol("handler");
     var Request2 = class {
       constructor(origin, {
-        path: path12,
+        path: path13,
         method,
         body,
         headers,
@@ -1700,11 +1700,11 @@ var require_request = __commonJS({
         expectContinue,
         servername
       }, handler) {
-        if (typeof path12 !== "string") {
+        if (typeof path13 !== "string") {
           throw new InvalidArgumentError("path must be a string");
-        } else if (path12[0] !== "/" && !(path12.startsWith("http://") || path12.startsWith("https://")) && method !== "CONNECT") {
+        } else if (path13[0] !== "/" && !(path13.startsWith("http://") || path13.startsWith("https://")) && method !== "CONNECT") {
           throw new InvalidArgumentError("path must be an absolute URL or start with a slash");
-        } else if (invalidPathRegex.test(path12)) {
+        } else if (invalidPathRegex.test(path13)) {
           throw new InvalidArgumentError("invalid request path");
         }
         if (typeof method !== "string") {
@@ -1770,7 +1770,7 @@ var require_request = __commonJS({
         this.completed = false;
         this.aborted = false;
         this.upgrade = upgrade || null;
-        this.path = query ? buildURL(path12, query) : path12;
+        this.path = query ? buildURL(path13, query) : path13;
         this.origin = origin;
         this.idempotent = idempotent == null ? method === "HEAD" || method === "GET" : idempotent;
         this.blocking = blocking == null ? false : blocking;
@@ -6392,7 +6392,7 @@ var require_client_h1 = __commonJS({
       return method !== "GET" && method !== "HEAD" && method !== "OPTIONS" && method !== "TRACE" && method !== "CONNECT";
     }
     function writeH1(client, request) {
-      const { method, path: path12, host, upgrade, blocking, reset } = request;
+      const { method, path: path13, host, upgrade, blocking, reset } = request;
       let { body, headers, contentLength } = request;
       const expectsPayload = method === "PUT" || method === "POST" || method === "PATCH" || method === "QUERY" || method === "PROPFIND" || method === "PROPPATCH";
       if (util.isFormDataLike(body)) {
@@ -6459,7 +6459,7 @@ var require_client_h1 = __commonJS({
       if (blocking) {
         socket[kBlocking] = true;
       }
-      let header = `${method} ${path12} HTTP/1.1\r
+      let header = `${method} ${path13} HTTP/1.1\r
 `;
       if (typeof host === "string") {
         header += `host: ${host}\r
@@ -6788,7 +6788,7 @@ var require_client_h2 = __commonJS({
   "node_modules/undici/lib/dispatcher/client-h2.js"(exports2, module2) {
     "use strict";
     var assert = require("node:assert");
-    var { pipeline: pipeline2 } = require("node:stream");
+    var { pipeline: pipeline3 } = require("node:stream");
     var util = require_util();
     var {
       RequestContentLengthMismatchError,
@@ -6985,7 +6985,7 @@ var require_client_h2 = __commonJS({
     }
     function writeH2(client, request) {
       const session = client[kHTTP2Session];
-      const { method, path: path12, host, upgrade, expectContinue, signal, headers: reqHeaders } = request;
+      const { method, path: path13, host, upgrade, expectContinue, signal, headers: reqHeaders } = request;
       let { body } = request;
       if (upgrade) {
         util.errorRequest(client, request, new Error("Upgrade not supported for H2"));
@@ -7052,7 +7052,7 @@ var require_client_h2 = __commonJS({
         });
         return true;
       }
-      headers[HTTP2_HEADER_PATH] = path12;
+      headers[HTTP2_HEADER_PATH] = path13;
       headers[HTTP2_HEADER_SCHEME] = "https";
       const expectsPayload = method === "PUT" || method === "POST" || method === "PATCH";
       if (body && typeof body.read === "function") {
@@ -7235,7 +7235,7 @@ var require_client_h2 = __commonJS({
     }
     function writeStream(abort, socket, expectsPayload, h2stream, body, client, request, contentLength) {
       assert(contentLength !== 0 || client[kRunning] === 0, "stream body cannot be pipelined");
-      const pipe = pipeline2(
+      const pipe = pipeline3(
         body,
         h2stream,
         (err) => {
@@ -7405,9 +7405,9 @@ var require_redirect_handler = __commonJS({
           return this.handler.onHeaders(statusCode, headers, resume, statusText);
         }
         const { origin, pathname, search } = util.parseURL(new URL(this.location, this.opts.origin && new URL(this.opts.path, this.opts.origin)));
-        const path12 = search ? `${pathname}${search}` : pathname;
+        const path13 = search ? `${pathname}${search}` : pathname;
         this.opts.headers = cleanRequestHeaders(this.opts.headers, statusCode === 303, this.opts.origin !== origin);
-        this.opts.path = path12;
+        this.opts.path = path13;
         this.opts.origin = origin;
         this.opts.maxRedirections = 0;
         this.opts.query = null;
@@ -8642,10 +8642,10 @@ var require_proxy_agent = __commonJS({
         };
         const {
           origin,
-          path: path12 = "/",
+          path: path13 = "/",
           headers = {}
         } = opts;
-        opts.path = origin + path12;
+        opts.path = origin + path13;
         if (!("host" in headers) && !("Host" in headers)) {
           const { host } = new URL2(origin);
           headers.host = host;
@@ -9279,7 +9279,7 @@ var require_readable = __commonJS({
   "node_modules/undici/lib/api/readable.js"(exports2, module2) {
     "use strict";
     var assert = require("node:assert");
-    var { Readable } = require("node:stream");
+    var { Readable: Readable2 } = require("node:stream");
     var { RequestAbortedError, NotSupportedError, InvalidArgumentError, AbortError: AbortError2 } = require_errors();
     var util = require_util();
     var { ReadableStreamFrom } = require_util();
@@ -9291,7 +9291,7 @@ var require_readable = __commonJS({
     var kContentLength = /* @__PURE__ */ Symbol("kContentLength");
     var noop2 = () => {
     };
-    var BodyReadable = class extends Readable {
+    var BodyReadable = class extends Readable2 {
       constructor({
         resume,
         abort,
@@ -9633,7 +9633,7 @@ var require_api_request = __commonJS({
   "node_modules/undici/lib/api/api-request.js"(exports2, module2) {
     "use strict";
     var assert = require("node:assert");
-    var { Readable } = require_readable();
+    var { Readable: Readable2 } = require_readable();
     var { InvalidArgumentError, RequestAbortedError } = require_errors();
     var util = require_util();
     var { getResolveErrorBodyCallback } = require_util3();
@@ -9728,7 +9728,7 @@ var require_api_request = __commonJS({
         const parsedHeaders = responseHeaders === "raw" ? util.parseHeaders(rawHeaders) : headers;
         const contentType = parsedHeaders["content-type"];
         const contentLength = parsedHeaders["content-length"];
-        const res = new Readable({
+        const res = new Readable2({
           resume,
           abort,
           contentType,
@@ -10043,7 +10043,7 @@ var require_api_pipeline = __commonJS({
   "node_modules/undici/lib/api/api-pipeline.js"(exports2, module2) {
     "use strict";
     var {
-      Readable,
+      Readable: Readable2,
       Duplex,
       PassThrough: PassThrough3
     } = require("node:stream");
@@ -10057,7 +10057,7 @@ var require_api_pipeline = __commonJS({
     var { addSignal, removeSignal } = require_abort_signal();
     var assert = require("node:assert");
     var kResume = /* @__PURE__ */ Symbol("resume");
-    var PipelineRequest = class extends Readable {
+    var PipelineRequest = class extends Readable2 {
       constructor() {
         super({ autoDestroy: true });
         this[kResume] = null;
@@ -10074,7 +10074,7 @@ var require_api_pipeline = __commonJS({
         callback(err);
       }
     };
-    var PipelineResponse = class extends Readable {
+    var PipelineResponse = class extends Readable2 {
       constructor(resume) {
         super({ autoDestroy: true });
         this[kResume] = resume;
@@ -10225,7 +10225,7 @@ var require_api_pipeline = __commonJS({
         util.destroy(ret, err);
       }
     };
-    function pipeline2(opts, handler) {
+    function pipeline3(opts, handler) {
       try {
         const pipelineHandler = new PipelineHandler(opts, handler);
         this.dispatch({ ...opts, body: pipelineHandler.req }, pipelineHandler);
@@ -10234,7 +10234,7 @@ var require_api_pipeline = __commonJS({
         return new PassThrough3().destroy(err);
       }
     }
-    module2.exports = pipeline2;
+    module2.exports = pipeline3;
   }
 });
 
@@ -10566,20 +10566,20 @@ var require_mock_utils = __commonJS({
       }
       return true;
     }
-    function safeUrl(path12) {
-      if (typeof path12 !== "string") {
-        return path12;
+    function safeUrl(path13) {
+      if (typeof path13 !== "string") {
+        return path13;
       }
-      const pathSegments = path12.split("?");
+      const pathSegments = path13.split("?");
       if (pathSegments.length !== 2) {
-        return path12;
+        return path13;
       }
       const qp = new URLSearchParams(pathSegments.pop());
       qp.sort();
       return [...pathSegments, qp.toString()].join("?");
     }
-    function matchKey(mockDispatch2, { path: path12, method, body, headers }) {
-      const pathMatch = matchValue(mockDispatch2.path, path12);
+    function matchKey(mockDispatch2, { path: path13, method, body, headers }) {
+      const pathMatch = matchValue(mockDispatch2.path, path13);
       const methodMatch = matchValue(mockDispatch2.method, method);
       const bodyMatch = typeof mockDispatch2.body !== "undefined" ? matchValue(mockDispatch2.body, body) : true;
       const headersMatch = matchHeaders(mockDispatch2, headers);
@@ -10601,7 +10601,7 @@ var require_mock_utils = __commonJS({
     function getMockDispatch(mockDispatches, key) {
       const basePath = key.query ? buildURL(key.path, key.query) : key.path;
       const resolvedPath = typeof basePath === "string" ? safeUrl(basePath) : basePath;
-      let matchedMockDispatches = mockDispatches.filter(({ consumed }) => !consumed).filter(({ path: path12 }) => matchValue(safeUrl(path12), resolvedPath));
+      let matchedMockDispatches = mockDispatches.filter(({ consumed }) => !consumed).filter(({ path: path13 }) => matchValue(safeUrl(path13), resolvedPath));
       if (matchedMockDispatches.length === 0) {
         throw new MockNotMatchedError(`Mock dispatch not matched for path '${resolvedPath}'`);
       }
@@ -10639,9 +10639,9 @@ var require_mock_utils = __commonJS({
       }
     }
     function buildKey(opts) {
-      const { path: path12, method, body, headers, query } = opts;
+      const { path: path13, method, body, headers, query } = opts;
       return {
-        path: path12,
+        path: path13,
         method,
         body,
         headers,
@@ -11104,10 +11104,10 @@ var require_pending_interceptors_formatter = __commonJS({
       }
       format(pendingInterceptors) {
         const withPrettyHeaders = pendingInterceptors.map(
-          ({ method, path: path12, data: { statusCode }, persist, times, timesInvoked, origin }) => ({
+          ({ method, path: path13, data: { statusCode }, persist, times, timesInvoked, origin }) => ({
             Method: method,
             Origin: origin,
-            Path: path12,
+            Path: path13,
             "Status code": statusCode,
             Persistent: persist ? PERSISTENT : NOT_PERSISTENT,
             Invocations: timesInvoked,
@@ -13399,7 +13399,7 @@ var require_fetch = __commonJS({
       subresourceSet
     } = require_constants3();
     var EE = require("node:events");
-    var { Readable, pipeline: pipeline2, finished } = require("node:stream");
+    var { Readable: Readable2, pipeline: pipeline3, finished } = require("node:stream");
     var { addAbortListener, isErrored, isReadable, bufferToLowerCasedHeaderName } = require_util();
     var { dataURLProcessor, serializeAMimeType, minimizeSupportedMimeType } = require_data_url();
     var { getGlobalDispatcher } = require_global2();
@@ -14300,7 +14300,7 @@ var require_fetch = __commonJS({
                 headersList.append(bufferToLowerCasedHeaderName(rawHeaders[i2]), rawHeaders[i2 + 1].toString("latin1"), true);
               }
               location = headersList.get("location", true);
-              this.body = new Readable({ read: resume });
+              this.body = new Readable2({ read: resume });
               const decoders = [];
               const willFollow = location && request.redirect === "follow" && redirectStatusSet.has(status);
               if (request.method !== "HEAD" && request.method !== "CONNECT" && !nullBodyStatus.includes(status) && !willFollow) {
@@ -14343,7 +14343,7 @@ var require_fetch = __commonJS({
                 status,
                 statusText,
                 headersList,
-                body: decoders.length ? pipeline2(this.body, ...decoders, (err) => {
+                body: decoders.length ? pipeline3(this.body, ...decoders, (err) => {
                   if (err) {
                     this.onError(err);
                   }
@@ -15988,9 +15988,9 @@ var require_util6 = __commonJS({
         }
       }
     }
-    function validateCookiePath(path12) {
-      for (let i2 = 0; i2 < path12.length; ++i2) {
-        const code = path12.charCodeAt(i2);
+    function validateCookiePath(path13) {
+      for (let i2 = 0; i2 < path13.length; ++i2) {
+        const code = path13.charCodeAt(i2);
         if (code < 32 || // exclude CTLs (0-31)
         code === 127 || // DEL
         code === 59) {
@@ -18323,7 +18323,7 @@ ${value}`;
 var require_eventsource = __commonJS({
   "node_modules/undici/lib/web/eventsource/eventsource.js"(exports2, module2) {
     "use strict";
-    var { pipeline: pipeline2 } = require("node:stream");
+    var { pipeline: pipeline3 } = require("node:stream");
     var { fetching } = require_fetch();
     var { makeRequest } = require_request2();
     var { webidl } = require_webidl();
@@ -18481,7 +18481,7 @@ var require_eventsource = __commonJS({
               ));
             }
           });
-          pipeline2(
+          pipeline3(
             response.body.stream,
             eventSourceStream,
             (error2) => {
@@ -18683,11 +18683,11 @@ var require_undici = __commonJS({
           if (typeof opts.path !== "string") {
             throw new InvalidArgumentError("invalid opts.path");
           }
-          let path12 = opts.path;
+          let path13 = opts.path;
           if (!opts.path.startsWith("/")) {
-            path12 = `/${path12}`;
+            path13 = `/${path13}`;
           }
-          url = new URL(util.parseOrigin(url).origin + path12);
+          url = new URL(util.parseOrigin(url).origin + path13);
         } else {
           if (!opts) {
             opts = typeof url === "object" ? url : {};
@@ -19341,7 +19341,7 @@ var require_ms = __commonJS({
       options = options || {};
       var type = typeof val;
       if (type === "string" && val.length > 0) {
-        return parse3(val);
+        return parse4(val);
       } else if (type === "number" && isFinite(val)) {
         return options.long ? fmtLong(val) : fmtShort(val);
       }
@@ -19349,7 +19349,7 @@ var require_ms = __commonJS({
         "val is not a non-empty string or a valid number. val=" + JSON.stringify(val)
       );
     };
-    function parse3(str) {
+    function parse4(str) {
       str = String(str);
       if (str.length > 100) {
         return;
@@ -25367,22 +25367,22 @@ var init_from = __esm({
     init_file();
     init_fetch_blob();
     ({ stat: stat2 } = import_node_fs2.promises);
-    blobFromSync = (path12, type) => fromBlob((0, import_node_fs2.statSync)(path12), path12, type);
-    blobFrom = (path12, type) => stat2(path12).then((stat5) => fromBlob(stat5, path12, type));
-    fileFrom = (path12, type) => stat2(path12).then((stat5) => fromFile(stat5, path12, type));
-    fileFromSync = (path12, type) => fromFile((0, import_node_fs2.statSync)(path12), path12, type);
-    fromBlob = (stat5, path12, type = "") => new fetch_blob_default([new BlobDataItem({
-      path: path12,
-      size: stat5.size,
-      lastModified: stat5.mtimeMs,
+    blobFromSync = (path13, type) => fromBlob((0, import_node_fs2.statSync)(path13), path13, type);
+    blobFrom = (path13, type) => stat2(path13).then((stat6) => fromBlob(stat6, path13, type));
+    fileFrom = (path13, type) => stat2(path13).then((stat6) => fromFile(stat6, path13, type));
+    fileFromSync = (path13, type) => fromFile((0, import_node_fs2.statSync)(path13), path13, type);
+    fromBlob = (stat6, path13, type = "") => new fetch_blob_default([new BlobDataItem({
+      path: path13,
+      size: stat6.size,
+      lastModified: stat6.mtimeMs,
       start: 0
     })], { type });
-    fromFile = (stat5, path12, type = "") => new file_default([new BlobDataItem({
-      path: path12,
-      size: stat5.size,
-      lastModified: stat5.mtimeMs,
+    fromFile = (stat6, path13, type = "") => new file_default([new BlobDataItem({
+      path: path13,
+      size: stat6.size,
+      lastModified: stat6.mtimeMs,
       start: 0
-    })], (0, import_node_path2.basename)(path12), { type, lastModified: stat5.mtimeMs });
+    })], (0, import_node_path2.basename)(path13), { type, lastModified: stat6.mtimeMs });
     BlobDataItem = class _BlobDataItem {
       #path;
       #start;
@@ -27928,7 +27928,7 @@ var require_bignumber = __commonJS({
             return arr.reverse();
           }
           return function(str, baseIn, baseOut, sign, callerIsToString) {
-            var alphabet, d, e2, k, r2, x2, xc, y, i2 = str.indexOf("."), dp = DECIMAL_PLACES, rm2 = ROUNDING_MODE;
+            var alphabet, d, e2, k, r2, x2, xc, y, i2 = str.indexOf("."), dp = DECIMAL_PLACES, rm3 = ROUNDING_MODE;
             if (i2 >= 0) {
               k = POW_PRECISION;
               POW_PRECISION = 0;
@@ -27954,7 +27954,7 @@ var require_bignumber = __commonJS({
               x2.c = xc;
               x2.e = e2;
               x2.s = sign;
-              x2 = div(x2, y, dp, rm2, baseOut);
+              x2 = div(x2, y, dp, rm3, baseOut);
               xc = x2.c;
               r2 = x2.r;
               e2 = x2.e;
@@ -27963,7 +27963,7 @@ var require_bignumber = __commonJS({
             i2 = xc[d];
             k = baseOut / 2;
             r2 = r2 || d < 0 || xc[d + 1] != null;
-            r2 = rm2 < 4 ? (i2 != null || r2) && (rm2 == 0 || rm2 == (x2.s < 0 ? 3 : 2)) : i2 > k || i2 == k && (rm2 == 4 || r2 || rm2 == 6 && xc[d - 1] & 1 || rm2 == (x2.s < 0 ? 8 : 7));
+            r2 = rm3 < 4 ? (i2 != null || r2) && (rm3 == 0 || rm3 == (x2.s < 0 ? 3 : 2)) : i2 > k || i2 == k && (rm3 == 4 || r2 || rm3 == 6 && xc[d - 1] & 1 || rm3 == (x2.s < 0 ? 8 : 7));
             if (d < 1 || !xc[0]) {
               str = r2 ? toFixedPoint(alphabet.charAt(1), -dp, alphabet.charAt(0)) : alphabet.charAt(0);
             } else {
@@ -28021,7 +28021,7 @@ var require_bignumber = __commonJS({
             }
             for (; !a[0] && a.length > 1; a.splice(0, 1)) ;
           }
-          return function(x2, y, dp, rm2, base) {
+          return function(x2, y, dp, rm3, base) {
             var cmp, e2, i2, more, n, prod, prodL, q, qc, rem, remL, rem0, xi, xL, yc0, yL, yz, s2 = x2.s == y.s ? 1 : -1, xc = x2.c, yc = y.c;
             if (!xc || !xc[0] || !yc || !yc[0]) {
               return new BigNumber2(
@@ -28118,7 +28118,7 @@ var require_bignumber = __commonJS({
             }
             if (base == BASE) {
               for (i2 = 1, s2 = qc[0]; s2 >= 10; s2 /= 10, i2++) ;
-              round(q, dp + (q.e = i2 + e2 * LOG_BASE - 1) + 1, rm2, more);
+              round(q, dp + (q.e = i2 + e2 * LOG_BASE - 1) + 1, rm3, more);
             } else {
               q.e = e2;
               q.r = +more;
@@ -28126,10 +28126,10 @@ var require_bignumber = __commonJS({
             return q;
           };
         })();
-        function format(n, i2, rm2, id) {
+        function format(n, i2, rm3, id) {
           var c0, e2, ne, len, str;
-          if (rm2 == null) rm2 = ROUNDING_MODE;
-          else intCheck(rm2, 0, 8);
+          if (rm3 == null) rm3 = ROUNDING_MODE;
+          else intCheck(rm3, 0, 8);
           if (!n.c) return n.toString();
           c0 = n.c[0];
           ne = n.e;
@@ -28137,7 +28137,7 @@ var require_bignumber = __commonJS({
             str = coeffToString(n.c);
             str = id == 1 || id == 2 && (ne <= TO_EXP_NEG || ne >= TO_EXP_POS) ? toExponential(str, ne) : toFixedPoint(str, ne, "0");
           } else {
-            n = round(new BigNumber2(n), i2, rm2);
+            n = round(new BigNumber2(n), i2, rm3);
             e2 = n.e;
             str = coeffToString(n.c);
             len = str.length;
@@ -28210,7 +28210,7 @@ var require_bignumber = __commonJS({
             x2.c = x2.e = null;
           };
         })();
-        function round(x2, sd, rm2, r2) {
+        function round(x2, sd, rm3, r2) {
           var d, i2, j, k, n, ni, rd, xc = x2.c, pows10 = POWS_TEN;
           if (xc) {
             out: {
@@ -28245,8 +28245,8 @@ var require_bignumber = __commonJS({
               // The expression  n % pows10[d - j - 1]  returns all digits of n to the right
               // of the digit at j, e.g. if n is 908714 and j is 2, the expression gives 714.
               xc[ni + 1] != null || (j < 0 ? n : n % pows10[d - j - 1]);
-              r2 = rm2 < 4 ? (rd || r2) && (rm2 == 0 || rm2 == (x2.s < 0 ? 3 : 2)) : rd > 5 || rd == 5 && (rm2 == 4 || r2 || rm2 == 6 && // Check whether the digit to the left of the rounding digit is odd.
-              (i2 > 0 ? j > 0 ? n / pows10[d - j] : 0 : xc[ni - 1]) % 10 & 1 || rm2 == (x2.s < 0 ? 8 : 7));
+              r2 = rm3 < 4 ? (rd || r2) && (rm3 == 0 || rm3 == (x2.s < 0 ? 3 : 2)) : rd > 5 || rd == 5 && (rm3 == 4 || r2 || rm3 == 6 && // Check whether the digit to the left of the rounding digit is odd.
+              (i2 > 0 ? j > 0 ? n / pows10[d - j] : 0 : xc[ni - 1]) % 10 & 1 || rm3 == (x2.s < 0 ? 8 : 7));
               if (sd < 1 || !xc[0]) {
                 xc.length = 0;
                 if (r2) {
@@ -28311,13 +28311,13 @@ var require_bignumber = __commonJS({
         P.comparedTo = function(y, b) {
           return compare(this, new BigNumber2(y, b));
         };
-        P.decimalPlaces = P.dp = function(dp, rm2) {
+        P.decimalPlaces = P.dp = function(dp, rm3) {
           var c, n, v, x2 = this;
           if (dp != null) {
             intCheck(dp, 0, MAX);
-            if (rm2 == null) rm2 = ROUNDING_MODE;
-            else intCheck(rm2, 0, 8);
-            return round(new BigNumber2(x2), dp + x2.e + 1, rm2);
+            if (rm3 == null) rm3 = ROUNDING_MODE;
+            else intCheck(rm3, 0, 8);
+            return round(new BigNumber2(x2), dp + x2.e + 1, rm3);
           }
           if (!(c = x2.c)) return null;
           n = ((v = c.length - 1) - bitFloor(this.e / LOG_BASE)) * LOG_BASE;
@@ -28400,11 +28400,11 @@ var require_bignumber = __commonJS({
           if (nIsNeg) y = ONE.div(y);
           return m2 ? y.mod(m2) : k ? round(y, POW_PRECISION, ROUNDING_MODE, more) : y;
         };
-        P.integerValue = function(rm2) {
+        P.integerValue = function(rm3) {
           var n = new BigNumber2(this);
-          if (rm2 == null) rm2 = ROUNDING_MODE;
-          else intCheck(rm2, 0, 8);
-          return round(n, n.e + 1, rm2);
+          if (rm3 == null) rm3 = ROUNDING_MODE;
+          else intCheck(rm3, 0, 8);
+          return round(n, n.e + 1, rm3);
         };
         P.isEqualTo = P.eq = function(y, b) {
           return compare(this, new BigNumber2(y, b)) === 0;
@@ -28631,13 +28631,13 @@ var require_bignumber = __commonJS({
           }
           return normalise(y, xc, ye);
         };
-        P.precision = P.sd = function(sd, rm2) {
+        P.precision = P.sd = function(sd, rm3) {
           var c, n, v, x2 = this;
           if (sd != null && sd !== !!sd) {
             intCheck(sd, 1, MAX);
-            if (rm2 == null) rm2 = ROUNDING_MODE;
-            else intCheck(rm2, 0, 8);
-            return round(new BigNumber2(x2), sd, rm2);
+            if (rm3 == null) rm3 = ROUNDING_MODE;
+            else intCheck(rm3, 0, 8);
+            return round(new BigNumber2(x2), sd, rm3);
           }
           if (!(c = x2.c)) return null;
           v = c.length - 1;
@@ -28707,36 +28707,36 @@ var require_bignumber = __commonJS({
           }
           return round(r2, r2.e + DECIMAL_PLACES + 1, ROUNDING_MODE, m2);
         };
-        P.toExponential = function(dp, rm2) {
+        P.toExponential = function(dp, rm3) {
           if (dp != null) {
             intCheck(dp, 0, MAX);
             dp++;
           }
-          return format(this, dp, rm2, 1);
+          return format(this, dp, rm3, 1);
         };
-        P.toFixed = function(dp, rm2) {
+        P.toFixed = function(dp, rm3) {
           if (dp != null) {
             intCheck(dp, 0, MAX);
             dp = dp + this.e + 1;
           }
-          return format(this, dp, rm2);
+          return format(this, dp, rm3);
         };
-        P.toFormat = function(dp, rm2, format2) {
+        P.toFormat = function(dp, rm3, format2) {
           var str, x2 = this;
           if (format2 == null) {
-            if (dp != null && rm2 && typeof rm2 == "object") {
-              format2 = rm2;
-              rm2 = null;
+            if (dp != null && rm3 && typeof rm3 == "object") {
+              format2 = rm3;
+              rm3 = null;
             } else if (dp && typeof dp == "object") {
               format2 = dp;
-              dp = rm2 = null;
+              dp = rm3 = null;
             } else {
               format2 = FORMAT;
             }
           } else if (typeof format2 != "object") {
             throw Error(bignumberError + "Argument not an object: " + format2);
           }
-          str = x2.toFixed(dp, rm2);
+          str = x2.toFixed(dp, rm3);
           if (x2.c) {
             var i2, arr = str.split("."), g1 = +format2.groupSize, g2 = +format2.secondaryGroupSize, groupSeparator = format2.groupSeparator || "", intPart = arr[0], fractionPart = arr[1], isNeg = x2.s < 0, intDigits = isNeg ? intPart.slice(1) : intPart, len = intDigits.length;
             if (g2) {
@@ -28804,9 +28804,9 @@ var require_bignumber = __commonJS({
         P.toNumber = function() {
           return +valueOf(this);
         };
-        P.toPrecision = function(sd, rm2) {
+        P.toPrecision = function(sd, rm3) {
           if (sd != null) intCheck(sd, 1, MAX);
-          return format(this, sd, rm2, 2);
+          return format(this, sd, rm3, 2);
         };
         P.toString = function(b) {
           var str, n = this, s2 = n.s, e2 = n.e;
@@ -30563,7 +30563,7 @@ var require_util10 = __commonJS({
     exports2.getWellKnownCertificateConfigFileLocation = getWellKnownCertificateConfigFileLocation;
     var fs4 = require("fs");
     var os6 = require("os");
-    var path12 = require("path");
+    var path13 = require("path");
     var WELL_KNOWN_CERTIFICATE_CONFIG_FILE = "certificate_config.json";
     var CLOUDSDK_CONFIG_DIRECTORY = "gcloud";
     function snakeToCamel(str) {
@@ -30656,8 +30656,8 @@ var require_util10 = __commonJS({
       }
     }
     function getWellKnownCertificateConfigFileLocation() {
-      const configDir = process.env.CLOUDSDK_CONFIG || (_isWindows() ? path12.join(process.env.APPDATA || "", CLOUDSDK_CONFIG_DIRECTORY) : path12.join(process.env.HOME || "", ".config", CLOUDSDK_CONFIG_DIRECTORY));
-      return path12.join(configDir, WELL_KNOWN_CERTIFICATE_CONFIG_FILE);
+      const configDir = process.env.CLOUDSDK_CONFIG || (_isWindows() ? path13.join(process.env.APPDATA || "", CLOUDSDK_CONFIG_DIRECTORY) : path13.join(process.env.HOME || "", ".config", CLOUDSDK_CONFIG_DIRECTORY));
+      return path13.join(configDir, WELL_KNOWN_CERTIFICATE_CONFIG_FILE);
     }
     function _isWindows() {
       return os6.platform().startsWith("win");
@@ -32603,11 +32603,11 @@ var require_getCredentials = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.getCredentials = getCredentials;
-    var path12 = require("path");
+    var path13 = require("path");
     var fs4 = require("fs");
     var util_1 = require("util");
     var errorWithCode_1 = require_errorWithCode();
-    var readFile4 = fs4.readFile ? (0, util_1.promisify)(fs4.readFile) : async () => {
+    var readFile5 = fs4.readFile ? (0, util_1.promisify)(fs4.readFile) : async () => {
       throw new errorWithCode_1.ErrorWithCode("use key rather than keyFile.", "MISSING_CREDENTIALS");
     };
     var ExtensionFiles;
@@ -32629,7 +32629,7 @@ var require_getCredentials = __commonJS({
        * @returns A promise that resolves with the credentials.
        */
       async getCredentials() {
-        const key = await readFile4(this.keyFilePath, "utf8");
+        const key = await readFile5(this.keyFilePath, "utf8");
         let body;
         try {
           body = JSON.parse(key);
@@ -32655,7 +32655,7 @@ var require_getCredentials = __commonJS({
        * @returns A promise that resolves with the private key.
        */
       async getCredentials() {
-        const privateKey = await readFile4(this.keyFilePath, "utf8");
+        const privateKey = await readFile5(this.keyFilePath, "utf8");
         return { privateKey };
       }
     };
@@ -32675,7 +32675,7 @@ var require_getCredentials = __commonJS({
        * @returns An instance of a class that implements ICredentialsProvider.
        */
       static create(keyFilePath) {
-        const keyFileExtension = path12.extname(keyFilePath);
+        const keyFileExtension = path13.extname(keyFilePath);
         switch (keyFileExtension) {
           case ExtensionFiles.JSON:
             return new JsonCredentialsProvider(keyFilePath);
@@ -34285,7 +34285,7 @@ var require_filesubjecttokensupplier = __commonJS({
     exports2.FileSubjectTokenSupplier = void 0;
     var util_1 = require("util");
     var fs4 = require("fs");
-    var readFile4 = (0, util_1.promisify)(fs4.readFile ?? (() => {
+    var readFile5 = (0, util_1.promisify)(fs4.readFile ?? (() => {
     }));
     var realpath2 = (0, util_1.promisify)(fs4.realpath ?? (() => {
     }));
@@ -34325,7 +34325,7 @@ var require_filesubjecttokensupplier = __commonJS({
           throw err;
         }
         let subjectToken;
-        const rawText = await readFile4(parsedFilePath, { encoding: "utf8" });
+        const rawText = await readFile5(parsedFilePath, { encoding: "utf8" });
         if (this.formatType === "text") {
           subjectToken = rawText;
         } else if (this.formatType === "json" && this.subjectTokenFieldName) {
@@ -36044,7 +36044,7 @@ var require_googleauth = __commonJS({
     var gaxios_1 = require_src2();
     var gcpMetadata = require_src4();
     var os6 = require("os");
-    var path12 = require("path");
+    var path13 = require("path");
     var crypto_1 = require_crypto3();
     var computeclient_1 = require_computeclient();
     var idtokenclient_1 = require_idtokenclient();
@@ -36331,11 +36331,11 @@ var require_googleauth = __commonJS({
         } else {
           const home = process.env["HOME"];
           if (home) {
-            location = path12.join(home, ".config");
+            location = path13.join(home, ".config");
           }
         }
         if (location) {
-          location = path12.join(location, "gcloud", "application_default_credentials.json");
+          location = path13.join(location, "gcloud", "application_default_credentials.json");
           if (!fs4.existsSync(location)) {
             location = null;
           }
@@ -36694,7 +36694,7 @@ var require_googleauth = __commonJS({
         if (this.jsonContent) {
           return this._cacheClientFromJSON(this.jsonContent, this.clientOptions);
         } else if (this.keyFilename) {
-          const filePath = path12.resolve(this.keyFilename);
+          const filePath = path13.resolve(this.keyFilename);
           const stream = fs4.createReadStream(filePath);
           return await this.fromStreamAsync(stream, this.clientOptions);
         } else if (this.apiKey) {
@@ -37318,17 +37318,17 @@ var require_visit = __commonJS({
     visit.BREAK = BREAK;
     visit.SKIP = SKIP;
     visit.REMOVE = REMOVE;
-    function visit_(key, node, visitor, path12) {
-      const ctrl = callVisitor(key, node, visitor, path12);
+    function visit_(key, node, visitor, path13) {
+      const ctrl = callVisitor(key, node, visitor, path13);
       if (identity.isNode(ctrl) || identity.isPair(ctrl)) {
-        replaceNode(key, path12, ctrl);
-        return visit_(key, ctrl, visitor, path12);
+        replaceNode(key, path13, ctrl);
+        return visit_(key, ctrl, visitor, path13);
       }
       if (typeof ctrl !== "symbol") {
         if (identity.isCollection(node)) {
-          path12 = Object.freeze(path12.concat(node));
+          path13 = Object.freeze(path13.concat(node));
           for (let i2 = 0; i2 < node.items.length; ++i2) {
-            const ci = visit_(i2, node.items[i2], visitor, path12);
+            const ci = visit_(i2, node.items[i2], visitor, path13);
             if (typeof ci === "number")
               i2 = ci - 1;
             else if (ci === BREAK)
@@ -37339,13 +37339,13 @@ var require_visit = __commonJS({
             }
           }
         } else if (identity.isPair(node)) {
-          path12 = Object.freeze(path12.concat(node));
-          const ck = visit_("key", node.key, visitor, path12);
+          path13 = Object.freeze(path13.concat(node));
+          const ck = visit_("key", node.key, visitor, path13);
           if (ck === BREAK)
             return BREAK;
           else if (ck === REMOVE)
             node.key = null;
-          const cv = visit_("value", node.value, visitor, path12);
+          const cv = visit_("value", node.value, visitor, path13);
           if (cv === BREAK)
             return BREAK;
           else if (cv === REMOVE)
@@ -37366,17 +37366,17 @@ var require_visit = __commonJS({
     visitAsync.BREAK = BREAK;
     visitAsync.SKIP = SKIP;
     visitAsync.REMOVE = REMOVE;
-    async function visitAsync_(key, node, visitor, path12) {
-      const ctrl = await callVisitor(key, node, visitor, path12);
+    async function visitAsync_(key, node, visitor, path13) {
+      const ctrl = await callVisitor(key, node, visitor, path13);
       if (identity.isNode(ctrl) || identity.isPair(ctrl)) {
-        replaceNode(key, path12, ctrl);
-        return visitAsync_(key, ctrl, visitor, path12);
+        replaceNode(key, path13, ctrl);
+        return visitAsync_(key, ctrl, visitor, path13);
       }
       if (typeof ctrl !== "symbol") {
         if (identity.isCollection(node)) {
-          path12 = Object.freeze(path12.concat(node));
+          path13 = Object.freeze(path13.concat(node));
           for (let i2 = 0; i2 < node.items.length; ++i2) {
-            const ci = await visitAsync_(i2, node.items[i2], visitor, path12);
+            const ci = await visitAsync_(i2, node.items[i2], visitor, path13);
             if (typeof ci === "number")
               i2 = ci - 1;
             else if (ci === BREAK)
@@ -37387,13 +37387,13 @@ var require_visit = __commonJS({
             }
           }
         } else if (identity.isPair(node)) {
-          path12 = Object.freeze(path12.concat(node));
-          const ck = await visitAsync_("key", node.key, visitor, path12);
+          path13 = Object.freeze(path13.concat(node));
+          const ck = await visitAsync_("key", node.key, visitor, path13);
           if (ck === BREAK)
             return BREAK;
           else if (ck === REMOVE)
             node.key = null;
-          const cv = await visitAsync_("value", node.value, visitor, path12);
+          const cv = await visitAsync_("value", node.value, visitor, path13);
           if (cv === BREAK)
             return BREAK;
           else if (cv === REMOVE)
@@ -37420,23 +37420,23 @@ var require_visit = __commonJS({
       }
       return visitor;
     }
-    function callVisitor(key, node, visitor, path12) {
+    function callVisitor(key, node, visitor, path13) {
       if (typeof visitor === "function")
-        return visitor(key, node, path12);
+        return visitor(key, node, path13);
       if (identity.isMap(node))
-        return visitor.Map?.(key, node, path12);
+        return visitor.Map?.(key, node, path13);
       if (identity.isSeq(node))
-        return visitor.Seq?.(key, node, path12);
+        return visitor.Seq?.(key, node, path13);
       if (identity.isPair(node))
-        return visitor.Pair?.(key, node, path12);
+        return visitor.Pair?.(key, node, path13);
       if (identity.isScalar(node))
-        return visitor.Scalar?.(key, node, path12);
+        return visitor.Scalar?.(key, node, path13);
       if (identity.isAlias(node))
-        return visitor.Alias?.(key, node, path12);
+        return visitor.Alias?.(key, node, path13);
       return void 0;
     }
-    function replaceNode(key, path12, node) {
-      const parent = path12[path12.length - 1];
+    function replaceNode(key, path13, node) {
+      const parent = path13[path13.length - 1];
       if (identity.isCollection(parent)) {
         parent.items[key] = node;
       } else if (identity.isPair(parent)) {
@@ -38046,10 +38046,10 @@ var require_Collection = __commonJS({
     var createNode = require_createNode();
     var identity = require_identity();
     var Node = require_Node();
-    function collectionFromPath(schema, path12, value) {
+    function collectionFromPath(schema, path13, value) {
       let v = value;
-      for (let i2 = path12.length - 1; i2 >= 0; --i2) {
-        const k = path12[i2];
+      for (let i2 = path13.length - 1; i2 >= 0; --i2) {
+        const k = path13[i2];
         if (typeof k === "number" && Number.isInteger(k) && k >= 0) {
           const a = [];
           a[k] = v;
@@ -38068,7 +38068,7 @@ var require_Collection = __commonJS({
         sourceObjects: /* @__PURE__ */ new Map()
       });
     }
-    var isEmptyPath = (path12) => path12 == null || typeof path12 === "object" && !!path12[Symbol.iterator]().next().done;
+    var isEmptyPath = (path13) => path13 == null || typeof path13 === "object" && !!path13[Symbol.iterator]().next().done;
     var Collection = class extends Node.NodeBase {
       constructor(type, schema) {
         super(type);
@@ -38098,11 +38098,11 @@ var require_Collection = __commonJS({
        * be a Pair instance or a `{ key, value }` object, which may not have a key
        * that already exists in the map.
        */
-      addIn(path12, value) {
-        if (isEmptyPath(path12))
+      addIn(path13, value) {
+        if (isEmptyPath(path13))
           this.add(value);
         else {
-          const [key, ...rest] = path12;
+          const [key, ...rest] = path13;
           const node = this.get(key, true);
           if (identity.isCollection(node))
             node.addIn(rest, value);
@@ -38116,8 +38116,8 @@ var require_Collection = __commonJS({
        * Removes a value from the collection.
        * @returns `true` if the item was found and removed.
        */
-      deleteIn(path12) {
-        const [key, ...rest] = path12;
+      deleteIn(path13) {
+        const [key, ...rest] = path13;
         if (rest.length === 0)
           return this.delete(key);
         const node = this.get(key, true);
@@ -38131,8 +38131,8 @@ var require_Collection = __commonJS({
        * scalar values from their surrounding node; to disable set `keepScalar` to
        * `true` (collections are always returned intact).
        */
-      getIn(path12, keepScalar) {
-        const [key, ...rest] = path12;
+      getIn(path13, keepScalar) {
+        const [key, ...rest] = path13;
         const node = this.get(key, true);
         if (rest.length === 0)
           return !keepScalar && identity.isScalar(node) ? node.value : node;
@@ -38150,8 +38150,8 @@ var require_Collection = __commonJS({
       /**
        * Checks if the collection includes a value with the key `key`.
        */
-      hasIn(path12) {
-        const [key, ...rest] = path12;
+      hasIn(path13) {
+        const [key, ...rest] = path13;
         if (rest.length === 0)
           return this.has(key);
         const node = this.get(key, true);
@@ -38161,8 +38161,8 @@ var require_Collection = __commonJS({
        * Sets a value in this collection. For `!!set`, `value` needs to be a
        * boolean to add/remove the item from the set.
        */
-      setIn(path12, value) {
-        const [key, ...rest] = path12;
+      setIn(path13, value) {
+        const [key, ...rest] = path13;
         if (rest.length === 0) {
           this.set(key, value);
         } else {
@@ -40677,9 +40677,9 @@ var require_Document = __commonJS({
           this.contents.add(value);
       }
       /** Adds a value to the document. */
-      addIn(path12, value) {
+      addIn(path13, value) {
         if (assertCollection(this.contents))
-          this.contents.addIn(path12, value);
+          this.contents.addIn(path13, value);
       }
       /**
        * Create a new `Alias` node, ensuring that the target `node` has the required anchor.
@@ -40754,14 +40754,14 @@ var require_Document = __commonJS({
        * Removes a value from the document.
        * @returns `true` if the item was found and removed.
        */
-      deleteIn(path12) {
-        if (Collection.isEmptyPath(path12)) {
+      deleteIn(path13) {
+        if (Collection.isEmptyPath(path13)) {
           if (this.contents == null)
             return false;
           this.contents = null;
           return true;
         }
-        return assertCollection(this.contents) ? this.contents.deleteIn(path12) : false;
+        return assertCollection(this.contents) ? this.contents.deleteIn(path13) : false;
       }
       /**
        * Returns item at `key`, or `undefined` if not found. By default unwraps
@@ -40776,10 +40776,10 @@ var require_Document = __commonJS({
        * scalar values from their surrounding node; to disable set `keepScalar` to
        * `true` (collections are always returned intact).
        */
-      getIn(path12, keepScalar) {
-        if (Collection.isEmptyPath(path12))
+      getIn(path13, keepScalar) {
+        if (Collection.isEmptyPath(path13))
           return !keepScalar && identity.isScalar(this.contents) ? this.contents.value : this.contents;
-        return identity.isCollection(this.contents) ? this.contents.getIn(path12, keepScalar) : void 0;
+        return identity.isCollection(this.contents) ? this.contents.getIn(path13, keepScalar) : void 0;
       }
       /**
        * Checks if the document includes a value with the key `key`.
@@ -40790,10 +40790,10 @@ var require_Document = __commonJS({
       /**
        * Checks if the document includes a value at `path`.
        */
-      hasIn(path12) {
-        if (Collection.isEmptyPath(path12))
+      hasIn(path13) {
+        if (Collection.isEmptyPath(path13))
           return this.contents !== void 0;
-        return identity.isCollection(this.contents) ? this.contents.hasIn(path12) : false;
+        return identity.isCollection(this.contents) ? this.contents.hasIn(path13) : false;
       }
       /**
        * Sets a value in this document. For `!!set`, `value` needs to be a
@@ -40810,13 +40810,13 @@ var require_Document = __commonJS({
        * Sets a value in this document. For `!!set`, `value` needs to be a
        * boolean to add/remove the item from the set.
        */
-      setIn(path12, value) {
-        if (Collection.isEmptyPath(path12)) {
+      setIn(path13, value) {
+        if (Collection.isEmptyPath(path13)) {
           this.contents = value;
         } else if (this.contents == null) {
-          this.contents = Collection.collectionFromPath(this.schema, Array.from(path12), value);
+          this.contents = Collection.collectionFromPath(this.schema, Array.from(path13), value);
         } else if (assertCollection(this.contents)) {
-          this.contents.setIn(path12, value);
+          this.contents.setIn(path13, value);
         }
       }
       /**
@@ -42776,9 +42776,9 @@ var require_cst_visit = __commonJS({
     visit.BREAK = BREAK;
     visit.SKIP = SKIP;
     visit.REMOVE = REMOVE;
-    visit.itemAtPath = (cst, path12) => {
+    visit.itemAtPath = (cst, path13) => {
       let item = cst;
-      for (const [field, index] of path12) {
+      for (const [field, index] of path13) {
         const tok = item?.[field];
         if (tok && "items" in tok) {
           item = tok.items[index];
@@ -42787,23 +42787,23 @@ var require_cst_visit = __commonJS({
       }
       return item;
     };
-    visit.parentCollection = (cst, path12) => {
-      const parent = visit.itemAtPath(cst, path12.slice(0, -1));
-      const field = path12[path12.length - 1][0];
+    visit.parentCollection = (cst, path13) => {
+      const parent = visit.itemAtPath(cst, path13.slice(0, -1));
+      const field = path13[path13.length - 1][0];
       const coll = parent?.[field];
       if (coll && "items" in coll)
         return coll;
       throw new Error("Parent collection not found");
     };
-    function _visit(path12, item, visitor) {
-      let ctrl = visitor(item, path12);
+    function _visit(path13, item, visitor) {
+      let ctrl = visitor(item, path13);
       if (typeof ctrl === "symbol")
         return ctrl;
       for (const field of ["key", "value"]) {
         const token = item[field];
         if (token && "items" in token) {
           for (let i2 = 0; i2 < token.items.length; ++i2) {
-            const ci = _visit(Object.freeze(path12.concat([[field, i2]])), token.items[i2], visitor);
+            const ci = _visit(Object.freeze(path13.concat([[field, i2]])), token.items[i2], visitor);
             if (typeof ci === "number")
               i2 = ci - 1;
             else if (ci === BREAK)
@@ -42814,10 +42814,10 @@ var require_cst_visit = __commonJS({
             }
           }
           if (typeof ctrl === "function" && field === "key")
-            ctrl = ctrl(item, path12);
+            ctrl = ctrl(item, path13);
         }
       }
-      return typeof ctrl === "function" ? ctrl(item, path12) : ctrl;
+      return typeof ctrl === "function" ? ctrl(item, path13) : ctrl;
     }
     exports2.visit = visit;
   }
@@ -44468,7 +44468,7 @@ var require_public_api = __commonJS({
       }
       return doc;
     }
-    function parse3(src, reviver, options) {
+    function parse4(src, reviver, options) {
       let _reviver = void 0;
       if (typeof reviver === "function") {
         _reviver = reviver;
@@ -44509,7 +44509,7 @@ var require_public_api = __commonJS({
         return value.toString(options);
       return new Document.Document(value, _replacer, options).toString(options);
     }
-    exports2.parse = parse3;
+    exports2.parse = parse4;
     exports2.parseAllDocuments = parseAllDocuments2;
     exports2.parseDocument = parseDocument2;
     exports2.stringify = stringify;
@@ -44589,15 +44589,23 @@ __export(index_exports, {
   buildExecutionOutputs: () => buildExecutionOutputs,
   chooseSource: () => chooseSource,
   collectRepoSignals: () => collectRepoSignals,
+  decodeUtf8NativeSpec: () => decodeUtf8NativeSpec,
   decodeUtf8OpenApi: () => decodeUtf8OpenApi,
   defaultWriteSpecFile: () => defaultWriteSpecFile,
   deriveOpenApiDocument: () => deriveOpenApiDocument,
+  detectNativeFormat: () => detectNativeFormat,
   execute: () => execute,
+  extractProtoImports: () => extractProtoImports,
   findExistingRepoSpecTyped: () => findExistingRepoSpecTyped,
   getInput: () => getInput2,
+  nativeFilename: () => nativeFilename,
+  normalizeProtoSourcePath: () => normalizeProtoSourcePath,
   outputNames: () => outputNames,
+  parseAndValidateNativeFamily: () => parseAndValidateNativeFamily,
+  parseAndValidateNativeSpec: () => parseAndValidateNativeSpec,
   parseAndValidateOpenApi: () => parseAndValidateOpenApi,
   parseApiGatewayConfigName: () => parseApiGatewayConfigName,
+  parseApiGatewayProtobufConfigName: () => parseApiGatewayProtobufConfigName,
   parseApiHubAdditionalSpecName: () => parseApiHubAdditionalSpecName,
   parseApiHubSpecName: () => parseApiHubSpecName,
   parseApigeeArchiveDeploymentName: () => parseApigeeArchiveDeploymentName,
@@ -44606,6 +44614,7 @@ __export(index_exports, {
   parseApigeeRevisionName: () => parseApigeeRevisionName,
   parseDialogflowToolName: () => parseDialogflowToolName,
   parseEndpointConfigName: () => parseEndpointConfigName,
+  parseEndpointProtobufConfigName: () => parseEndpointProtobufConfigName,
   parseGcsSpecLocation: () => parseGcsSpecLocation,
   parseVertexExtensionName: () => parseVertexExtensionName,
   partitionCandidates: () => partitionCandidates,
@@ -44613,6 +44622,7 @@ __export(index_exports, {
   readActionInputs: () => readActionInputs,
   renderAmbiguityStepSummary: () => renderAmbiguityStepSummary,
   resolveInputs: () => resolveInputs,
+  resolveProtoSourceSet: () => resolveProtoSourceSet,
   resolveServiceCandidate: () => resolveServiceCandidate,
   runAction: () => runAction,
   runNarrowingPipeline: () => runNarrowingPipeline,
@@ -47058,8 +47068,8 @@ function normalizeRepoUrl(url) {
   const sshMatch = raw.match(/^git@([^:]+):(.+?)(?:\.git)?$/);
   if (sshMatch) {
     const host = sshMatch[1];
-    const path12 = sshMatch[2];
-    return `https://${host}/${path12}`;
+    const path13 = sshMatch[2];
+    return `https://${host}/${path13}`;
   }
   return raw.replace(/\.git$/, "");
 }
@@ -47377,6 +47387,9 @@ var actionContract = {
     "spec-path": {
       description: "Path to the resolved or generated specification when available."
     },
+    "spec-files-json": {
+      description: "Optional JSON inventory of the authoritative multi-file definition set (schemaVersion 1). Empty for single-file, unresolved, and discover-many results."
+    },
     "api-id": {
       description: "Full resource name of the exported cloud source (API Gateway config, Cloud Endpoints config, Apigee proxy revision, Apigee archive deployment, API Hub spec, legacy Apigee Registry spec, Apigee portal apidoc, Vertex extension, Dialogflow tool, or CES tool/toolset); empty for repo, generated, or IaC-local resolutions."
     },
@@ -47399,7 +47412,7 @@ var actionContract = {
       description: "Provider that produced the resolved spec: api-gateway, cloud-endpoints, apigee, api-hub, apigee-registry, app-integration, connectors-custom, apigee-portal, vertex-extensions, dialogflow-tools, ces-toolsets, or iac-local."
     },
     "spec-format": {
-      description: "Format of the resolved spec: openapi-yaml or openapi-json."
+      description: "Format of the resolved spec: openapi-yaml, openapi-json, asyncapi-yaml, asyncapi-json, graphql-sdl, graphql-introspection-json, protobuf, wsdl, or mcp-json."
     },
     "contract-origin": {
       description: "Compatibility output; always empty in v1."
@@ -47447,8 +47460,576 @@ function resolveActionVersion2() {
 
 // src/lib/gcp/clients.ts
 var import_node_crypto2 = require("node:crypto");
-var import_node_util4 = require("node:util");
+var import_node_util5 = require("node:util");
 var import_google_auth_library = __toESM(require_src5(), 1);
+
+// src/lib/providers/source-document.ts
+var import_node_util4 = require("node:util");
+
+// src/lib/spec/native-formats.ts
+var import_yaml2 = __toESM(require_dist3(), 1);
+
+// src/lib/spec/validate-openapi.ts
+var import_yaml = __toESM(require_dist3(), 1);
+var HTTP_OPERATIONS = /* @__PURE__ */ new Set(["get", "put", "post", "delete", "options", "head", "patch", "trace"]);
+function parseAndValidateOpenApi(content) {
+  const trimmed = content.trim();
+  if (!trimmed) {
+    throw new Error("Specification content is empty");
+  }
+  const isJson = trimmed.startsWith("{");
+  let parsed;
+  try {
+    parsed = isJson ? JSON.parse(trimmed) : (0, import_yaml.parse)(trimmed);
+  } catch (error2) {
+    const detail = error2 instanceof Error ? error2.message : String(error2);
+    throw new Error(`Specification is not parseable JSON or YAML: ${detail}`);
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new Error("Specification did not parse to an object document");
+  }
+  const document2 = parsed;
+  let version;
+  const swagger = typeof document2.swagger === "string" ? document2.swagger : "";
+  const openapi = typeof document2.openapi === "string" ? document2.openapi : "";
+  if (swagger.startsWith("2")) {
+    version = "swagger-2.0";
+  } else if (openapi.startsWith("3.1")) {
+    version = "openapi-3.1";
+  } else if (openapi.startsWith("3.")) {
+    version = "openapi-3.0";
+  }
+  if (!version) {
+    throw new Error("Specification is not Swagger 2.0 or OpenAPI 3.x");
+  }
+  const paths = document2.paths;
+  if (!paths || typeof paths !== "object" || Array.isArray(paths)) {
+    throw new Error("Specification has no paths object");
+  }
+  if (Object.keys(paths).length === 0) {
+    throw new Error("Specification has an empty paths object");
+  }
+  if (!hasRecognizedHttpOperation(paths)) {
+    throw new Error("Specification has no recognized HTTP operation under paths");
+  }
+  return { document: document2, version, isJson };
+}
+function isRecognizedHttpOperation(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const responses = value.responses;
+  if (!responses || typeof responses !== "object" || Array.isArray(responses)) return false;
+  return Object.keys(responses).length > 0;
+}
+function hasRecognizedHttpOperation(paths) {
+  for (const pathItem of Object.values(paths)) {
+    if (!pathItem || typeof pathItem !== "object" || Array.isArray(pathItem)) continue;
+    const item = pathItem;
+    for (const key of Object.keys(item)) {
+      if (HTTP_OPERATIONS.has(key.toLowerCase()) && isRecognizedHttpOperation(item[key])) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+// src/lib/spec/native-formats.ts
+var MAX_INSPECT_CHARS = 256e3;
+function nativeFilename(format) {
+  switch (format) {
+    case "openapi-json":
+      return "index.json";
+    case "openapi-yaml":
+      return "index.yaml";
+    case "asyncapi-json":
+      return "asyncapi.json";
+    case "asyncapi-yaml":
+      return "asyncapi.yaml";
+    case "graphql-sdl":
+      return "schema.graphql";
+    case "graphql-introspection-json":
+      return "introspection.json";
+    case "protobuf":
+      return "service.proto";
+    case "wsdl":
+      return "service.wsdl";
+    case "mcp-json":
+      return "mcp.json";
+  }
+}
+function bound(content) {
+  return content.length > MAX_INSPECT_CHARS ? content.slice(0, MAX_INSPECT_CHARS) : content;
+}
+function trimContent(content) {
+  return bound(content).trim();
+}
+function looksLikeJson(trimmed) {
+  return trimmed.startsWith("{") || trimmed.startsWith("[");
+}
+function looksLikeXml(trimmed) {
+  return trimmed.startsWith("<");
+}
+function parseObjectDocument(content) {
+  const trimmed = trimContent(content);
+  if (!trimmed) return void 0;
+  const isJson = looksLikeJson(trimmed);
+  try {
+    const parsed = isJson ? JSON.parse(trimmed) : (0, import_yaml2.parse)(trimmed);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return void 0;
+    return { document: parsed, isJson };
+  } catch {
+    return void 0;
+  }
+}
+function openApiVersionOf(document2) {
+  const swagger = typeof document2.swagger === "string" ? document2.swagger : "";
+  const openapi = typeof document2.openapi === "string" ? document2.openapi : "";
+  if (swagger.startsWith("2")) return "swagger-2.0";
+  if (openapi.startsWith("3.1")) return "openapi-3.1";
+  if (openapi.startsWith("3.")) return "openapi-3.0";
+  return void 0;
+}
+function stripXmlPreamble(xml) {
+  return xml.replace(/<\?xml[\s\S]*?\?>/gi, "").replace(/<!--[\s\S]*?-->/g, "").replace(/<!DOCTYPE[\s\S]*?>/gi, "").trim();
+}
+function xmlRootInfo(xml) {
+  const body = stripXmlPreamble(trimContent(xml));
+  const match = body.match(/<\s*([A-Za-z_][\w.-]*(?::[A-Za-z_][\w.-]*)?)\b([^>]*)>/);
+  if (!match) return void 0;
+  const qualified = match[1];
+  const localName = (qualified.includes(":") ? qualified.split(":").pop() : qualified).toLowerCase();
+  const head = `${qualified} ${match[2] ?? ""}`.toLowerCase();
+  return { localName, qualified, head };
+}
+function isWsdlXml(xml) {
+  const root = xmlRootInfo(xml);
+  if (!root) return false;
+  if (root.localName !== "definitions" && root.localName !== "description") return false;
+  return /wsdl/i.test(root.head) || /schemas\.xmlsoap\.org\/wsdl|www\.w3\.org\/ns\/wsdl/i.test(trimContent(xml));
+}
+var GRAPHQL_DEFINITION_RE = /^\s*(?:"""[\s\S]*?"""\s*)?(?:extend\s+)?(?:(?:type|interface|enum|union|scalar|input)\s+[A-Za-z_]|schema\s*\{|directive\s+@)/m;
+function isGraphqlSdl(content) {
+  const trimmed = trimContent(content);
+  if (!trimmed || looksLikeJson(trimmed) || looksLikeXml(trimmed)) return false;
+  if (/^\s*(?:openapi|swagger|asyncapi)\s*:/m.test(trimmed)) return false;
+  return GRAPHQL_DEFINITION_RE.test(trimmed);
+}
+function looksLikeIntrospection(record) {
+  if (record.__schema && typeof record.__schema === "object" && !Array.isArray(record.__schema)) return true;
+  const data = record.data;
+  if (!data || typeof data !== "object" || Array.isArray(data)) return false;
+  const nested = data.__schema;
+  return Boolean(nested && typeof nested === "object" && !Array.isArray(nested));
+}
+function looksLikeMcp(record) {
+  if (record.mcpServers && typeof record.mcpServers === "object" && !Array.isArray(record.mcpServers)) return true;
+  if (typeof record.$schema === "string" && /modelcontextprotocol/i.test(record.$schema)) return true;
+  return typeof record.name === "string" && (Array.isArray(record.remotes) || Array.isArray(record.packages));
+}
+function isProtobufSource(content) {
+  const trimmed = trimContent(content);
+  if (!trimmed || looksLikeJson(trimmed) || looksLikeXml(trimmed)) return false;
+  if (/^\s*(?:openapi|swagger|asyncapi)\s*:/m.test(trimmed)) return false;
+  if (/^\s*syntax\s*=\s*["']proto[23]["']\s*;/m.test(trimmed)) return true;
+  if (/\bmessage\s+[A-Za-z_]\w*\s*\{/.test(trimmed)) return true;
+  if (/\bservice\s+[A-Za-z_]\w*\s*\{[\s\S]*\brpc\b/.test(trimmed)) return true;
+  return false;
+}
+function hasProtobufServiceRpc(content) {
+  return /\bservice\s+[A-Za-z_]\w*\s*\{[\s\S]*\brpc\b/.test(trimContent(content));
+}
+function asyncApiVersionOf(document2) {
+  return typeof document2.asyncapi === "string" && document2.asyncapi.trim() ? document2.asyncapi.trim() : void 0;
+}
+function hasAsyncApiChannels(document2) {
+  const channels = document2.channels;
+  if (channels && typeof channels === "object" && !Array.isArray(channels)) {
+    return Object.keys(channels).length > 0;
+  }
+  const operations = document2.operations;
+  if (operations && typeof operations === "object" && !Array.isArray(operations)) {
+    return Object.keys(operations).length > 0;
+  }
+  return false;
+}
+function mcpServersHasObjectEntry(mcpServers) {
+  for (const value of Object.values(mcpServers)) {
+    if (value && typeof value === "object" && !Array.isArray(value)) return true;
+  }
+  return false;
+}
+function arrayHasObjectEntry(value) {
+  if (!Array.isArray(value)) return false;
+  return value.some((entry) => entry && typeof entry === "object" && !Array.isArray(entry));
+}
+function hasUsableMcpServers(document2) {
+  const mcpServers = document2.mcpServers;
+  if (mcpServers && typeof mcpServers === "object" && !Array.isArray(mcpServers)) {
+    return mcpServersHasObjectEntry(mcpServers);
+  }
+  if (typeof document2.name !== "string" || !document2.name.trim()) return false;
+  return arrayHasObjectEntry(document2.remotes) || arrayHasObjectEntry(document2.packages);
+}
+function detectNativeFormat(content) {
+  const trimmed = trimContent(content);
+  if (!trimmed) return void 0;
+  if (looksLikeXml(trimmed)) {
+    if (isWsdlXml(trimmed)) {
+      return { kind: "wsdl", format: "wsdl", serialization: "xml" };
+    }
+    return void 0;
+  }
+  const parsed = parseObjectDocument(trimmed);
+  if (parsed) {
+    if (parsed.isJson && looksLikeIntrospection(parsed.document)) {
+      return {
+        kind: "graphql-introspection",
+        format: "graphql-introspection-json",
+        serialization: "json"
+      };
+    }
+    const asyncVersion = asyncApiVersionOf(parsed.document);
+    if (asyncVersion) {
+      return {
+        kind: "asyncapi",
+        format: parsed.isJson ? "asyncapi-json" : "asyncapi-yaml",
+        serialization: parsed.isJson ? "json" : "yaml",
+        version: asyncVersion
+      };
+    }
+    const openapiVersion = openApiVersionOf(parsed.document);
+    if (openapiVersion) {
+      return {
+        kind: "openapi",
+        format: parsed.isJson ? "openapi-json" : "openapi-yaml",
+        serialization: parsed.isJson ? "json" : "yaml",
+        version: openapiVersion
+      };
+    }
+    if (parsed.isJson && looksLikeMcp(parsed.document) && hasUsableMcpServers(parsed.document)) {
+      return { kind: "mcp", format: "mcp-json", serialization: "json" };
+    }
+  }
+  if (isProtobufSource(trimmed) && hasProtobufServiceRpc(trimmed)) {
+    return { kind: "protobuf", format: "protobuf", serialization: "text" };
+  }
+  if (isGraphqlSdl(trimmed)) {
+    return { kind: "graphql-sdl", format: "graphql-sdl", serialization: "text" };
+  }
+  return void 0;
+}
+function assertExpectedFormat(actual, expected) {
+  if (expected && actual !== expected) {
+    throw new Error(`Specification is wrong kind: expected ${expected}, detected ${actual}`);
+  }
+}
+function validateAsyncApi(content, expected) {
+  const trimmed = trimContent(content);
+  if (!trimmed) throw new Error("Specification content is empty");
+  const isJson = looksLikeJson(trimmed);
+  let parsed;
+  try {
+    parsed = isJson ? JSON.parse(trimmed) : (0, import_yaml2.parse)(trimmed);
+  } catch (error2) {
+    const detail = error2 instanceof Error ? error2.message : String(error2);
+    throw new Error(`Specification is not parseable JSON or YAML: ${detail}`);
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new Error("Specification did not parse to an object document");
+  }
+  const document2 = parsed;
+  const version = asyncApiVersionOf(document2);
+  if (!version) {
+    throw new Error("Specification is not an AsyncAPI document");
+  }
+  if (!hasAsyncApiChannels(document2)) {
+    throw new Error("AsyncAPI document has no channels or operations");
+  }
+  const format = isJson ? "asyncapi-json" : "asyncapi-yaml";
+  assertExpectedFormat(format, expected);
+  return {
+    kind: "asyncapi",
+    format,
+    serialization: isJson ? "json" : "yaml",
+    version,
+    document: document2
+  };
+}
+function validateWsdl(content, expected) {
+  const trimmed = trimContent(content);
+  if (!trimmed) throw new Error("Specification content is empty");
+  if (!looksLikeXml(trimmed) || !xmlRootInfo(trimmed)) {
+    throw new Error("Specification is not parseable XML");
+  }
+  if (!isWsdlXml(trimmed)) {
+    throw new Error("XML document is not a WSDL 1.1/2.0 root");
+  }
+  assertExpectedFormat("wsdl", expected);
+  return { kind: "wsdl", format: "wsdl", serialization: "xml" };
+}
+function validateProtobuf(content, expected) {
+  const trimmed = trimContent(content);
+  if (!trimmed) throw new Error("Specification content is empty");
+  if (!isProtobufSource(trimmed)) {
+    throw new Error("Specification is not protobuf source (syntax, message, or service required)");
+  }
+  if (!hasProtobufServiceRpc(trimmed)) {
+    throw new Error(
+      "PROTO_NO_SERVICES: .proto defines no service methods; gRPC contract tests require at least one rpc"
+    );
+  }
+  assertExpectedFormat("protobuf", expected);
+  return { kind: "protobuf", format: "protobuf", serialization: "text" };
+}
+function validateGraphqlSdl(content, expected) {
+  const trimmed = trimContent(content);
+  if (!trimmed) throw new Error("Specification content is empty");
+  if (!isGraphqlSdl(trimmed)) {
+    throw new Error("Specification is not GraphQL SDL (type or schema definition required)");
+  }
+  assertExpectedFormat("graphql-sdl", expected);
+  return { kind: "graphql-sdl", format: "graphql-sdl", serialization: "text" };
+}
+function validateGraphqlIntrospection(content, expected) {
+  const trimmed = trimContent(content);
+  if (!trimmed) throw new Error("Specification content is empty");
+  if (!looksLikeJson(trimmed)) {
+    throw new Error("Specification is not GraphQL introspection JSON");
+  }
+  let parsed;
+  try {
+    parsed = JSON.parse(trimmed);
+  } catch (error2) {
+    const detail = error2 instanceof Error ? error2.message : String(error2);
+    throw new Error(`Specification is not parseable JSON: ${detail}`);
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new Error("Specification did not parse to an object document");
+  }
+  const document2 = parsed;
+  if (!looksLikeIntrospection(document2)) {
+    throw new Error("Specification is not GraphQL introspection JSON (missing __schema)");
+  }
+  assertExpectedFormat("graphql-introspection-json", expected);
+  return {
+    kind: "graphql-introspection",
+    format: "graphql-introspection-json",
+    serialization: "json",
+    document: document2
+  };
+}
+function validateMcp(content, expected) {
+  const trimmed = trimContent(content);
+  if (!trimmed) throw new Error("Specification content is empty");
+  if (!looksLikeJson(trimmed)) {
+    throw new Error("Specification is not MCP JSON");
+  }
+  let parsed;
+  try {
+    parsed = JSON.parse(trimmed);
+  } catch (error2) {
+    const detail = error2 instanceof Error ? error2.message : String(error2);
+    throw new Error(`Specification is not parseable JSON: ${detail}`);
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new Error("Specification did not parse to an object document");
+  }
+  const document2 = parsed;
+  if (!looksLikeMcp(document2) || !hasUsableMcpServers(document2)) {
+    throw new Error(
+      "Specification is not an MCP server description (usable mcpServers object entries, or name plus object remotes/packages required)"
+    );
+  }
+  assertExpectedFormat("mcp-json", expected);
+  return { kind: "mcp", format: "mcp-json", serialization: "json", document: document2 };
+}
+function validateOpenApi(content, expected) {
+  const validated = parseAndValidateOpenApi(content);
+  const format = validated.isJson ? "openapi-json" : "openapi-yaml";
+  assertExpectedFormat(format, expected);
+  return {
+    kind: "openapi",
+    format,
+    serialization: validated.isJson ? "json" : "yaml",
+    version: validated.version,
+    document: validated.document
+  };
+}
+function parseAndValidateNativeSpec(content, expectedFormat) {
+  const trimmed = trimContent(content);
+  if (!trimmed) {
+    throw new Error("Specification content is empty");
+  }
+  if (expectedFormat === "openapi-json" || expectedFormat === "openapi-yaml") {
+    return validateOpenApi(content, expectedFormat);
+  }
+  if (expectedFormat === "asyncapi-json" || expectedFormat === "asyncapi-yaml") {
+    return validateAsyncApi(content, expectedFormat);
+  }
+  if (expectedFormat === "wsdl") {
+    return validateWsdl(content, expectedFormat);
+  }
+  if (expectedFormat === "protobuf") {
+    return validateProtobuf(content, expectedFormat);
+  }
+  if (expectedFormat === "graphql-sdl") {
+    return validateGraphqlSdl(content, expectedFormat);
+  }
+  if (expectedFormat === "graphql-introspection-json") {
+    return validateGraphqlIntrospection(content, expectedFormat);
+  }
+  if (expectedFormat === "mcp-json") {
+    return validateMcp(content, expectedFormat);
+  }
+  const detected = detectNativeFormat(content);
+  if (!detected) {
+    if (looksLikeXml(trimmed)) {
+      throw new Error("XML document is not a WSDL 1.1/2.0 root");
+    }
+    if (looksLikeJson(trimmed) || /:\s*\S/.test(trimmed)) {
+      try {
+        if (looksLikeJson(trimmed)) JSON.parse(trimmed);
+        else (0, import_yaml2.parse)(trimmed);
+      } catch (error2) {
+        const detail = error2 instanceof Error ? error2.message : String(error2);
+        throw new Error(`Specification is not parseable JSON or YAML: ${detail}`);
+      }
+    }
+    if (isProtobufSource(trimmed) && !hasProtobufServiceRpc(trimmed)) {
+      throw new Error(
+        "PROTO_NO_SERVICES: .proto defines no service methods; gRPC contract tests require at least one rpc"
+      );
+    }
+    if (looksLikeJson(trimmed)) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        if (parsed && typeof parsed === "object" && !Array.isArray(parsed) && looksLikeMcp(parsed)) {
+          throw new Error(
+            "Specification is not an MCP server description (usable mcpServers object entries, or name plus object remotes/packages required)"
+          );
+        }
+      } catch (error2) {
+        if (error2 instanceof Error && /MCP server description/i.test(error2.message)) throw error2;
+      }
+    }
+    if (/^\s*package\s+[\w.]+/m.test(trimmed) || /\bproto\b/i.test(trimmed)) {
+      throw new Error("Specification is not protobuf source (syntax, message, or service required)");
+    }
+    if (/^\s*#/.test(trimmed) || /\b(type|schema|query)\b/i.test(trimmed)) {
+      throw new Error("Specification is not GraphQL SDL (type or schema definition required)");
+    }
+    throw new Error("Specification is not a supported native format");
+  }
+  switch (detected.kind) {
+    case "openapi":
+      return validateOpenApi(content, expectedFormat);
+    case "asyncapi":
+      return validateAsyncApi(content, expectedFormat);
+    case "wsdl":
+      return validateWsdl(content, expectedFormat);
+    case "protobuf":
+      return validateProtobuf(content, expectedFormat);
+    case "graphql-sdl":
+      return validateGraphqlSdl(content, expectedFormat);
+    case "graphql-introspection":
+      return validateGraphqlIntrospection(content, expectedFormat);
+    case "mcp":
+      return validateMcp(content, expectedFormat);
+  }
+}
+function parseAndValidateNativeFamily(content, family) {
+  switch (family) {
+    case "openapi": {
+      const result = validateOpenApi(content);
+      return result;
+    }
+    case "asyncapi": {
+      const result = validateAsyncApi(content);
+      return result;
+    }
+    case "graphql": {
+      const detected = detectNativeFormat(content);
+      if (detected?.kind === "graphql-introspection") {
+        return validateGraphqlIntrospection(content);
+      }
+      return validateGraphqlSdl(content);
+    }
+    case "protobuf":
+      return validateProtobuf(content);
+    case "wsdl":
+      return validateWsdl(content);
+    case "mcp":
+      return validateMcp(content);
+  }
+}
+function isOpenApiFormat(format) {
+  return format === "openapi-json" || format === "openapi-yaml";
+}
+
+// src/lib/providers/source-document.ts
+var MAX_SOURCE_BYTES = 10 * 1024 * 1024;
+var MAX_BASE64_CHARS = Math.ceil(MAX_SOURCE_BYTES / 3) * 4 + 4;
+function assertUtf8Size(text) {
+  if (Buffer.byteLength(text) > MAX_SOURCE_BYTES) {
+    throw new Error("Configuration source file exceeds 10 MiB");
+  }
+}
+function decodeUtf8OpenApi(text) {
+  assertUtf8Size(text);
+  const parsed = parseAndValidateOpenApi(text);
+  return {
+    content: text,
+    format: parsed.isJson ? "openapi-json" : "openapi-yaml",
+    filename: parsed.isJson ? "index.json" : "index.yaml"
+  };
+}
+function decodeSourceDocument(contents) {
+  const text = decodeBoundedBase64Utf8(contents);
+  return decodeUtf8OpenApi(text);
+}
+function decodeUtf8NativeSpec(text, expectedFormat) {
+  assertUtf8Size(text);
+  const validated = parseAndValidateNativeSpec(text, expectedFormat);
+  return {
+    content: text,
+    format: validated.format,
+    filename: nativeFilename(validated.format)
+  };
+}
+function decodeUtf8NativeFamily(text, family) {
+  assertUtf8Size(text);
+  const validated = parseAndValidateNativeFamily(text, family);
+  return {
+    content: text,
+    format: validated.format,
+    filename: nativeFilename(validated.format)
+  };
+}
+function decodeNativeSourceDocument(contents, family) {
+  const text = decodeBoundedBase64Utf8(contents);
+  return family ? decodeUtf8NativeFamily(text, family) : decodeUtf8NativeSpec(text);
+}
+function decodeBoundedBase64Utf8(contents) {
+  if (!contents) throw new Error("Configuration source file has no contents");
+  if (contents.length > MAX_BASE64_CHARS || !/^[A-Za-z0-9+/]*={0,2}$/.test(contents)) {
+    throw new Error("Configuration source file is not valid base64 or exceeds 10 MiB");
+  }
+  const bytes = Buffer.from(contents, "base64");
+  const expected = contents.replace(/=+$/, "");
+  if (bytes.toString("base64").replace(/=+$/, "") !== expected) {
+    throw new Error("Configuration source file is not valid base64");
+  }
+  if (bytes.byteLength > MAX_SOURCE_BYTES) {
+    throw new Error("Configuration source file exceeds 10 MiB");
+  }
+  try {
+    return new import_node_util4.TextDecoder("utf-8", { fatal: true }).decode(bytes);
+  } catch (error2) {
+    throw new Error("Configuration source file is not valid UTF-8", { cause: error2 });
+  }
+}
+
+// src/lib/gcp/clients.ts
 function safeUrlForErrors(url) {
   return `${url.origin}${url.pathname}`;
 }
@@ -47482,6 +48063,54 @@ function parseApiHubAdditionalContentTypes(value) {
     if (type === "BOOSTED_SPEC_CONTENT" || type === "GATEWAY_OPEN_API_SPEC") seen.add(type);
   }
   return [...seen];
+}
+function documentationFileContents(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return void 0;
+  const contents = value.contents;
+  return typeof contents === "string" ? contents : void 0;
+}
+function parseApigeePortalDocumentationBody(body) {
+  const data = body.data && typeof body.data === "object" && !Array.isArray(body.data) ? body.data : body;
+  const arms = [
+    {
+      type: "oasDocumentation",
+      family: "openapi",
+      present: data.oasDocumentation !== void 0 && data.oasDocumentation !== null,
+      base64: documentationFileContents(
+        data.oasDocumentation && typeof data.oasDocumentation === "object" ? data.oasDocumentation.spec : void 0
+      )
+    },
+    {
+      type: "graphqlDocumentation",
+      family: "graphql",
+      present: data.graphqlDocumentation !== void 0 && data.graphqlDocumentation !== null,
+      base64: documentationFileContents(
+        data.graphqlDocumentation && typeof data.graphqlDocumentation === "object" ? data.graphqlDocumentation.schema : void 0
+      )
+    },
+    {
+      type: "asyncApiDocumentation",
+      family: "asyncapi",
+      present: data.asyncApiDocumentation !== void 0 && data.asyncApiDocumentation !== null,
+      base64: documentationFileContents(
+        data.asyncApiDocumentation && typeof data.asyncApiDocumentation === "object" ? data.asyncApiDocumentation.spec : void 0
+      )
+    }
+  ];
+  const present = arms.filter((arm2) => arm2.present);
+  if (present.length === 0) return { type: "missing" };
+  if (present.length > 1) return { type: "malformed" };
+  const arm = present[0];
+  if (arm.base64 === void 0) return { type: "malformed" };
+  try {
+    return {
+      type: arm.type,
+      family: arm.family,
+      contents: decodeBoundedBase64Utf8(arm.base64)
+    };
+  } catch {
+    return { type: "malformed" };
+  }
 }
 var CLOUD_PLATFORM_SCOPE = "https://www.googleapis.com/auth/cloud-platform";
 var MAX_LIST_PAGES = 100;
@@ -47856,12 +48485,11 @@ var GcpSdkClient = class {
     return this.collectPages(() => resourceUrl("https://apigee.googleapis.com/", `organizations/${org}/sites/${siteId}/apidocs`), "Apigee portal apidoc list", (body) => ({ items: body.data ?? [], nextPageToken: body.nextPageToken }));
   }
   async getApigeePortalDocumentation(org, siteId, apidocId) {
-    const body = await this.getJson(resourceUrl("https://apigee.googleapis.com/", `organizations/${org}/sites/${siteId}/apidocs/${apidocId}/documentation`), "Apigee portal documentation get");
-    const data = body.data ?? {};
-    for (const type of ["oasDocumentation", "graphqlDocumentation", "asyncapiDocumentation"]) {
-      if (data[type]) return { type, contents: type === "oasDocumentation" ? data[type].spec?.contents : void 0 };
-    }
-    return { type: "missing" };
+    const body = await this.getJson(
+      resourceUrl("https://apigee.googleapis.com/", `organizations/${org}/sites/${siteId}/apidocs/${apidocId}/documentation`),
+      "Apigee portal documentation get"
+    );
+    return parseApigeePortalDocumentationBody(body);
   }
   async probeVertexExtensions(projectId, location) {
     const url = resourceUrl(
@@ -48178,7 +48806,7 @@ var GcpSdkClient = class {
       throw new Error("Cloud Storage object metadata omitted CRC32C and MD5 checksums");
     }
     try {
-      return new import_node_util4.TextDecoder("utf-8", { fatal: true }).decode(bytes);
+      return new import_node_util5.TextDecoder("utf-8", { fatal: true }).decode(bytes);
     } catch {
       throw new Error("Cloud Storage object is not valid UTF-8");
     }
@@ -48344,6 +48972,26 @@ var GcpSdkClient = class {
       state: typeof item.state === "string" ? item.state : void 0
     };
   }
+  toGatewaySourceFile(value) {
+    const item = value ?? {};
+    return {
+      path: typeof item.path === "string" ? item.path : void 0,
+      contents: typeof item.contents === "string" ? item.contents : void 0
+    };
+  }
+  toGatewayOpenApiDocument(value) {
+    const item = value ?? {};
+    if (!item.document || typeof item.document !== "object" || Array.isArray(item.document)) {
+      return {};
+    }
+    return { document: this.toGatewaySourceFile(item.document) };
+  }
+  toGatewayGrpcService(value) {
+    const item = value ?? {};
+    const fileDescriptorSet = item.fileDescriptorSet && typeof item.fileDescriptorSet === "object" && !Array.isArray(item.fileDescriptorSet) ? this.toGatewaySourceFile(item.fileDescriptorSet) : void 0;
+    const source = Array.isArray(item.source) ? item.source.filter((entry) => entry && typeof entry === "object" && !Array.isArray(entry)).map((entry) => this.toGatewaySourceFile(entry)) : [];
+    return { fileDescriptorSet, source };
+  }
   toGatewayConfig(value) {
     const item = value ?? {};
     return {
@@ -48353,9 +49001,9 @@ var GcpSdkClient = class {
       state: typeof item.state === "string" ? item.state : void 0,
       createTime: typeof item.createTime === "string" ? item.createTime : void 0,
       updateTime: typeof item.updateTime === "string" ? item.updateTime : void 0,
-      openapiDocuments: Array.isArray(item.openapiDocuments) ? item.openapiDocuments : [],
-      grpcServices: Array.isArray(item.grpcServices) ? item.grpcServices : [],
-      managedServiceConfigs: Array.isArray(item.managedServiceConfigs) ? item.managedServiceConfigs : []
+      openapiDocuments: Array.isArray(item.openapiDocuments) ? item.openapiDocuments.map((entry) => this.toGatewayOpenApiDocument(entry)) : [],
+      grpcServices: Array.isArray(item.grpcServices) ? item.grpcServices.map((entry) => this.toGatewayGrpcService(entry)) : [],
+      managedServiceConfigs: Array.isArray(item.managedServiceConfigs) ? item.managedServiceConfigs.filter((entry) => entry && typeof entry === "object" && !Array.isArray(entry)).map((entry) => this.toGatewaySourceFile(entry)) : []
     };
   }
   toManagedService(value) {
@@ -48365,6 +49013,18 @@ var GcpSdkClient = class {
       producerProjectId: typeof item.producerProjectId === "string" ? item.producerProjectId : void 0
     };
   }
+  toEndpointSourceFile(value) {
+    const item = value ?? {};
+    const mapped = {
+      filePath: typeof item.filePath === "string" ? item.filePath : void 0,
+      fileContents: typeof item.fileContents === "string" ? item.fileContents : void 0,
+      fileType: typeof item.fileType === "string" ? item.fileType : void 0
+    };
+    if (typeof item["@type"] === "string") {
+      mapped["@type"] = item["@type"];
+    }
+    return mapped;
+  }
   toEndpointConfig(value) {
     const item = value ?? {};
     const sourceInfo = item.sourceInfo;
@@ -48373,7 +49033,9 @@ var GcpSdkClient = class {
       name: typeof item.name === "string" ? item.name : void 0,
       title: typeof item.title === "string" ? item.title : void 0,
       producerProjectId: typeof item.producerProjectId === "string" ? item.producerProjectId : void 0,
-      sourceInfo: sourceInfo && Array.isArray(sourceInfo.sourceFiles) ? { sourceFiles: sourceInfo.sourceFiles } : void 0
+      sourceInfo: sourceInfo && Array.isArray(sourceInfo.sourceFiles) ? {
+        sourceFiles: sourceInfo.sourceFiles.filter((entry) => entry && typeof entry === "object" && !Array.isArray(entry)).map((entry) => this.toEndpointSourceFile(entry))
+      } : void 0
     };
   }
 };
@@ -48828,8 +49490,8 @@ async function prepareTelemetryCredentials(options) {
 }
 
 // src/runtime.ts
-var import_promises6 = require("node:fs/promises");
-var import_node_path8 = __toESM(require("node:path"), 1);
+var import_promises8 = require("node:fs/promises");
+var import_node_path9 = __toESM(require("node:path"), 1);
 
 // src/lib/repo/context.ts
 function normalize2(value) {
@@ -48844,8 +49506,8 @@ function normalizeRepoUrl2(url) {
   const sshMatch = raw.match(/^git@([^:]+):(.+?)(?:\.git)?$/);
   if (sshMatch) {
     const host = sshMatch[1];
-    const path12 = sshMatch[2];
-    return `https://${host}/${path12}`;
+    const path13 = sshMatch[2];
+    return `https://${host}/${path13}`;
   }
   return raw.replace(/\.git$/, "");
 }
@@ -48899,72 +49561,6 @@ function detectRepoContext2(input, env = process.env) {
 // src/lib/repo/specs.ts
 var import_promises2 = require("node:fs/promises");
 var import_node_path3 = __toESM(require("node:path"), 1);
-
-// src/lib/spec/validate-openapi.ts
-var import_yaml = __toESM(require_dist3(), 1);
-var HTTP_OPERATIONS = /* @__PURE__ */ new Set(["get", "put", "post", "delete", "options", "head", "patch", "trace"]);
-function parseAndValidateOpenApi(content) {
-  const trimmed = content.trim();
-  if (!trimmed) {
-    throw new Error("Specification content is empty");
-  }
-  const isJson = trimmed.startsWith("{");
-  let parsed;
-  try {
-    parsed = isJson ? JSON.parse(trimmed) : (0, import_yaml.parse)(trimmed);
-  } catch (error2) {
-    const detail = error2 instanceof Error ? error2.message : String(error2);
-    throw new Error(`Specification is not parseable JSON or YAML: ${detail}`);
-  }
-  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-    throw new Error("Specification did not parse to an object document");
-  }
-  const document2 = parsed;
-  let version;
-  const swagger = typeof document2.swagger === "string" ? document2.swagger : "";
-  const openapi = typeof document2.openapi === "string" ? document2.openapi : "";
-  if (swagger.startsWith("2")) {
-    version = "swagger-2.0";
-  } else if (openapi.startsWith("3.1")) {
-    version = "openapi-3.1";
-  } else if (openapi.startsWith("3.")) {
-    version = "openapi-3.0";
-  }
-  if (!version) {
-    throw new Error("Specification is not Swagger 2.0 or OpenAPI 3.x");
-  }
-  const paths = document2.paths;
-  if (!paths || typeof paths !== "object" || Array.isArray(paths)) {
-    throw new Error("Specification has no paths object");
-  }
-  if (Object.keys(paths).length === 0) {
-    throw new Error("Specification has an empty paths object");
-  }
-  if (!hasRecognizedHttpOperation(paths)) {
-    throw new Error("Specification has no recognized HTTP operation under paths");
-  }
-  return { document: document2, version, isJson };
-}
-function isRecognizedHttpOperation(value) {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
-  const responses = value.responses;
-  if (!responses || typeof responses !== "object" || Array.isArray(responses)) return false;
-  return Object.keys(responses).length > 0;
-}
-function hasRecognizedHttpOperation(paths) {
-  for (const pathItem of Object.values(paths)) {
-    if (!pathItem || typeof pathItem !== "object" || Array.isArray(pathItem)) continue;
-    const item = pathItem;
-    for (const key of Object.keys(item)) {
-      if (HTTP_OPERATIONS.has(key.toLowerCase()) && isRecognizedHttpOperation(item[key])) {
-        return true;
-      }
-    }
-  }
-  return false;
-}
-
-// src/lib/repo/specs.ts
 var DIRECT_SPEC_CANDIDATES = [
   "openapi.yaml",
   "openapi.yml",
@@ -48978,6 +49574,18 @@ var DIRECT_SPEC_CANDIDATES = [
   "swagger.yaml",
   "swagger.yml",
   "swagger.json",
+  "asyncapi.yaml",
+  "asyncapi.yml",
+  "asyncapi.json",
+  "schema.graphql",
+  "schema.graphqls",
+  "schema.gql",
+  "introspection.json",
+  "service.proto",
+  "schema.proto",
+  "service.wsdl",
+  "api.wsdl",
+  "mcp.json",
   "spec/openapi.yaml",
   "spec/openapi.yml",
   "spec/openapi.json",
@@ -48986,7 +49594,14 @@ var DIRECT_SPEC_CANDIDATES = [
   "api/openapi.json",
   "docs/openapi.yaml",
   "docs/openapi.yml",
-  "docs/openapi.json"
+  "docs/openapi.json",
+  "spec/asyncapi.yaml",
+  "spec/asyncapi.yml",
+  "spec/asyncapi.json",
+  "spec/schema.graphql",
+  "spec/service.proto",
+  "spec/service.wsdl",
+  "spec/mcp.json"
 ];
 var COMMON_SCAN_DIRS = [
   ".",
@@ -49001,7 +49616,11 @@ var COMMON_SCAN_DIRS = [
   "contracts",
   "services",
   "packages",
-  "apps"
+  "apps",
+  "proto",
+  "protos",
+  "graphql",
+  "schemas"
 ];
 var SKIP_DIRS = /* @__PURE__ */ new Set([
   ".git",
@@ -49020,16 +49639,15 @@ var SKIP_DIRS = /* @__PURE__ */ new Set([
 ]);
 var MAX_SPEC_SCAN_FILES = 200;
 var MAX_SPEC_SCAN_DEPTH = 6;
-function isLikelyOpenApiDocument(content) {
+function isLikelyNativeSpec(content) {
+  const detected = detectNativeFormat(content);
+  if (!detected) return void 0;
   try {
-    parseAndValidateOpenApi(content);
-    return true;
+    const validated = parseAndValidateNativeSpec(content, detected.format);
+    return validated.format;
   } catch {
-    return false;
+    return void 0;
   }
-}
-function formatFor(candidate) {
-  return candidate.endsWith(".json") ? "openapi-json" : "openapi-yaml";
 }
 async function findExistingRepoSpecTyped(repoRoot) {
   const candidates = await collectSpecCandidates(repoRoot);
@@ -49042,32 +49660,54 @@ async function findExistingRepoSpecTyped(repoRoot) {
         continue;
       }
       const content = await (0, import_promises2.readFile)(fullPath, "utf8");
-      if (isLikelyOpenApiDocument(content)) {
-        valid.push({ path: candidate.replace(/\\/g, "/"), score: specCandidateScore(candidate) });
+      const format = isLikelyNativeSpec(content);
+      if (format) {
+        valid.push({
+          path: candidate.replace(/\\/g, "/"),
+          score: specCandidateScore(candidate),
+          format
+        });
       }
     } catch {
     }
   }
   if (valid.length === 0) return void 0;
+  valid.sort(
+    (left, right) => right.score - left.score || Number(isOpenApiFormat(right.format)) - Number(isOpenApiFormat(left.format)) || left.path.localeCompare(right.path)
+  );
   const top = valid[0];
   const tied = valid.filter((match) => match.score === top.score);
   if (tied.length > 1) {
+    const openApiTied = tied.filter((match) => isOpenApiFormat(match.format));
+    if (openApiTied.length === 1) {
+      const preferred = openApiTied[0];
+      return {
+        path: preferred.path,
+        format: preferred.format,
+        evidence: [`Resolved from repository specification ${preferred.path}`]
+      };
+    }
     return {
       path: top.path,
-      format: formatFor(top.path.toLowerCase()),
+      format: top.format,
       ambiguousPaths: tied.map((match) => match.path),
       evidence: [`Repository contains ${tied.length} equally ranked specification documents; refusing to guess between them`]
     };
   }
   return {
     path: top.path,
-    format: formatFor(top.path.toLowerCase()),
+    format: top.format,
     evidence: [`Resolved from repository specification ${top.path}`]
   };
 }
 function isSpecLikeFilename(filename) {
   const lower2 = filename.toLowerCase();
-  return /^(openapi|swagger|api|oas)(?:[.-]v?\d+(?:\.\d+)*)?\.(?:ya?ml|json)$/.test(lower2);
+  if (/^(openapi|swagger|api|oas)(?:[.-]v?\d+(?:\.\d+)*)?\.(?:ya?ml|json)$/.test(lower2)) return true;
+  if (/^(asyncapi)(?:[.-]v?\d+(?:\.\d+)*)?\.(?:ya?ml|json)$/.test(lower2)) return true;
+  if (/\.(?:wsdl|proto|graphql|graphqls|gql)$/.test(lower2)) return true;
+  if (/^(schema|service|api)\.(?:graphql|graphqls|gql|proto|wsdl)$/.test(lower2)) return true;
+  if (/^(introspection|mcp|server)\.json$/.test(lower2)) return true;
+  return false;
 }
 async function collectSpecCandidates(repoRoot) {
   const candidates = /* @__PURE__ */ new Set();
@@ -49092,7 +49732,9 @@ async function collectSpecCandidates(repoRoot) {
     }
     if (count.value >= MAX_SPEC_SCAN_FILES) break;
   }
-  return [...candidates].sort((left, right) => specCandidateScore(right) - specCandidateScore(left) || left.localeCompare(right));
+  return [...candidates].sort(
+    (left, right) => specCandidateScore(right) - specCandidateScore(left) || left.localeCompare(right)
+  );
 }
 async function walkSpecCandidates(repoRoot, current, count, depth = 0) {
   if (depth > MAX_SPEC_SCAN_DEPTH || count.value >= MAX_SPEC_SCAN_FILES) return [];
@@ -49121,8 +49763,12 @@ function specCandidateScore(candidate) {
   let score = 0;
   if (DIRECT_SPEC_CANDIDATES.includes(normalized)) score += 200;
   if (/^(openapi|swagger)(?:[.-]v?\d+(?:\.\d+)*)?\.(?:ya?ml|json)$/.test(basename4)) score += 90;
-  if (/^(api|oas)(?:[.-]v?\d+(?:\.\d+)*)?\.(?:ya?ml|json)$/.test(basename4)) score += 85;
-  if (/^(api|apis|spec|specs|contracts|reference|public)\//.test(normalized)) score += 20;
+  else if (/^(asyncapi)(?:[.-]v?\d+(?:\.\d+)*)?\.(?:ya?ml|json)$/.test(basename4)) score += 88;
+  else if (/^(api|oas)(?:[.-]v?\d+(?:\.\d+)*)?\.(?:ya?ml|json)$/.test(basename4)) score += 85;
+  else if (/^(schema|service|api)\.(?:graphql|graphqls|gql|proto|wsdl)$/.test(basename4)) score += 70;
+  else if (/\.(?:wsdl|proto|graphql|graphqls|gql)$/.test(basename4)) score += 70;
+  else if (/^(introspection|mcp|server)\.json$/.test(basename4)) score += 65;
+  if (/^(api|apis|spec|specs|contracts|reference|public|proto|protos|graphql|schemas)\//.test(normalized)) score += 20;
   if (/^(services|packages|apps)\/[^/]+\//.test(normalized)) score += 15;
   return score;
 }
@@ -49223,41 +49869,7 @@ async function collectRepoSignals(input) {
 // src/lib/repo/gcp-iac-scanner.ts
 var import_promises5 = require("node:fs/promises");
 var import_node_path6 = __toESM(require("node:path"), 1);
-var import_yaml2 = __toESM(require_dist3(), 1);
-
-// src/lib/providers/source-document.ts
-var import_node_util5 = require("node:util");
-var MAX_SOURCE_BYTES = 10 * 1024 * 1024;
-var MAX_BASE64_CHARS = Math.ceil(MAX_SOURCE_BYTES / 3) * 4 + 4;
-function decodeUtf8OpenApi(text) {
-  if (Buffer.byteLength(text) > MAX_SOURCE_BYTES) throw new Error("Configuration source file exceeds 10 MiB");
-  const parsed = parseAndValidateOpenApi(text);
-  return { content: `${text.replace(/(?:\r?\n)+$/, "")}
-`, format: parsed.isJson ? "openapi-json" : "openapi-yaml", filename: parsed.isJson ? "index.json" : "index.yaml" };
-}
-function decodeSourceDocument(contents) {
-  if (!contents) throw new Error("Configuration source file has no contents");
-  if (contents.length > MAX_BASE64_CHARS || !/^[A-Za-z0-9+/]*={0,2}$/.test(contents)) {
-    throw new Error("Configuration source file is not valid base64 or exceeds 10 MiB");
-  }
-  const bytes = Buffer.from(contents, "base64");
-  const expected = contents.replace(/=+$/, "");
-  if (bytes.toString("base64").replace(/=+$/, "") !== expected) {
-    throw new Error("Configuration source file is not valid base64");
-  }
-  if (bytes.byteLength > MAX_SOURCE_BYTES) {
-    throw new Error("Configuration source file exceeds 10 MiB");
-  }
-  let text;
-  try {
-    text = new import_node_util5.TextDecoder("utf-8", { fatal: true }).decode(bytes);
-  } catch (error2) {
-    throw new Error("Configuration source file is not valid UTF-8", { cause: error2 });
-  }
-  return decodeUtf8OpenApi(text);
-}
-
-// src/lib/repo/gcp-iac-scanner.ts
+var import_yaml3 = __toESM(require_dist3(), 1);
 var MAX_SCAN_FILES = 200;
 var MAX_SCAN_DEPTH = 6;
 var MAX_REFERENCED_OPENAPI_BYTES = 10 * 1024 * 1024;
@@ -49317,9 +49929,9 @@ async function scanGCPIac(repoRoot, outputDir) {
   };
 }
 async function readUtf8WithinByteCeiling(absolutePath, maxBytes) {
-  const stat5 = await (0, import_promises5.lstat)(absolutePath).catch(() => void 0);
-  if (!stat5 || !stat5.isFile() || stat5.isSymbolicLink()) return void 0;
-  if (stat5.size > maxBytes) return void 0;
+  const stat6 = await (0, import_promises5.lstat)(absolutePath).catch(() => void 0);
+  if (!stat6 || !stat6.isFile() || stat6.isSymbolicLink()) return void 0;
+  if (stat6.size > maxBytes) return void 0;
   return (0, import_promises5.readFile)(absolutePath, "utf8").catch(() => void 0);
 }
 async function collectIacFiles(root, current, outputRoot, depth = 0, count = { value: 0 }) {
@@ -49331,13 +49943,13 @@ async function collectIacFiles(root, current, outputRoot, depth = 0, count = { v
     if (SKIP_DIRS3.has(entry)) continue;
     const fullPath = import_node_path6.default.join(current, entry);
     if (fullPath === outputRoot || fullPath.startsWith(`${outputRoot}${import_node_path6.default.sep}`)) continue;
-    const stat5 = await (0, import_promises5.lstat)(fullPath).catch(() => void 0);
-    if (!stat5 || stat5.isSymbolicLink()) continue;
-    if (stat5.isDirectory()) {
+    const stat6 = await (0, import_promises5.lstat)(fullPath).catch(() => void 0);
+    if (!stat6 || stat6.isSymbolicLink()) continue;
+    if (stat6.isDirectory()) {
       results.push(...await collectIacFiles(root, fullPath, outputRoot, depth + 1, count));
       continue;
     }
-    if (!stat5.isFile() || !CANDIDATE_EXTENSIONS.has(import_node_path6.default.extname(entry).toLowerCase())) continue;
+    if (!stat6.isFile() || !CANDIDATE_EXTENSIONS.has(import_node_path6.default.extname(entry).toLowerCase())) continue;
     count.value += 1;
     results.push(import_node_path6.default.relative(root, fullPath).split(import_node_path6.default.sep).join("/"));
   }
@@ -49574,7 +50186,7 @@ function addInlineDocument(terraformPath, block, content, candidates, fingerprin
 function extractPulumiYamlDocuments(relativePath, content, candidates, fingerprint) {
   let documents;
   try {
-    documents = (0, import_yaml2.parseAllDocuments)(content, { merge: false, prettyErrors: false });
+    documents = (0, import_yaml3.parseAllDocuments)(content, { merge: false, prettyErrors: false });
   } catch {
     return;
   }
@@ -49587,25 +50199,25 @@ function extractPulumiYamlDocuments(relativePath, content, candidates, fingerpri
   const document2 = nonEmpty[0];
   if (document2.errors.length > 0) return;
   const root = document2.contents;
-  if (!(0, import_yaml2.isMap)(root) || mapHasMergeKey(root) || mapHasFnKey(root)) return;
+  if (!(0, import_yaml3.isMap)(root) || mapHasMergeKey(root) || mapHasFnKey(root)) return;
   if (!isYamlRuntime(mapGet(root, "runtime"))) return;
   const resourcesNode = mapGet(root, "resources");
-  if (!(0, import_yaml2.isMap)(resourcesNode) || mapHasMergeKey(resourcesNode) || mapHasFnKey(resourcesNode)) return;
+  if (!(0, import_yaml3.isMap)(resourcesNode) || mapHasMergeKey(resourcesNode) || mapHasFnKey(resourcesNode)) return;
   for (const item of resourcesNode.items) {
-    if (!(0, import_yaml2.isPair)(item)) continue;
+    if (!(0, import_yaml3.isPair)(item)) continue;
     const resourceName = scalarString(item.key);
-    if (!resourceName || !(0, import_yaml2.isMap)(item.value) || mapHasMergeKey(item.value) || mapHasFnKey(item.value)) continue;
+    if (!resourceName || !(0, import_yaml3.isMap)(item.value) || mapHasMergeKey(item.value) || mapHasFnKey(item.value)) continue;
     const resourceType = scalarString(mapGet(item.value, "type"));
     if (!resourceType || !PULUMI_API_CONFIG_TYPES.has(resourceType)) continue;
     const properties = mapGet(item.value, "properties");
-    if (!(0, import_yaml2.isMap)(properties) || mapHasMergeKey(properties) || mapHasFnKey(properties)) continue;
+    if (!(0, import_yaml3.isMap)(properties) || mapHasMergeKey(properties) || mapHasFnKey(properties)) continue;
     const project = literalFingerprintString(mapGet(properties, "project"));
     if (project) fingerprint.projectIds.push(project);
     const api = literalFingerprintString(mapGet(properties, "api")) ?? literalFingerprintString(mapGet(properties, "apiId"));
     if (api) fingerprint.serviceNames.push(api);
     fingerprint.serviceNames.push(resourceName);
     const openapiDocuments = mapGet(properties, "openapiDocuments");
-    if (!(0, import_yaml2.isSeq)(openapiDocuments)) continue;
+    if (!(0, import_yaml3.isSeq)(openapiDocuments)) continue;
     if (seqHasFnOrMerge(openapiDocuments)) continue;
     openapiDocuments.items.forEach((entry, index) => {
       addPulumiOpenApiDocument(
@@ -49621,19 +50233,19 @@ function extractPulumiYamlDocuments(relativePath, content, candidates, fingerpri
   }
 }
 function addPulumiOpenApiDocument(relativePath, resourceType, resourceName, index, entry, candidates, fingerprint) {
-  if (!(0, import_yaml2.isMap)(entry) || mapHasMergeKey(entry) || mapHasFnKey(entry)) return;
+  if (!(0, import_yaml3.isMap)(entry) || mapHasMergeKey(entry) || mapHasFnKey(entry)) return;
   const documentNode = mapGet(entry, "document");
-  if (!(0, import_yaml2.isMap)(documentNode) || mapHasMergeKey(documentNode) || mapHasFnKey(documentNode)) return;
+  if (!(0, import_yaml3.isMap)(documentNode) || mapHasMergeKey(documentNode) || mapHasFnKey(documentNode)) return;
   const pathNode = mapGet(documentNode, "path");
   const contentsNode = mapGet(documentNode, "contents");
   if (contentsNode == null) return;
-  if ((0, import_yaml2.isAlias)(contentsNode) || (0, import_yaml2.isAlias)(pathNode)) {
+  if ((0, import_yaml3.isAlias)(contentsNode) || (0, import_yaml3.isAlias)(pathNode)) {
     fingerprint.evidence.push(
       `Pulumi ${resourceType}.${resourceName} openapiDocuments/${index} uses YAML alias; ignored`
     );
     return;
   }
-  if (!(0, import_yaml2.isScalar)(contentsNode) || typeof contentsNode.value !== "string") {
+  if (!(0, import_yaml3.isScalar)(contentsNode) || typeof contentsNode.value !== "string") {
     fingerprint.evidence.push(
       `Pulumi ${resourceType}.${resourceName} openapiDocuments/${index} contents is not a literal scalar; ignored`
     );
@@ -49680,8 +50292,8 @@ function addPulumiOpenApiDocument(relativePath, resourceType, resourceName, inde
   }
 }
 function isYamlRuntime(node) {
-  if ((0, import_yaml2.isScalar)(node) && node.value === "yaml") return true;
-  if (!(0, import_yaml2.isMap)(node) || mapHasMergeKey(node) || mapHasFnKey(node)) return false;
+  if ((0, import_yaml3.isScalar)(node) && node.value === "yaml") return true;
+  if (!(0, import_yaml3.isMap)(node) || mapHasMergeKey(node) || mapHasFnKey(node)) return false;
   return scalarString(mapGet(node, "name")) === "yaml";
 }
 function literalFingerprintString(node) {
@@ -49690,28 +50302,28 @@ function literalFingerprintString(node) {
   return value;
 }
 function scalarString(node) {
-  if ((0, import_yaml2.isAlias)(node) || !(0, import_yaml2.isScalar)(node) || typeof node.value !== "string") return void 0;
+  if ((0, import_yaml3.isAlias)(node) || !(0, import_yaml3.isScalar)(node) || typeof node.value !== "string") return void 0;
   return node.value;
 }
 function mapGet(map, key) {
   for (const item of map.items) {
-    if (!(0, import_yaml2.isPair)(item)) continue;
+    if (!(0, import_yaml3.isPair)(item)) continue;
     if (scalarString(item.key) === key) return item.value;
   }
   return void 0;
 }
 function mapHasMergeKey(map) {
-  return map.items.some((item) => (0, import_yaml2.isPair)(item) && scalarString(item.key) === "<<");
+  return map.items.some((item) => (0, import_yaml3.isPair)(item) && scalarString(item.key) === "<<");
 }
 function mapHasFnKey(map) {
   return map.items.some((item) => {
-    if (!(0, import_yaml2.isPair)(item)) return false;
+    if (!(0, import_yaml3.isPair)(item)) return false;
     const key = scalarString(item.key);
     return Boolean(key?.startsWith("fn::"));
   });
 }
 function seqHasFnOrMerge(seq) {
-  return seq.items.some((item) => (0, import_yaml2.isMap)(item) && (mapHasFnKey(item) || mapHasMergeKey(item)));
+  return seq.items.some((item) => (0, import_yaml3.isMap)(item) && (mapHasFnKey(item) || mapHasMergeKey(item)));
 }
 
 // src/lib/resolve/source-selector.ts
@@ -49976,11 +50588,213 @@ async function runNarrowingPipeline(context, candidates) {
   return void 0;
 }
 
+// src/lib/spec/definition-file-inventory.ts
+var import_node_crypto3 = require("node:crypto");
+var import_node_fs3 = require("node:fs");
+var import_promises6 = require("node:fs/promises");
+var import_node_path7 = __toESM(require("node:path"), 1);
+var import_promises7 = require("node:stream/promises");
+var import_node_stream3 = require("node:stream");
+function sha256HexOfString(content) {
+  return (0, import_node_crypto3.createHash)("sha256").update(content, "utf8").digest("hex");
+}
+function caseFoldPathKey(path13) {
+  return path13.normalize("NFC").toLocaleLowerCase("en-US");
+}
+function assertSafeRelativePath(value, label) {
+  const normalized = value.trim().replace(/\\/g, "/").normalize("NFC");
+  if (!normalized || normalized.startsWith("/") || /^[A-Za-z]:\//.test(normalized) || normalized.includes("\0")) {
+    throw new Error(`${label} path is unsafe: ${value}`);
+  }
+  const parts = normalized.split("/");
+  if (parts.some((part) => part === "" || part === "." || part === "..")) {
+    throw new Error(`${label} path is unsafe: ${value}`);
+  }
+  return parts.join("/");
+}
+function assertUniquePathIdentities(paths, label) {
+  const seen = /* @__PURE__ */ new Map();
+  for (const pathKey of paths) {
+    const identity = caseFoldPathKey(pathKey);
+    const prior = seen.get(identity);
+    if (prior !== void 0) {
+      throw new Error(`${label} paths collide under NFC/case-fold (${prior} vs ${pathKey}); refusing to merge`);
+    }
+    seen.set(identity, pathKey);
+  }
+}
+function buildDefinitionFileInventory(args) {
+  const root = assertSafeRelativePath(args.root, "inventory root");
+  const files = args.members.map((member) => {
+    const memberPath = assertSafeRelativePath(member.path, "inventory member");
+    const bytes = Buffer.byteLength(member.content, "utf8");
+    return {
+      path: memberPath,
+      role: member.role,
+      bytes,
+      sha256: sha256HexOfString(member.content)
+    };
+  }).sort((a, b) => a.path.localeCompare(b.path));
+  assertUniquePathIdentities(
+    files.map((file) => file.path),
+    "Inventory member"
+  );
+  const roots = files.filter((file) => file.role === "root");
+  if (roots.length !== 1) {
+    throw new Error(`Inventory must contain exactly one root, found ${roots.length}`);
+  }
+  if (roots[0].path !== root) {
+    throw new Error(`Inventory root path mismatch: expected ${root}, found ${roots[0].path}`);
+  }
+  return {
+    schemaVersion: 1,
+    root,
+    format: args.format,
+    completeness: args.completeness,
+    provenance: { kind: "provider", provider: "gcp" },
+    files
+  };
+}
+function serializeDefinitionFileInventory(inventory) {
+  return JSON.stringify(inventory);
+}
+async function validateStagedMembers(stageDirAbs, members) {
+  for (const member of members) {
+    const relativePath = assertSafeRelativePath(member.relativePath, "staged member");
+    const absolute = import_node_path7.default.join(stageDirAbs, ...relativePath.split("/"));
+    const onDisk = await (0, import_promises6.readFile)(absolute);
+    const expected = Buffer.from(member.content, "utf8");
+    if (!onDisk.equals(expected)) {
+      throw new Error(`Staged member byte mismatch at ${relativePath}`);
+    }
+    if ((0, import_node_crypto3.createHash)("sha256").update(onDisk).digest("hex") !== sha256HexOfString(member.content)) {
+      throw new Error(`Staged member hash mismatch at ${relativePath}`);
+    }
+  }
+}
+async function fsyncFile(absolutePath) {
+  const handle = await (0, import_promises6.open)(absolutePath, "r+");
+  try {
+    await handle.sync();
+  } finally {
+    await handle.close();
+  }
+}
+async function writeExactFile(absolutePath, content) {
+  await (0, import_promises6.mkdir)(import_node_path7.default.dirname(absolutePath), { recursive: true });
+  const bytes = Buffer.from(content, "utf8");
+  await (0, import_promises7.pipeline)(import_node_stream3.Readable.from(bytes), (0, import_node_fs3.createWriteStream)(absolutePath));
+  await fsyncFile(absolutePath);
+}
+async function walkFiles(rootAbs) {
+  const out = [];
+  async function walk(currentAbs, relative2) {
+    const entries = await (0, import_promises6.readdir)(currentAbs, { withFileTypes: true });
+    for (const entry of entries) {
+      const childRel = relative2 ? `${relative2}/${entry.name}` : entry.name;
+      const childAbs = import_node_path7.default.join(currentAbs, entry.name);
+      if (entry.isDirectory()) {
+        await walk(childAbs, childRel);
+      } else if (entry.isFile()) {
+        out.push(childRel.split(import_node_path7.default.sep).join("/"));
+      }
+    }
+  }
+  await walk(rootAbs, "");
+  return out;
+}
+async function copyPreservedSidecars(canonicalAbs, stageAbs, ownedRelativePaths) {
+  let priorFiles;
+  try {
+    priorFiles = await walkFiles(canonicalAbs);
+  } catch {
+    return;
+  }
+  for (const relative2 of priorFiles) {
+    if (ownedRelativePaths.has(relative2)) continue;
+    if (relative2.endsWith(".proto")) continue;
+    const from = import_node_path7.default.join(canonicalAbs, ...relative2.split("/"));
+    const to = import_node_path7.default.join(stageAbs, ...relative2.split("/"));
+    await (0, import_promises6.mkdir)(import_node_path7.default.dirname(to), { recursive: true });
+    await (0, import_promises6.copyFile)(from, to);
+  }
+}
+async function pathExists(absolutePath) {
+  try {
+    await (0, import_promises6.stat)(absolutePath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+async function stageAndSwapServiceDirectory(options) {
+  const serviceDirRelative = assertSafeRelativePath(options.serviceDirRelative, "service directory");
+  if (options.members.length === 0) {
+    throw new Error("Refusing to stage an empty definition member set");
+  }
+  const owned = options.members.map((member) => ({
+    relativePath: assertSafeRelativePath(member.relativePath, "owned member"),
+    content: member.content
+  }));
+  assertUniquePathIdentities(
+    owned.map((member) => member.relativePath),
+    "Owned member"
+  );
+  const ownedSet = new Set(owned.map((member) => member.relativePath));
+  const runId = options.runId ?? (0, import_node_crypto3.randomBytes)(8).toString("hex");
+  const canonicalAbs = import_node_path7.default.resolve(options.repoRoot, ...serviceDirRelative.split("/"));
+  const stageAbs = `${canonicalAbs}.stage-${runId}`;
+  const backupAbs = `${canonicalAbs}.backup-${runId}`;
+  await (0, import_promises6.rm)(stageAbs, { recursive: true, force: true });
+  await (0, import_promises6.rm)(backupAbs, { recursive: true, force: true });
+  await (0, import_promises6.mkdir)(stageAbs, { recursive: true });
+  let swappedToCanonical = false;
+  try {
+    for (let index = 0; index < owned.length; index += 1) {
+      const member = owned[index];
+      await options.beforeWriteMember?.(index, member.relativePath);
+      const absolute = import_node_path7.default.join(stageAbs, ...member.relativePath.split("/"));
+      await writeExactFile(absolute, member.content);
+    }
+    if (await pathExists(canonicalAbs)) {
+      await copyPreservedSidecars(canonicalAbs, stageAbs, ownedSet);
+    }
+    await validateStagedMembers(stageAbs, owned);
+    const hadCanonical = await pathExists(canonicalAbs);
+    if (hadCanonical) {
+      await (0, import_promises6.rename)(canonicalAbs, backupAbs);
+    }
+    try {
+      await (0, import_promises6.rename)(stageAbs, canonicalAbs);
+      swappedToCanonical = true;
+    } catch (error2) {
+      if (hadCanonical && await pathExists(backupAbs)) {
+        await (0, import_promises6.rename)(backupAbs, canonicalAbs);
+      }
+      throw error2;
+    }
+    await options.afterCanonicalSwap?.();
+    await validateStagedMembers(canonicalAbs, owned);
+    if (await pathExists(backupAbs)) {
+      await (0, import_promises6.rm)(backupAbs, { recursive: true, force: true });
+    }
+  } catch (error2) {
+    await (0, import_promises6.rm)(stageAbs, { recursive: true, force: true });
+    if (swappedToCanonical) {
+      await (0, import_promises6.rm)(canonicalAbs, { recursive: true, force: true });
+      if (await pathExists(backupAbs)) {
+        await (0, import_promises6.rename)(backupAbs, canonicalAbs);
+      }
+    }
+    throw error2;
+  }
+}
+
 // src/lib/spec/oas-derivation.ts
-var import_yaml3 = __toESM(require_dist3(), 1);
+var import_yaml4 = __toESM(require_dist3(), 1);
 function parseDocument(content) {
   try {
-    const parsed = content.trim().startsWith("{") ? JSON.parse(content) : (0, import_yaml3.parse)(content);
+    const parsed = content.trim().startsWith("{") ? JSON.parse(content) : (0, import_yaml4.parse)(content);
     return parsed && typeof parsed === "object" ? parsed : void 0;
   } catch {
     return void 0;
@@ -50040,6 +50854,340 @@ function swaggerToOpenApi(parsed, title) {
   return document2;
 }
 
+// src/lib/spec/proto-source-set.ts
+var PROTO_SOURCE_SET_LIMITS = {
+  maxFiles: 101,
+  maxDepth: 20,
+  maxBytesPerFile: 25 * 1024 * 1024,
+  maxTotalBytes: 25 * 1024 * 1024
+};
+function resolveProtoSourceSetLimits(overrides) {
+  const clamp = (value, ceiling, floor) => {
+    const raw = value === void 0 ? ceiling : Math.floor(value);
+    if (!Number.isFinite(raw)) return ceiling;
+    return Math.min(Math.max(raw, floor), ceiling);
+  };
+  return {
+    maxFiles: clamp(overrides?.maxFiles, PROTO_SOURCE_SET_LIMITS.maxFiles, 1),
+    maxDepth: clamp(overrides?.maxDepth, PROTO_SOURCE_SET_LIMITS.maxDepth, 0),
+    maxBytesPerFile: clamp(overrides?.maxBytesPerFile, PROTO_SOURCE_SET_LIMITS.maxBytesPerFile, 1),
+    maxTotalBytes: clamp(overrides?.maxTotalBytes, PROTO_SOURCE_SET_LIMITS.maxTotalBytes, 1)
+  };
+}
+var WELL_KNOWN_IMPORT_PREFIXES = [
+  "google/protobuf/",
+  "google/api/",
+  "google/rpc/",
+  "google/type/",
+  "google/longrunning/"
+];
+function isWellKnownImport(value) {
+  return WELL_KNOWN_IMPORT_PREFIXES.some((prefix) => value.startsWith(prefix));
+}
+function extractProtoImports(content) {
+  const imports = [];
+  const pattern = /^\s*import\s+(?:public\s+|weak\s+)?["']([^"']+)["']\s*;/gm;
+  for (const match of content.matchAll(pattern)) {
+    const value = match[1]?.trim();
+    if (value) imports.push(value);
+  }
+  return imports;
+}
+function caseFoldPathKey2(path13) {
+  return path13.normalize("NFC").toLocaleLowerCase("en-US");
+}
+function normalizeProtoSourcePath(path13) {
+  if (!path13 || !path13.trim()) return void 0;
+  const normalized = path13.trim().replace(/\\/g, "/").normalize("NFC");
+  if (normalized.startsWith("/") || /^[A-Za-z]:\//.test(normalized) || normalized.includes("\0")) {
+    return void 0;
+  }
+  const parts = normalized.split("/");
+  if (parts.some((part) => part === "" || part === "." || part === "..")) {
+    return void 0;
+  }
+  return parts.join("/");
+}
+function dirnameOfNormalized(normalizedPath) {
+  const idx = normalizedPath.lastIndexOf("/");
+  return idx === -1 ? "" : normalizedPath.slice(0, idx);
+}
+function resolveImportToReturnedSource(imp, importerNormalizedPath, byNormalized) {
+  const asRootKey = normalizeProtoSourcePath(imp);
+  if (asRootKey) {
+    const exact = byNormalized.get(asRootKey);
+    if (exact) return exact;
+  }
+  const importerDir = dirnameOfNormalized(importerNormalizedPath);
+  const joined = importerDir ? `${importerDir}/${imp}` : imp;
+  const relativeKey = normalizeProtoSourcePath(joined);
+  if (relativeKey && relativeKey !== asRootKey) {
+    const relative2 = byNormalized.get(relativeKey);
+    if (relative2) return relative2;
+  }
+  return void 0;
+}
+function classifyProtobufContent(content) {
+  try {
+    parseAndValidateNativeFamily(content, "protobuf");
+    return "service";
+  } catch (error2) {
+    const detail = error2 instanceof Error ? error2.message : String(error2);
+    if (/PROTO_NO_SERVICES/i.test(detail)) return "message-only";
+    return "invalid";
+  }
+}
+function unsupportedLimit(evidence, detail) {
+  return {
+    status: "unsupported",
+    authority: "unsupported-format",
+    evidence: [...evidence, detail]
+  };
+}
+function collectClosure(root, byNormalized, limits) {
+  if (root.byteLength > limits.maxBytesPerFile) {
+    return {
+      limitExceeded: `Protobuf source ${root.normalizedPath} exceeds maxBytesPerFile=${limits.maxBytesPerFile}`
+    };
+  }
+  if (root.byteLength > limits.maxTotalBytes) {
+    return {
+      limitExceeded: `Protobuf source set decoded UTF-8 bytes exceed maxTotalBytes=${limits.maxTotalBytes}`
+    };
+  }
+  const ordered = [
+    {
+      content: root.content,
+      originalPath: root.originalPath,
+      normalizedPath: root.normalizedPath,
+      role: "root"
+    }
+  ];
+  const seen = /* @__PURE__ */ new Set([root.normalizedPath]);
+  let totalBytes = root.byteLength;
+  const queue = root.imports.map(
+    (imp) => ({
+      imp,
+      importerPath: root.normalizedPath,
+      depth: 1
+    })
+  );
+  while (queue.length > 0) {
+    const { imp, importerPath, depth } = queue.shift();
+    if (isWellKnownImport(imp)) continue;
+    const matched = resolveImportToReturnedSource(imp, importerPath, byNormalized);
+    if (!matched) {
+      return { missing: imp };
+    }
+    if (seen.has(matched.normalizedPath)) continue;
+    if (depth > limits.maxDepth) {
+      return {
+        limitExceeded: `Protobuf import closure depth exceeded maxDepth=${limits.maxDepth} at ${matched.normalizedPath}`
+      };
+    }
+    if (seen.size >= limits.maxFiles) {
+      return {
+        limitExceeded: `Protobuf import closure exceeds maxFiles=${limits.maxFiles} (including root) at ${matched.normalizedPath}`
+      };
+    }
+    if (matched.byteLength > limits.maxBytesPerFile || totalBytes + matched.byteLength > limits.maxTotalBytes) {
+      return {
+        limitExceeded: `Protobuf import closure decoded UTF-8 bytes exceed maxTotalBytes=${limits.maxTotalBytes} (or maxBytesPerFile=${limits.maxBytesPerFile}) at ${matched.normalizedPath}`
+      };
+    }
+    seen.add(matched.normalizedPath);
+    totalBytes += matched.byteLength;
+    ordered.push({
+      content: matched.content,
+      originalPath: matched.originalPath,
+      normalizedPath: matched.normalizedPath,
+      role: "dependency"
+    });
+    for (const nextImp of matched.imports) {
+      queue.push({
+        imp: nextImp,
+        importerPath: matched.normalizedPath,
+        depth: depth + 1
+      });
+    }
+  }
+  const rootMember = ordered.find((member) => member.role === "root");
+  const deps = ordered.filter((member) => member.role === "dependency").sort((a, b) => a.normalizedPath.localeCompare(b.normalizedPath));
+  return { members: [rootMember, ...deps] };
+}
+function resolveProtoSourceSet(inputs, options = {}) {
+  const evidence = [...options.evidencePrefix ?? []];
+  const limits = resolveProtoSourceSetLimits(options.limits);
+  if (inputs.length === 0) {
+    if (options.descriptorOnly) {
+      return {
+        status: "unsupported",
+        authority: "unsupported-format",
+        evidence: [
+          ...evidence,
+          "Protobuf descriptor set is present without .proto sources; descriptor-to-contract conversion is not supported"
+        ]
+      };
+    }
+    return {
+      status: "unsupported",
+      authority: "metadata-only",
+      evidence: [...evidence, "No protobuf source files were returned"]
+    };
+  }
+  if (inputs.length > limits.maxFiles) {
+    return unsupportedLimit(
+      evidence,
+      `Protobuf source set has ${inputs.length} files which exceeds maxFiles=${limits.maxFiles} (including root); refusing unbounded decode`
+    );
+  }
+  const decoded = [];
+  const identitySeen = /* @__PURE__ */ new Map();
+  let totalDecodedBytes = 0;
+  for (const input of inputs) {
+    const normalizedPath = normalizeProtoSourcePath(input.path);
+    if (!normalizedPath) {
+      return {
+        status: "unsupported",
+        authority: "unsupported-format",
+        evidence: [
+          ...evidence,
+          `Protobuf source path is missing or unsafe (${input.path ?? "<empty>"}); refusing to guess an entrypoint`
+        ]
+      };
+    }
+    const identityKey = caseFoldPathKey2(normalizedPath);
+    const prior = identitySeen.get(identityKey);
+    if (prior) {
+      return {
+        status: "unsupported",
+        authority: "unsupported-format",
+        evidence: [
+          ...evidence,
+          `Protobuf source paths collide at ${normalizedPath} (identity ${prior}); refusing to merge or guess`
+        ]
+      };
+    }
+    identitySeen.set(identityKey, normalizedPath);
+    let content;
+    try {
+      content = decodeBoundedBase64Utf8(input.contentsBase64);
+    } catch (error2) {
+      const detail = error2 instanceof Error ? error2.message : String(error2);
+      return {
+        status: "unsupported",
+        authority: "metadata-only",
+        evidence: [...evidence, `Protobuf source ${normalizedPath} decode failed: ${detail}`]
+      };
+    }
+    const byteLength = Buffer.byteLength(content, "utf8");
+    if (byteLength > limits.maxBytesPerFile) {
+      return unsupportedLimit(
+        evidence,
+        `Protobuf source ${normalizedPath} exceeds maxBytesPerFile=${limits.maxBytesPerFile}`
+      );
+    }
+    if (totalDecodedBytes + byteLength > limits.maxTotalBytes) {
+      return unsupportedLimit(
+        evidence,
+        `Protobuf source set decoded UTF-8 bytes exceed maxTotalBytes=${limits.maxTotalBytes}`
+      );
+    }
+    totalDecodedBytes += byteLength;
+    const kind = classifyProtobufContent(content);
+    if (kind === "invalid") {
+      return {
+        status: "unsupported",
+        authority: "unsupported-format",
+        evidence: [
+          ...evidence,
+          `Returned source ${normalizedPath} is not valid service/rpc-bearing protobuf`
+        ]
+      };
+    }
+    decoded.push({
+      originalPath: input.path ?? normalizedPath,
+      normalizedPath,
+      content,
+      serviceBearing: kind === "service",
+      imports: extractProtoImports(content),
+      byteLength
+    });
+  }
+  decoded.sort((a, b) => a.normalizedPath.localeCompare(b.normalizedPath));
+  const serviceBearing = decoded.filter((entry) => entry.serviceBearing);
+  const byNormalized = new Map(decoded.map((entry) => [entry.normalizedPath, entry]));
+  if (serviceBearing.length === 0) {
+    if (options.descriptorOnly) {
+      return {
+        status: "unsupported",
+        authority: "unsupported-format",
+        evidence: [
+          ...evidence,
+          "Protobuf descriptor set / message-only sources lack a service/rpc entrypoint; not converted"
+        ]
+      };
+    }
+    return {
+      status: "unsupported",
+      authority: "unsupported-format",
+      evidence: [
+        ...evidence,
+        "PROTO_NO_SERVICES: protobuf source set defines no service methods; gRPC contract tests require at least one rpc"
+      ]
+    };
+  }
+  if (serviceBearing.length > 1) {
+    return {
+      status: "unsupported",
+      authority: "unsupported-format",
+      evidence: [
+        ...evidence,
+        `Protobuf source set has ${serviceBearing.length} service/rpc-bearing entrypoints (${serviceBearing.map((entry) => entry.normalizedPath).join(", ")}); refusing to merge or guess`
+      ]
+    };
+  }
+  const primary = serviceBearing[0];
+  const closure = collectClosure(primary, byNormalized, limits);
+  if ("missing" in closure) {
+    return {
+      status: "unsupported",
+      authority: "unsupported-format",
+      evidence: [
+        ...evidence,
+        `Protobuf entrypoint ${primary.normalizedPath} has unresolved local import ${closure.missing}`
+      ]
+    };
+  }
+  if ("limitExceeded" in closure) {
+    return unsupportedLimit(evidence, closure.limitExceeded);
+  }
+  const closurePaths = new Set(closure.members.map((member) => member.normalizedPath));
+  const ignored = decoded.filter((entry) => !closurePaths.has(entry.normalizedPath)).map((entry) => entry.normalizedPath);
+  if (ignored.length > 0) {
+    evidence.push(
+      `Selected sole service/rpc-bearing protobuf entrypoint ${primary.normalizedPath}; ignored non-imported sources (${ignored.join(", ")})`
+    );
+  } else if (closure.members.length > 1) {
+    evidence.push(
+      `Selected sole service/rpc-bearing protobuf entrypoint ${primary.normalizedPath} with ${closure.members.length - 1} provider dependency(ies)`
+    );
+  } else {
+    evidence.push(`Selected sole service/rpc-bearing protobuf entrypoint ${primary.normalizedPath}`);
+  }
+  return {
+    status: "exportable",
+    export: {
+      content: primary.content,
+      originalPath: primary.originalPath,
+      rootPath: primary.normalizedPath,
+      completeness: "full",
+      members: closure.members,
+      evidence
+    }
+  };
+}
+
 // src/lib/providers/probe.ts
 function probeFailureStatus(error2) {
   const message = error2 instanceof Error ? error2.message : String(error2);
@@ -50059,14 +51207,43 @@ function withAuthority(candidate) {
 
 // src/lib/providers/api-gateway.ts
 var CONFIG_PATTERN = /^projects\/([^/]+)\/locations\/([^/]+)\/apis\/([^/]+)\/configs\/([^/]+)$/;
+var API_GATEWAY_PROTOBUF_VARIANT = "protobuf";
 function parseApiGatewayConfigName(value) {
-  const match = CONFIG_PATTERN.exec(value);
+  const match = CONFIG_PATTERN.exec(stripProtobufVariant(value));
   return match ? { projectId: match[1], location: match[2], apiName: match[3], configId: match[4] } : void 0;
+}
+function parseApiGatewayProtobufConfigName(value) {
+  if (!value.endsWith(`#${API_GATEWAY_PROTOBUF_VARIANT}`)) return void 0;
+  return parseApiGatewayConfigName(value);
+}
+function stripProtobufVariant(value) {
+  return value.endsWith(`#${API_GATEWAY_PROTOBUF_VARIANT}`) ? value.slice(0, -(API_GATEWAY_PROTOBUF_VARIANT.length + 1)) : value;
+}
+function isProtobufVariantId(value) {
+  return value.endsWith(`#${API_GATEWAY_PROTOBUF_VARIANT}`);
 }
 function shortName(value) {
   return value.split("/").pop() ?? value;
 }
-function supportEvidence(config, options = {}) {
+function flattenGrpcSources(config) {
+  const sources = [];
+  let hasDescriptor = false;
+  for (const service of config.grpcServices) {
+    if (service.fileDescriptorSet?.contents) hasDescriptor = true;
+    for (const source of service.source) {
+      sources.push(source);
+    }
+  }
+  return { sources, descriptorOnly: hasDescriptor && sources.length === 0 };
+}
+function resolveGatewayProtobuf(config, evidencePrefix) {
+  const { sources, descriptorOnly } = flattenGrpcSources(config);
+  return resolveProtoSourceSet(
+    sources.map((source) => ({ path: source.path, contentsBase64: source.contents })),
+    { descriptorOnly, evidencePrefix }
+  );
+}
+function openApiSupportEvidence(config, options = {}) {
   const evidence = [`API Gateway config ${shortName(config.name)} is ${config.state ?? "STATE_UNSPECIFIED"}`];
   if (config.state !== "ACTIVE") {
     if (!options.allowInactive) {
@@ -50082,14 +51259,39 @@ function supportEvidence(config, options = {}) {
     const detail = config.openapiDocuments.length === 0 ? "API Gateway config has no OpenAPI source document" : `API Gateway config has ${config.openapiDocuments.length} OpenAPI source documents; refusing to merge or guess`;
     return { supported: false, authority: "metadata-only", evidence: [...evidence, detail] };
   }
-  if (config.grpcServices.length > 0) {
+  return { supported: true, authority: "stored-authoritative", evidence };
+}
+function protobufSupportEvidence(config, options = {}) {
+  const evidence = [`API Gateway config ${shortName(config.name)} is ${config.state ?? "STATE_UNSPECIFIED"}`];
+  if (config.state !== "ACTIVE") {
+    if (!options.allowInactive) {
+      return {
+        supported: false,
+        authority: "metadata-only",
+        evidence: [...evidence, "Only ACTIVE API Gateway configs are exportable"]
+      };
+    }
+    evidence.push("Explicit api-id requested inactive/historical API Gateway config export");
+  }
+  if (config.managedServiceConfigs.length > 0) {
+    evidence.push(
+      `API Gateway managedServiceConfigs (${config.managedServiceConfigs.length}) are non-exportable service configs`
+    );
+  }
+  const resolved = resolveGatewayProtobuf(config, evidence);
+  if (resolved.status === "exportable") {
     return {
-      supported: false,
-      authority: "unsupported-format",
-      evidence: [...evidence, "gRPC API Gateway configs are not converted in v1.0.0"]
+      supported: true,
+      authority: "stored-authoritative",
+      evidence: resolved.export.evidence,
+      originalPath: resolved.export.originalPath
     };
   }
-  return { supported: true, authority: "stored-authoritative", evidence };
+  return {
+    supported: false,
+    authority: resolved.authority,
+    evidence: resolved.evidence
+  };
 }
 var ApiGatewayProvider = class {
   constructor(client, scope) {
@@ -50108,15 +51310,25 @@ var ApiGatewayProvider = class {
     }
   }
   async listCandidates() {
-    const explicit = this.scope.apiId ? parseApiGatewayConfigName(this.scope.apiId) : void 0;
-    if (explicit) {
+    const explicitRaw = this.scope.apiId;
+    const explicit = explicitRaw ? parseApiGatewayConfigName(explicitRaw) : void 0;
+    if (explicitRaw && explicit) {
       if (explicit.projectId !== this.scope.projectId || explicit.location !== this.scope.location) {
         throw new Error("api-id must belong to the configured project-id and global location");
       }
-      const candidate = this.toCandidate(await this.client.getApiGatewayConfig(this.scope.apiId), void 0, {
-        allowInactive: true
+      const full = await this.client.getApiGatewayConfig(stripProtobufVariant(explicitRaw));
+      const wantProtobuf = isProtobufVariantId(explicitRaw);
+      const candidates2 = this.toCandidates(full, void 0, {
+        allowInactive: true,
+        preferProtobufOnly: wantProtobuf
       });
-      return [{ ...candidate, apiId: this.scope.apiId }];
+      if (wantProtobuf) {
+        const protobuf = candidates2.find((candidate) => candidate.meta.exportFamily === "protobuf");
+        return protobuf ? [{ ...protobuf, apiId: explicitRaw }] : candidates2.map((candidate) => ({ ...candidate, apiId: explicitRaw }));
+      }
+      return candidates2.map(
+        (candidate) => candidate.meta.exportFamily === "protobuf" ? candidate : { ...candidate, apiId: stripProtobufVariant(explicitRaw) }
+      );
     }
     if (this.scope.apiId) return [];
     const candidates = [];
@@ -50128,25 +51340,55 @@ var ApiGatewayProvider = class {
         if (!summary2.name) continue;
         try {
           const full = await this.client.getApiGatewayConfig(summary2.name);
-          candidates.push(this.toCandidate(full, api, { allowInactive: false }));
+          candidates.push(...this.toCandidates(full, api, { allowInactive: false }));
         } catch {
-          const candidate = this.toCandidate(summary2, api, { allowInactive: false });
-          candidates.push({
-            ...candidate,
-            supported: false,
-            authority: "metadata-only",
-            evidence: [...candidate.evidence, "API Gateway FULL source export is unavailable; retained for manual review"]
+          const candidate = this.toOpenApiCandidate(summary2, api, {
+            allowInactive: false,
+            supportedOverride: {
+              supported: false,
+              authority: "metadata-only",
+              evidence: [
+                `API Gateway config ${shortName(summary2.name)} is ${summary2.state ?? "STATE_UNSPECIFIED"}`,
+                "API Gateway FULL source export is unavailable; retained for manual review"
+              ]
+            }
           });
+          candidates.push(candidate);
         }
       }
     }
     return candidates;
   }
   async exportSpec(candidate) {
-    const configName = candidate.apiId && parseApiGatewayConfigName(candidate.apiId) ? candidate.apiId : candidate.id;
+    const configName = candidate.meta.configName || (candidate.apiId ? stripProtobufVariant(candidate.apiId) : void 0) || stripProtobufVariant(candidate.id);
     const config = await this.client.getApiGatewayConfig(configName);
     const allowInactive = candidate.meta.allowInactiveExport === "true" || Boolean(this.scope.apiId && parseApiGatewayConfigName(this.scope.apiId));
-    const support = supportEvidence(config, { allowInactive });
+    if (candidate.meta.exportFamily === "protobuf" || isProtobufVariantId(candidate.id)) {
+      const support2 = protobufSupportEvidence(config, { allowInactive });
+      if (!support2.supported) throw new Error(support2.evidence.at(-1));
+      const resolved = resolveGatewayProtobuf(config, []);
+      if (resolved.status !== "exportable") throw new Error(resolved.evidence.at(-1));
+      const decoded2 = decodeUtf8NativeFamily(resolved.export.content, "protobuf");
+      const multiFile = resolved.export.members.length > 1;
+      return {
+        content: resolved.export.content,
+        format: "protobuf",
+        filename: multiFile ? resolved.export.rootPath : decoded2.filename,
+        completeness: "full",
+        rootPath: resolved.export.rootPath,
+        artifacts: multiFile ? resolved.export.members.map((member) => ({
+          path: member.normalizedPath,
+          role: member.role,
+          content: member.content,
+          originalPath: member.originalPath
+        })) : void 0,
+        evidence: [
+          `Exported original API Gateway protobuf source ${resolved.export.originalPath}`,
+          ...resolved.export.evidence.filter((line) => !line.startsWith("Selected sole"))
+        ]
+      };
+    }
+    const support = openApiSupportEvidence(config, { allowInactive });
     if (!support.supported) throw new Error(support.evidence.at(-1));
     const decoded = decodeSourceDocument(config.openapiDocuments[0]?.document?.contents);
     return {
@@ -50154,8 +51396,29 @@ var ApiGatewayProvider = class {
       evidence: [`Exported original API Gateway source ${config.openapiDocuments[0]?.document?.path ?? "openapi source"}`]
     };
   }
-  toCandidate(config, api, options) {
-    const support = supportEvidence(config, options);
+  toCandidates(config, api, options) {
+    const hasOpenApi = config.openapiDocuments.length > 0;
+    const hasGrpc = config.grpcServices.length > 0;
+    const results = [];
+    if (!options.preferProtobufOnly && (hasOpenApi || !hasGrpc)) {
+      results.push(this.toOpenApiCandidate(config, api, { allowInactive: options.allowInactive }));
+    }
+    if (hasGrpc) {
+      results.push(
+        this.toProtobufCandidate(config, api, {
+          allowInactive: options.allowInactive,
+          // Distinct ID only when OpenAPI candidate also exists (no silent overwrite).
+          distinctId: hasOpenApi && !options.preferProtobufOnly
+        })
+      );
+    }
+    if (results.length === 0) {
+      results.push(this.toOpenApiCandidate(config, api, { allowInactive: options.allowInactive }));
+    }
+    return results;
+  }
+  toOpenApiCandidate(config, api, options) {
+    const support = options.supportedOverride ?? openApiSupportEvidence(config, options);
     const apiName = config.name.split("/configs/")[0] ?? config.name;
     return withAuthority({
       id: config.name,
@@ -50171,9 +51434,39 @@ var ApiGatewayProvider = class {
       meta: {
         apiName,
         configId: shortName(config.name),
+        configName: config.name,
         createTime: config.createTime ?? "",
         updateTime: config.updateTime ?? "",
         state: config.state ?? "",
+        exportFamily: "openapi",
+        allowInactiveExport: options.allowInactive && config.state !== "ACTIVE" && support.supported ? "true" : "false"
+      }
+    });
+  }
+  toProtobufCandidate(config, api, options) {
+    const support = protobufSupportEvidence(config, options);
+    const apiName = config.name.split("/configs/")[0] ?? config.name;
+    const id = options.distinctId ? `${config.name}#${API_GATEWAY_PROTOBUF_VARIANT}` : config.name;
+    return withAuthority({
+      id,
+      name: `${config.displayName || api?.displayName || shortName(apiName)} (protobuf)`,
+      providerType: this.type,
+      sourceType: "api-gateway-config",
+      authority: support.authority,
+      apiId: id,
+      projectId: this.scope.projectId,
+      tags: { ...api?.labels ?? {}, ...config.labels },
+      supported: support.supported,
+      evidence: support.evidence,
+      meta: {
+        apiName,
+        configId: shortName(config.name),
+        configName: config.name,
+        createTime: config.createTime ?? "",
+        updateTime: config.updateTime ?? "",
+        state: config.state ?? "",
+        exportFamily: "protobuf",
+        originalProtoPath: support.originalPath ?? "",
         allowInactiveExport: options.allowInactive && config.state !== "ACTIVE" && support.supported ? "true" : "false"
       }
     });
@@ -50183,29 +51476,81 @@ var ApiGatewayProvider = class {
 // src/lib/providers/cloud-endpoints.ts
 var ENDPOINT_CONFIG_PATTERN = /^services\/([^/]+)\/configs\/([^/]+)$/;
 var OPENAPI_FILE_TYPES = /* @__PURE__ */ new Set(["OPEN_API_JSON", "OPEN_API_YAML"]);
+var CLOUD_ENDPOINTS_PROTOBUF_VARIANT = "protobuf";
 function parseEndpointConfigName(value) {
-  const match = ENDPOINT_CONFIG_PATTERN.exec(value);
+  const match = ENDPOINT_CONFIG_PATTERN.exec(stripProtobufVariant2(value));
   return match ? { serviceName: match[1], configId: match[2] } : void 0;
 }
-function sourceFiles(config) {
-  return (config.sourceInfo?.sourceFiles ?? []).filter((file) => OPENAPI_FILE_TYPES.has(file.fileType ?? ""));
+function parseEndpointProtobufConfigName(value) {
+  if (!value.endsWith(`#${CLOUD_ENDPOINTS_PROTOBUF_VARIANT}`)) return void 0;
+  return parseEndpointConfigName(value);
 }
-function supportEvidence2(config) {
-  const files = sourceFiles(config);
+function stripProtobufVariant2(value) {
+  return value.endsWith(`#${CLOUD_ENDPOINTS_PROTOBUF_VARIANT}`) ? value.slice(0, -(CLOUD_ENDPOINTS_PROTOBUF_VARIANT.length + 1)) : value;
+}
+function isProtobufVariantId2(value) {
+  return value.endsWith(`#${CLOUD_ENDPOINTS_PROTOBUF_VARIANT}`);
+}
+function allSourceFiles(config) {
+  return config.sourceInfo?.sourceFiles ?? [];
+}
+function openApiSourceFiles(config) {
+  return allSourceFiles(config).filter((file) => OPENAPI_FILE_TYPES.has(file.fileType ?? ""));
+}
+function protoSourceFiles(config) {
+  return allSourceFiles(config).filter((file) => file.fileType === "PROTO_FILE");
+}
+function hasDescriptorSet(config) {
+  return allSourceFiles(config).some((file) => file.fileType === "FILE_DESCRIPTOR_SET_PROTO");
+}
+function resolveEndpointsProtobuf(config) {
+  const protoFiles = protoSourceFiles(config);
+  return resolveProtoSourceSet(
+    protoFiles.map((file) => ({ path: file.filePath, contentsBase64: file.fileContents })),
+    {
+      descriptorOnly: hasDescriptorSet(config) && protoFiles.length === 0,
+      evidencePrefix: [`Cloud Endpoints config ${config.id}`]
+    }
+  );
+}
+function openApiSupportEvidence2(config) {
+  const files = openApiSourceFiles(config);
   if (files.length === 1) {
-    return { supported: true, authority: "stored-authoritative", evidence: [`Cloud Endpoints config ${config.id} has one original OpenAPI source`] };
+    return {
+      supported: true,
+      authority: "stored-authoritative",
+      evidence: [`Cloud Endpoints config ${config.id} has one original OpenAPI source`]
+    };
   }
   if (files.length === 0) {
     return {
       supported: false,
       authority: "metadata-only",
-      evidence: ["Cloud Endpoints config has no original OpenAPI sourceInfo file; normalized Service Config is not reverse-converted"]
+      evidence: [
+        "Cloud Endpoints config has no original OpenAPI sourceInfo file; normalized Service Config is not reverse-converted"
+      ]
     };
   }
   return {
     supported: false,
     authority: "metadata-only",
     evidence: [`Cloud Endpoints config has ${files.length} OpenAPI source files; refusing to merge or guess`]
+  };
+}
+function protobufSupportEvidence2(config) {
+  const resolved = resolveEndpointsProtobuf(config);
+  if (resolved.status === "exportable") {
+    return {
+      supported: true,
+      authority: "stored-authoritative",
+      evidence: resolved.export.evidence,
+      originalPath: resolved.export.originalPath
+    };
+  }
+  return {
+    supported: false,
+    authority: resolved.authority,
+    evidence: resolved.evidence
   };
 }
 var CloudEndpointsProvider = class {
@@ -50225,13 +51570,21 @@ var CloudEndpointsProvider = class {
     }
   }
   async listCandidates() {
-    const explicit = this.scope.apiId ? parseEndpointConfigName(this.scope.apiId) : void 0;
-    if (explicit) {
+    const explicitRaw = this.scope.apiId;
+    const explicit = explicitRaw ? parseEndpointConfigName(explicitRaw) : void 0;
+    if (explicitRaw && explicit) {
       const full = await this.client.getEndpointConfig(explicit.serviceName, explicit.configId);
       if (full.producerProjectId !== this.scope.projectId) {
         throw new Error("api-id Cloud Endpoints config does not belong to the configured project-id");
       }
-      return [this.toCandidate(full, { serviceName: explicit.serviceName, producerProjectId: full.producerProjectId })];
+      const service = { serviceName: explicit.serviceName, producerProjectId: full.producerProjectId };
+      const wantProtobuf = isProtobufVariantId2(explicitRaw);
+      const candidates2 = this.toCandidates(full, service, { preferProtobufOnly: wantProtobuf });
+      if (wantProtobuf) {
+        const protobuf = candidates2.find((candidate) => candidate.meta.exportFamily === "protobuf");
+        return protobuf ? [{ ...protobuf, apiId: explicitRaw }] : candidates2;
+      }
+      return candidates2;
     }
     if (this.scope.apiId) return [];
     const candidates = [];
@@ -50241,7 +51594,7 @@ var CloudEndpointsProvider = class {
       if (!newest?.id) continue;
       const full = await this.client.getEndpointConfig(service.serviceName, newest.id);
       if (full.producerProjectId && full.producerProjectId !== this.scope.projectId) continue;
-      candidates.push(this.toCandidate(full, service));
+      candidates.push(...this.toCandidates(full, service));
     }
     return candidates;
   }
@@ -50252,17 +51605,64 @@ var CloudEndpointsProvider = class {
     if (config.producerProjectId !== this.scope.projectId) {
       throw new Error("Cloud Endpoints config belongs to a different project");
     }
-    const support = supportEvidence2(config);
+    if (candidate.meta.exportFamily === "protobuf" || isProtobufVariantId2(candidate.id)) {
+      const support2 = protobufSupportEvidence2(config);
+      if (!support2.supported) throw new Error(support2.evidence.at(-1));
+      const resolved = resolveEndpointsProtobuf(config);
+      if (resolved.status !== "exportable") throw new Error(resolved.evidence.at(-1));
+      const decoded2 = decodeUtf8NativeFamily(resolved.export.content, "protobuf");
+      const multiFile = resolved.export.members.length > 1;
+      return {
+        content: resolved.export.content,
+        format: "protobuf",
+        filename: multiFile ? resolved.export.rootPath : decoded2.filename,
+        completeness: "full",
+        rootPath: resolved.export.rootPath,
+        artifacts: multiFile ? resolved.export.members.map((member) => ({
+          path: member.normalizedPath,
+          role: member.role,
+          content: member.content,
+          originalPath: member.originalPath
+        })) : void 0,
+        evidence: [
+          `Exported original Cloud Endpoints protobuf source ${resolved.export.originalPath}`,
+          ...support2.evidence.filter((line) => line.includes("ignored non-imported"))
+        ]
+      };
+    }
+    const support = openApiSupportEvidence2(config);
     if (!support.supported) throw new Error(support.evidence.at(-1));
-    const source = sourceFiles(config)[0];
+    const source = openApiSourceFiles(config)[0];
     const decoded = decodeSourceDocument(source.fileContents);
     return {
       ...decoded,
       evidence: [`Exported original Cloud Endpoints source ${source.filePath ?? "OpenAPI source"}`]
     };
   }
-  toCandidate(config, service) {
-    const support = supportEvidence2(config);
+  toCandidates(config, service, options = {}) {
+    const openapiFiles = openApiSourceFiles(config);
+    const protoFiles = protoSourceFiles(config);
+    const descriptor = hasDescriptorSet(config);
+    const results = [];
+    if (!options.preferProtobufOnly) {
+      if (openapiFiles.length > 0 || protoFiles.length === 0 && !descriptor) {
+        results.push(this.toOpenApiCandidate(config, service));
+      }
+    }
+    if (protoFiles.length > 0 || descriptor) {
+      results.push(
+        this.toProtobufCandidate(config, service, {
+          distinctId: results.length > 0 && !options.preferProtobufOnly
+        })
+      );
+    }
+    if (results.length === 0) {
+      results.push(this.toOpenApiCandidate(config, service));
+    }
+    return results;
+  }
+  toOpenApiCandidate(config, service) {
+    const support = openApiSupportEvidence2(config);
     const id = `services/${service.serviceName}/configs/${config.id}`;
     return withAuthority({
       id,
@@ -50275,7 +51675,34 @@ var CloudEndpointsProvider = class {
       tags: {},
       supported: support.supported,
       evidence: support.evidence,
-      meta: { serviceName: service.serviceName, configId: config.id }
+      meta: {
+        serviceName: service.serviceName,
+        configId: config.id,
+        exportFamily: "openapi"
+      }
+    });
+  }
+  toProtobufCandidate(config, service, options) {
+    const support = protobufSupportEvidence2(config);
+    const baseId = `services/${service.serviceName}/configs/${config.id}`;
+    const id = options.distinctId ? `${baseId}#${CLOUD_ENDPOINTS_PROTOBUF_VARIANT}` : baseId;
+    return withAuthority({
+      id,
+      name: `${config.title || config.name || service.serviceName} (protobuf)`,
+      providerType: this.type,
+      sourceType: "cloud-endpoints-config",
+      authority: support.authority,
+      apiId: id,
+      projectId: this.scope.projectId,
+      tags: {},
+      supported: support.supported,
+      evidence: support.evidence,
+      meta: {
+        serviceName: service.serviceName,
+        configId: config.id,
+        exportFamily: "protobuf",
+        originalProtoPath: support.originalPath ?? ""
+      }
     });
   }
 };
@@ -50386,6 +51813,8 @@ function inflateZip(bytes) {
 // src/lib/providers/apigee.ts
 var REVISION_PATTERN = /^organizations\/([^/]+)\/apis\/([^/]+)\/revisions\/([^/]+)$/;
 var ARCHIVE_PATTERN = /^organizations\/([^/]+)\/environments\/([^/]+)\/archiveDeployments\/([^/]+)$/;
+var PROXY_OPENAPI_PATH = /^apiproxy\/resources\/(?:oas|openapi)\//i;
+var PROXY_WSDL_PATH = /^apiproxy\/resources\/wsdl\//i;
 function parseApigeeRevisionName(value) {
   const match = REVISION_PATTERN.exec(value);
   return match ? { org: match[1], proxyName: match[2], revision: match[3] } : void 0;
@@ -50400,30 +51829,46 @@ function isUnsafeZipEntryName(name) {
   if (normalized.startsWith("/") || /^[A-Za-z]:/.test(normalized)) return true;
   return normalized.split("/").some((segment) => segment === "..");
 }
+function decodeUtf8Text(bytes) {
+  return new import_node_util6.TextDecoder("utf-8", { fatal: true }).decode(bytes);
+}
 function proxyDocuments(bundle) {
   const result = [];
-  for (const [path12, bytes] of inflateZip(bundle)) {
-    if (!/^apiproxy\/resources\/(?:oas|openapi)\//i.test(path12) && !/^apiproxy\/resources\/.*\.(?:json|ya?ml)$/i.test(path12)) continue;
-    try {
-      result.push({ path: path12, decoded: decodeUtf8OpenApi(new import_node_util6.TextDecoder("utf-8", { fatal: true }).decode(bytes)) });
-    } catch {
+  for (const [path13, bytes] of inflateZip(bundle)) {
+    if (PROXY_OPENAPI_PATH.test(path13)) {
+      try {
+        result.push({ path: path13, decoded: decodeUtf8OpenApi(decodeUtf8Text(bytes)) });
+      } catch {
+      }
+      continue;
+    }
+    if (PROXY_WSDL_PATH.test(path13)) {
+      try {
+        result.push({ path: path13, decoded: decodeUtf8NativeFamily(decodeUtf8Text(bytes), "wsdl") });
+      } catch {
+      }
     }
   }
   return result;
 }
 function archiveDocuments(bundle) {
   const result = [];
-  for (const [path12, bytes] of inflateZip(bundle)) {
-    if (isUnsafeZipEntryName(path12)) {
+  for (const [path13, bytes] of inflateZip(bundle)) {
+    if (isUnsafeZipEntryName(path13)) {
       throw new Error("Apigee archive deployment zip contains an unsafe entry name");
     }
-    if (path12.endsWith("/") || !/\.(?:json|ya?ml)$/i.test(path12)) continue;
+    if (path13.endsWith("/") || !/\.(?:json|ya?ml)$/i.test(path13)) continue;
     try {
-      result.push({ path: path12, decoded: decodeUtf8OpenApi(new import_node_util6.TextDecoder("utf-8", { fatal: true }).decode(bytes)) });
+      result.push({ path: path13, decoded: decodeUtf8OpenApi(decodeUtf8Text(bytes)) });
     } catch {
     }
   }
   return result;
+}
+function documentCountEvidence(kind, count) {
+  if (count === 1) return [`Apigee ${kind} has one contract source document`];
+  if (count === 0) return [`Apigee ${kind} has no contract source document`];
+  return [`Apigee ${kind} has ${count} contract source documents; refusing to merge or guess`];
 }
 var ApigeeProvider = class {
   constructor(client, scope) {
@@ -50466,7 +51911,7 @@ var ApigeeProvider = class {
       revisions.map(async ({ proxyName, revision, labels }) => {
         const id = `organizations/${this.scope.projectId}/apis/${proxyName}/revisions/${revision}`;
         const count = proxyDocuments(await this.client.downloadApigeeRevisionBundle(this.scope.projectId, proxyName, revision)).length;
-        const evidence = count === 1 ? ["Apigee proxy revision has one OpenAPI source document"] : count === 0 ? ["Apigee proxy revision has no OpenAPI source document"] : [`Apigee proxy revision has ${count} OpenAPI source documents; refusing to merge or guess`];
+        const evidence = documentCountEvidence("proxy revision", count);
         return withAuthority({
           id,
           name: proxyName,
@@ -50502,7 +51947,7 @@ var ApigeeProvider = class {
     const found = proxyDocuments(await this.client.downloadApigeeRevisionBundle(parsed.org, parsed.proxyName, parsed.revision));
     if (found.length !== 1) {
       throw new Error(
-        found.length ? `Apigee proxy revision has ${found.length} OpenAPI source documents; refusing to merge or guess` : "Apigee proxy revision has no OpenAPI source document"
+        found.length ? `Apigee proxy revision has ${found.length} contract source documents; refusing to merge or guess` : "Apigee proxy revision has no contract source document"
       );
     }
     return { ...found[0].decoded, evidence: [`Exported original Apigee source ${found[0].path}`] };
@@ -50671,19 +52116,54 @@ function shortName3(value) {
 function additionalSourceType(type) {
   return type === "BOOSTED_SPEC_CONTENT" ? "api-hub-boosted-spec" : "api-hub-gateway-openapi-spec";
 }
-function supportEvidence3(spec) {
+function resolveApiHubNativeFamily(specTypeIds) {
+  if (specTypeIds.length === 0) return "unspecified";
+  for (const id of specTypeIds) {
+    const lower2 = id.toLowerCase();
+    if (/openapi|oas|swagger|(?:^|[^a-z])rest(?:[^a-z]|$)/i.test(lower2)) return "openapi";
+    if (/asyncapi/i.test(lower2)) return "asyncapi";
+    if (/graphql|gql/i.test(lower2)) return "graphql";
+    if (/proto|protobuf|grpc/i.test(lower2)) return "protobuf";
+    if (/wsdl|soap/i.test(lower2)) return "wsdl";
+    if (/mcp|model.?context.?protocol/i.test(lower2)) return "mcp";
+  }
+  return "unsupported";
+}
+function supportEvidence(spec) {
   const specTypes = spec.specTypeIds;
   const evidence = [
     `API Hub spec ${shortName3(spec.name)} declares type ${specTypes.length > 0 ? specTypes.join(",") : "unspecified"}`
   ];
-  if (specTypes.length > 0 && !specTypes.some((id) => /openapi|oas|swagger/i.test(id))) {
+  const family = resolveApiHubNativeFamily(specTypes);
+  if (family === "unsupported") {
     return {
       supported: false,
       authority: "unsupported-format",
-      evidence: [...evidence, "Only OpenAPI-typed API Hub specs are exportable in v1.0.0"]
+      evidence: [
+        ...evidence,
+        "Only bootstrap-supported native API Hub types (OpenAPI, GraphQL, protobuf, WSDL, AsyncAPI, MCP) are exportable"
+      ],
+      family: "unspecified"
     };
   }
-  return { supported: true, authority: "stored-authoritative", evidence };
+  if (family === "unspecified") {
+    return {
+      supported: true,
+      authority: "stored-authoritative",
+      evidence: [...evidence, "Unspecified API Hub type; export validates content as a bootstrap-supported native format"],
+      family: "unspecified"
+    };
+  }
+  return {
+    supported: true,
+    authority: "stored-authoritative",
+    evidence: [...evidence, `API Hub stored original is bootstrap-supported native family ${family}`],
+    family
+  };
+}
+function isOpenApiTyped(spec) {
+  const family = resolveApiHubNativeFamily(spec.specTypeIds);
+  return family === "openapi" || family === "unspecified";
 }
 var ApiHubProvider = class {
   constructor(client, scope) {
@@ -50740,17 +52220,19 @@ var ApiHubProvider = class {
         ]
       };
     }
+    const family = candidate.meta.nativeFamily || "unspecified";
     const contents = await this.client.getApiHubSpecContents(specName);
     let decoded;
     const evidence = [`Exported API Hub spec contents for ${shortName3(specName)}`];
     if (contents.contents) {
-      decoded = decodeSourceDocument(contents.contents);
+      decoded = family === "unspecified" ? decodeNativeSourceDocument(contents.contents) : decodeNativeSourceDocument(contents.contents, family);
     } else {
       const gcs = parseGcsSpecLocation(candidate.meta.sourceUri ?? "");
       if (!gcs) {
         throw new Error("API Hub spec contents are absent and sourceUri is not a trusted gs:// object reference");
       }
-      decoded = decodeUtf8OpenApi(await this.client.getStorageObjectText(gcs.bucket, gcs.object));
+      const text = await this.client.getStorageObjectText(gcs.bucket, gcs.object);
+      decoded = family === "unspecified" ? decodeUtf8NativeSpec(text) : decodeUtf8NativeFamily(text, family);
       evidence.push("Fetched original spec bytes from registered Cloud Storage source_uri");
     }
     return { ...decoded, evidence };
@@ -50758,7 +52240,7 @@ var ApiHubProvider = class {
   async candidatesForSpec(spec) {
     const original = this.toOriginalCandidate(spec);
     const result = [original];
-    if (!original.supported) return result;
+    if (!original.supported || !isOpenApiTyped(spec)) return result;
     const types3 = spec.additionalSpecContentTypes ?? [];
     for (const type of types3) {
       result.push(...await this.candidatesForAdditionalVariant(spec, type, { includeOriginalBytesGuard: true }));
@@ -50770,8 +52252,8 @@ var ApiHubProvider = class {
    * Never returns the stored original, so generated content cannot overwrite it.
    */
   async candidatesForAdditionalVariant(spec, type, options = {}) {
-    const originalSupport = supportEvidence3(spec);
-    if (!originalSupport.supported) {
+    const originalSupport = supportEvidence(spec);
+    if (!originalSupport.supported || !isOpenApiTyped(spec)) {
       return [
         this.toAdditionalCandidate(spec, type, {
           supported: false,
@@ -50800,7 +52282,10 @@ var ApiHubProvider = class {
         ];
       }
       try {
-        decodeSourceDocument(fetched.contents);
+        const decoded = decodeSourceDocument(fetched.contents);
+        if (!isOpenApiFormat(decoded.format)) {
+          throw new Error("not openapi");
+        }
       } catch {
         return [
           this.toAdditionalCandidate(spec, type, {
@@ -50835,7 +52320,7 @@ var ApiHubProvider = class {
     }
   }
   toOriginalCandidate(spec) {
-    const support = supportEvidence3(spec);
+    const support = supportEvidence(spec);
     return withAuthority({
       id: spec.name,
       name: spec.displayName || spec.apiDisplayName || shortName3(spec.name),
@@ -50853,7 +52338,8 @@ var ApiHubProvider = class {
         specId: shortName3(spec.name),
         createTime: spec.createTime ?? "",
         sourceUri: spec.sourceUri ?? "",
-        specName: spec.name
+        specName: spec.name,
+        nativeFamily: support.family
       }
     });
   }
@@ -50886,6 +52372,7 @@ var ApiHubProvider = class {
 var import_node_zlib3 = require("node:zlib");
 var import_node_util7 = require("node:util");
 var SPEC_PATTERN2 = /^projects\/([^/]+)\/locations\/([^/]+)\/apis\/([^/]+)\/versions\/([^/]+)\/specs\/([^/]+)$/;
+var NATIVE_ZIP_ENTRY = /\.(?:json|ya?ml|graphql|gql|proto|wsdl|xml)$/i;
 function parseApigeeRegistrySpecName(value) {
   const match = SPEC_PATTERN2.exec(value);
   return match ? { projectId: match[1], location: match[2], apiName: match[3], versionId: match[4], specId: match[5] } : void 0;
@@ -50896,71 +52383,120 @@ function shortName4(value) {
 function mimeBase(mimeType) {
   return (mimeType ?? "").split(";")[0]?.trim().toLowerCase() ?? "";
 }
-function isNonOpenApiMime(mimeType) {
-  const base = mimeBase(mimeType);
-  if (!base) return false;
-  return /(?:^|[+/.-])(?:proto|protobuf|graphql|wsdl|asyncapi)(?:$|[+/.-])/.test(base) || base.includes("vnd.apigee.proto") || base.includes("vnd.apigee.graphql");
-}
 function isGzipMime(mimeType) {
   const base = mimeBase(mimeType);
   return base.endsWith("+gzip") || base === "application/gzip" || base === "application/x-gzip";
 }
+function familyHintFromMime(mimeType) {
+  const base = mimeBase(mimeType);
+  if (!base) return void 0;
+  if (/(?:^|[+/.-])(?:openapi|swagger)(?:$|[+/.-])/.test(base) || base.includes("vnd.apigee.openapi")) {
+    return "openapi";
+  }
+  if (/(?:^|[+/.-])asyncapi(?:$|[+/.-])/.test(base)) return "asyncapi";
+  if (/(?:^|[+/.-])graphql(?:$|[+/.-])/.test(base) || base.includes("vnd.apigee.graphql")) return "graphql";
+  if (/(?:^|[+/.-])(?:proto|protobuf)(?:$|[+/.-])/.test(base) || base.includes("vnd.apigee.proto")) {
+    return "protobuf";
+  }
+  if (/(?:^|[+/.-])wsdl(?:$|[+/.-])/.test(base)) return "wsdl";
+  if (/(?:^|[+/.-])mcp(?:$|[+/.-])/.test(base)) return "mcp";
+  return void 0;
+}
+function isClearlyNonSpecMime(mimeType) {
+  const base = mimeBase(mimeType);
+  if (!base) return false;
+  if (familyHintFromMime(mimeType) || isGzipMime(mimeType)) return false;
+  if (base === "application/zip" || base === "application/x-zip-compressed") return false;
+  if (base === "application/octet-stream" || base === "text/plain") return false;
+  return /^(?:image|audio|video|font)\//.test(base) || base === "application/pdf";
+}
 function supportFromMime(spec) {
   const evidence = [
-    `Legacy Apigee Registry spec ${shortName4(spec.name)} declares mimeType ${spec.mimeType ?? "unspecified"} (no-longer-supported surface; not a replacement for API Hub)`
+    `Legacy Apigee Registry spec ${shortName4(spec.name)} declares mimeType ${spec.mimeType ?? "unspecified"} (no-longer-supported surface; not a replacement for API Hub)`,
+    "MIME type is a hint only; export validates bootstrap-native single-file contents"
   ];
-  if (isNonOpenApiMime(spec.mimeType)) {
+  if (isClearlyNonSpecMime(spec.mimeType)) {
     return {
       supported: false,
       authority: "unsupported-format",
-      evidence: [...evidence, "Only OpenAPI/Swagger Apigee Registry specs are exportable"]
+      evidence: [...evidence, "MIME type is not a bootstrap-supported specification family"]
     };
   }
   return { supported: true, authority: "stored-authoritative", evidence };
 }
-function tryDecodeOpenApiBytes(bytes) {
+function tryDecodeNativeBytes(bytes, familyHint) {
+  let text;
   try {
-    return decodeUtf8OpenApi(new import_node_util7.TextDecoder("utf-8", { fatal: true }).decode(bytes));
+    text = new import_node_util7.TextDecoder("utf-8", { fatal: true }).decode(bytes);
   } catch {
     return void 0;
   }
+  try {
+    if (familyHint) return decodeUtf8NativeFamily(text, familyHint);
+    return decodeUtf8NativeSpec(text);
+  } catch {
+    if (familyHint) {
+      try {
+        return decodeUtf8NativeSpec(text);
+      } catch {
+        return void 0;
+      }
+    }
+    return void 0;
+  }
+}
+function familyOf(decoded) {
+  const detected = detectNativeFormat(decoded.content);
+  return detected?.kind ?? decoded.format;
 }
 function decodeRegistryContents(bytes, mimeType) {
-  if (bytes.byteLength >= 2 && bytes[0] === 31 && bytes[1] === 138) {
+  const hint = familyHintFromMime(mimeType);
+  if (bytes.byteLength >= 2 && bytes[0] === 31 && bytes[1] === 139) {
     let inflated;
     try {
       inflated = (0, import_node_zlib3.gunzipSync)(bytes, { maxOutputLength: 10 * 1024 * 1024 });
     } catch {
       throw new Error("Legacy Apigee Registry spec contents are gzip-compressed and could not be inflated within bounds");
     }
-    const decoded2 = tryDecodeOpenApiBytes(inflated);
-    if (!decoded2) throw new Error("Legacy Apigee Registry gzip contents are not a valid OpenAPI document");
+    const decoded2 = tryDecodeNativeBytes(inflated, hint);
+    if (!decoded2) {
+      throw new Error("Legacy Apigee Registry gzip contents are not a valid bootstrap-supported native document");
+    }
     return decoded2;
   }
   if (bytes.byteLength >= 4 && bytes.readUInt32LE(0) === 67324752) {
     const found = [];
-    for (const [path12, entry] of inflateZip(bytes)) {
-      if (path12.includes("\0") || path12.startsWith("/") || path12.includes("..") || /^[A-Za-z]:/.test(path12)) {
+    for (const [path13, entry] of inflateZip(bytes)) {
+      if (path13.includes("\0") || path13.startsWith("/") || path13.includes("..") || /^[A-Za-z]:/.test(path13)) {
         throw new Error("Legacy Apigee Registry multi-file bundle contains an unsafe entry name");
       }
-      if (!/\.(?:json|ya?ml)$/i.test(path12)) continue;
-      const decoded2 = tryDecodeOpenApiBytes(entry);
+      if (!NATIVE_ZIP_ENTRY.test(path13)) continue;
+      const decoded2 = tryDecodeNativeBytes(entry, hint);
       if (decoded2) found.push(decoded2);
     }
     if (found.length === 1) return found[0];
     if (found.length === 0) {
-      throw new Error("Legacy Apigee Registry multi-file bundle has no OpenAPI document");
+      throw new Error("Legacy Apigee Registry multi-file bundle has no bootstrap-supported native document");
     }
-    throw new Error(`Legacy Apigee Registry multi-file bundle has ${found.length} OpenAPI documents; refusing to merge or guess`);
+    const families = new Set(found.map(familyOf));
+    if (families.size > 1) {
+      throw new Error(
+        `Legacy Apigee Registry multi-file bundle has mixed native families (${[...families].join(", ")}); refusing to merge or guess`
+      );
+    }
+    throw new Error(
+      `Legacy Apigee Registry multi-file bundle has ${found.length} native documents; refusing to merge or guess`
+    );
   }
-  if (isGzipMime(mimeType)) {
-    throw new Error("Legacy Apigee Registry spec mimeType indicates compression that remains unsupported without a single OpenAPI document");
+  if (isGzipMime(mimeType) && !(bytes.byteLength >= 2 && bytes[0] === 31 && bytes[1] === 139)) {
+    throw new Error(
+      "Legacy Apigee Registry spec mimeType indicates compression that remains unsupported without inflateable gzip bytes"
+    );
   }
-  if (isNonOpenApiMime(mimeType)) {
-    throw new Error("Legacy Apigee Registry spec contents are a non-OpenAPI mime type");
+  const decoded = tryDecodeNativeBytes(bytes, hint);
+  if (!decoded) {
+    throw new Error("Legacy Apigee Registry spec contents are not a valid bootstrap-supported native document");
   }
-  const decoded = tryDecodeOpenApiBytes(bytes);
-  if (!decoded) throw new Error("Legacy Apigee Registry spec contents are not a valid OpenAPI document");
   return decoded;
 }
 var ApigeeRegistryProvider = class {
@@ -51101,9 +52637,20 @@ var AppIntegrationProvider = class {
 
 // src/lib/providers/apigee-portal.ts
 var PATTERN = /^organizations\/([^/]+)\/sites\/([^/]+)\/apidocs\/([^/]+)$/;
+function isSupportedPortalType(type) {
+  return type === "oasDocumentation" || type === "graphqlDocumentation" || type === "asyncApiDocumentation";
+}
 function parseApigeePortalApidocName(value) {
   const m2 = PATTERN.exec(value);
   return m2 ? { org: m2[1], siteId: m2[2], apidocId: m2[3] } : void 0;
+}
+function tryDecodePortalDoc(doc) {
+  if (!doc.family || !doc.contents?.length || !isSupportedPortalType(doc.type)) return void 0;
+  try {
+    return decodeUtf8NativeFamily(doc.contents, doc.family);
+  } catch {
+    return void 0;
+  }
 }
 var ApigeePortalProvider = class {
   constructor(client, scope) {
@@ -51139,17 +52686,15 @@ var ApigeePortalProvider = class {
     return Promise.all(docs.map(async ({ siteId, doc }) => {
       const id = `organizations/${this.scope.projectId}/sites/${siteId}/apidocs/${doc.id}`;
       const found = await this.client.getApigeePortalDocumentation(this.scope.projectId, siteId, doc.id);
-      let supported = false;
-      let authority = found.type === "oasDocumentation" ? "metadata-only" : "unsupported-format";
-      if (found.type === "oasDocumentation" && found.contents?.trim()) {
-        try {
-          decodeUtf8OpenApi(found.contents);
-          supported = true;
-          authority = "stored-authoritative";
-        } catch {
-          supported = false;
-          authority = "metadata-only";
-        }
+      const decoded = tryDecodePortalDoc(found);
+      const supported = Boolean(decoded);
+      let authority = "unsupported-format";
+      if (found.type === "missing" || found.type === "malformed") {
+        authority = "unsupported-format";
+      } else if (decoded) {
+        authority = "stored-authoritative";
+      } else if (isSupportedPortalType(found.type)) {
+        authority = "metadata-only";
       }
       return withAuthority({
         id,
@@ -51162,7 +52707,7 @@ var ApigeePortalProvider = class {
         tags: {},
         supported,
         evidence: [`Apigee portal documentation type: ${found.type}`],
-        meta: { siteId, apidocId: doc.id, documentationType: found.type }
+        meta: { siteId, apidocId: doc.id, documentationType: found.type, documentationFamily: found.family ?? "" }
       });
     }));
   }
@@ -51170,10 +52715,14 @@ var ApigeePortalProvider = class {
     const p = parseApigeePortalApidocName(candidate.id);
     if (!p || p.org !== this.scope.projectId) throw new Error("Invalid Apigee portal document resource name");
     const doc = await this.client.getApigeePortalDocumentation(p.org, p.siteId, p.apidocId);
-    if (doc.type !== "oasDocumentation" || !doc.contents?.trim()) {
+    const decoded = tryDecodePortalDoc(doc);
+    if (!decoded) {
       throw new Error(`Apigee portal documentation type ${doc.type} is unsupported`);
     }
-    return { ...decodeUtf8OpenApi(doc.contents), evidence: ["Exported original Apigee portal OpenAPI documentation"] };
+    return {
+      ...decoded,
+      evidence: [`Exported original Apigee portal ${doc.family ?? doc.type} documentation`]
+    };
   }
 };
 
@@ -51207,10 +52756,11 @@ var DialogflowToolsProvider = class {
     if (parsed) tools = (await this.client.listDialogflowTools(`projects/${parsed.projectId}/locations/${parsed.location}/agents/${parsed.agentId}`)).filter((tool) => tool.name === this.scope.apiId);
     else for (const agent of await this.client.listDialogflowAgents(this.scope.projectId)) tools.push(...await this.client.listDialogflowTools(agent.name));
     return tools.map((tool) => {
-      const schema = tool.textSchema?.trim();
-      let supported = Boolean(schema);
-      let authority = schema ? "stored-authoritative" : "metadata-only";
-      if (schema) {
+      const schema = tool.textSchema ?? "";
+      const hasSchema = Boolean(schema.trim());
+      let supported = hasSchema;
+      let authority = hasSchema ? "stored-authoritative" : "metadata-only";
+      if (hasSchema) {
         try {
           decodeUtf8OpenApi(schema);
         } catch {
@@ -51228,8 +52778,8 @@ var DialogflowToolsProvider = class {
         projectId: this.scope.projectId,
         tags: {},
         supported,
-        evidence: [schema ? "Dialogflow tool stores an OpenAPI text schema" : "Dialogflow tool has no OpenAPI text schema; only OPEN_API_TOOL tools are exportable"],
-        meta: { textSchema: schema ?? "" }
+        evidence: [hasSchema ? "Dialogflow tool stores an OpenAPI text schema" : "Dialogflow tool has no OpenAPI text schema; only OPEN_API_TOOL tools are exportable"],
+        meta: { textSchema: schema }
       });
     });
   }
@@ -51364,13 +52914,14 @@ var CesToolsetsProvider = class {
     return toolsets.map((toolset) => this.toCandidate(toolset));
   }
   toCandidate(toolset) {
-    const schema = toolset.openApiSchema?.trim();
+    const schema = toolset.openApiSchema ?? "";
+    const hasSchema = Boolean(schema.trim());
     const toolsetScopedTool = /\/toolsets\/[^/]+\/tools\/[^/]+$/.test(toolset.name);
     const standaloneTool = /\/apps\/[^/]+\/tools\/[^/]+$/.test(toolset.name);
     const resourceKind = toolsetScopedTool ? "toolset-scoped tool" : standaloneTool ? "tool" : "toolset";
-    let supported = Boolean(schema);
-    let authority = schema ? "stored-authoritative" : "metadata-only";
-    if (schema) {
+    let supported = hasSchema;
+    let authority = hasSchema ? "stored-authoritative" : "metadata-only";
+    if (hasSchema) {
       try {
         decodeUtf8OpenApi(schema);
       } catch {
@@ -51388,8 +52939,8 @@ var CesToolsetsProvider = class {
       projectId: this.scope.projectId,
       tags: {},
       supported,
-      evidence: [schema ? `CES ${resourceKind} stores an OpenAPI schema` : `CES ${resourceKind} has no OpenAPI schema`],
-      meta: { openApiSchema: schema ?? "", resourceKind }
+      evidence: [hasSchema ? `CES ${resourceKind} stores an OpenAPI schema` : `CES ${resourceKind} has no OpenAPI schema`],
+      meta: { openApiSchema: schema, resourceKind }
     });
   }
   async exportSpec(candidate) {
@@ -51426,31 +52977,31 @@ var IacLocalProvider = class {
 };
 
 // src/lib/utils/resolve-path-within-root.ts
-var import_node_fs3 = require("node:fs");
-var import_node_path7 = __toESM(require("node:path"), 1);
+var import_node_fs4 = require("node:fs");
+var import_node_path8 = __toESM(require("node:path"), 1);
 function nearestExistingAncestor(candidate) {
   let current = candidate;
   for (; ; ) {
     try {
-      return (0, import_node_fs3.realpathSync)(current);
+      return (0, import_node_fs4.realpathSync)(current);
     } catch {
-      const parent = import_node_path7.default.dirname(current);
+      const parent = import_node_path8.default.dirname(current);
       if (parent === current) return current;
       current = parent;
     }
   }
 }
 function resolvePathWithinRoot(rootPath, targetPath, fieldName) {
-  const base = import_node_path7.default.resolve(rootPath);
-  const resolved = import_node_path7.default.resolve(base, targetPath);
-  const relative2 = import_node_path7.default.relative(base, resolved);
-  if (relative2.startsWith("..") || import_node_path7.default.isAbsolute(relative2)) {
+  const base = import_node_path8.default.resolve(rootPath);
+  const resolved = import_node_path8.default.resolve(base, targetPath);
+  const relative2 = import_node_path8.default.relative(base, resolved);
+  if (relative2.startsWith("..") || import_node_path8.default.isAbsolute(relative2)) {
     throw new Error(`${fieldName} must stay within repo-root/workspace; received ${targetPath}`);
   }
   const realBase = nearestExistingAncestor(base);
   const realResolved = nearestExistingAncestor(resolved);
-  const realRelative = import_node_path7.default.relative(realBase, realResolved);
-  if (realRelative.startsWith("..") || import_node_path7.default.isAbsolute(realRelative)) {
+  const realRelative = import_node_path8.default.relative(realBase, realResolved);
+  if (realRelative.startsWith("..") || import_node_path8.default.isAbsolute(realRelative)) {
     throw new Error(`${fieldName} must stay within repo-root/workspace after resolving symlinks; received ${targetPath}`);
   }
   return resolved;
@@ -51626,8 +53177,8 @@ function readActionInputs(inputReader) {
   });
 }
 async function defaultWriteSpecFile(outputPath, content) {
-  await (0, import_promises6.mkdir)(import_node_path8.default.dirname(outputPath), { recursive: true });
-  await (0, import_promises6.writeFile)(outputPath, content, "utf8");
+  await (0, import_promises8.mkdir)(import_node_path9.default.dirname(outputPath), { recursive: true });
+  await (0, import_promises8.writeFile)(outputPath, content, "utf8");
 }
 function projectFolderName(projectName) {
   const safe = projectName.trim().replace(/[\\/]+/g, "-").replace(/^\.+$/, "service").replace(/[^A-Za-z0-9._-]+/g, "-").replace(/^-+|-+$/g, "");
@@ -51659,14 +53210,63 @@ function sourceTypeForProvider(provider, candidateSourceType) {
   if (provider === "ces-toolsets") return "ces-toolset-schema";
   return "iac-embedded";
 }
-async function writeSpecExport(inputs, serviceName, exportResult, writeSpecFile) {
+function isFullMultiFileExport(exportResult) {
+  return exportResult.completeness === "full" && Array.isArray(exportResult.artifacts) && exportResult.artifacts.length > 1 && typeof exportResult.rootPath === "string" && exportResult.rootPath.length > 0;
+}
+async function writeSpecExport(inputs, serviceName, exportResult, dependencies) {
   const folder = projectFolderName(serviceName);
-  const relativeSpecPath = import_node_path8.default.posix.join(inputs.outputDir.split(import_node_path8.default.sep).join("/"), folder, exportResult.filename);
-  const absoluteSpecPath = resolvePathWithinRoot(inputs.repoRoot, relativeSpecPath, "output-dir");
-  if (!inputs.dryRun) {
-    await writeSpecFile(absoluteSpecPath, exportResult.content);
+  const outputDirPosix = inputs.outputDir.split(import_node_path9.default.sep).join("/");
+  const serviceDirRelative = import_node_path9.default.posix.join(outputDirPosix, folder);
+  const writeSpecFile = dependencies.writeSpecFile;
+  let relativeSpecPath;
+  let specFilesJson;
+  if (isFullMultiFileExport(exportResult)) {
+    const artifacts = exportResult.artifacts;
+    const rootPath = exportResult.rootPath;
+    relativeSpecPath = import_node_path9.default.posix.join(serviceDirRelative, rootPath);
+    resolvePathWithinRoot(inputs.repoRoot, relativeSpecPath, "output-dir");
+    for (const artifact of artifacts) {
+      resolvePathWithinRoot(
+        inputs.repoRoot,
+        import_node_path9.default.posix.join(serviceDirRelative, artifact.path),
+        "output-dir"
+      );
+    }
+    const inventory = buildDefinitionFileInventory({
+      root: relativeSpecPath,
+      format: exportResult.format,
+      completeness: "full",
+      members: artifacts.map((artifact) => ({
+        path: import_node_path9.default.posix.join(serviceDirRelative, artifact.path),
+        role: artifact.role,
+        content: artifact.content
+      }))
+    });
+    specFilesJson = serializeDefinitionFileInventory(inventory);
+    if (!inputs.dryRun) {
+      await stageAndSwapServiceDirectory({
+        repoRoot: inputs.repoRoot,
+        serviceDirRelative,
+        members: artifacts.map((artifact) => ({
+          relativePath: artifact.path,
+          content: artifact.content
+        })),
+        runId: dependencies.stageRunId,
+        beforeWriteMember: dependencies.beforeStageWriteMember
+      });
+    }
+  } else {
+    relativeSpecPath = import_node_path9.default.posix.join(serviceDirRelative, exportResult.filename);
+    const absoluteSpecPath = resolvePathWithinRoot(inputs.repoRoot, relativeSpecPath, "output-dir");
+    if (!inputs.dryRun) {
+      await writeSpecFile(absoluteSpecPath, exportResult.content);
+    }
   }
-  const written = { specPath: relativeSpecPath, specFormat: exportResult.format };
+  const written = {
+    specPath: relativeSpecPath,
+    specFormat: exportResult.format,
+    specFilesJson
+  };
   const derivation = deriveOpenApiDocument({ content: exportResult.content, format: exportResult.format, title: serviceName });
   if (derivation) {
     if (derivation.completeness === "full" && exportResult.format === "openapi-json") {
@@ -51678,7 +53278,7 @@ async function writeSpecExport(inputs, serviceName, exportResult, writeSpecFile)
         evidence: derivation.evidence
       };
     } else {
-      const derivedRelative = import_node_path8.default.posix.join(inputs.outputDir.split(import_node_path8.default.sep).join("/"), folder, "openapi.derived.json");
+      const derivedRelative = import_node_path9.default.posix.join(serviceDirRelative, "openapi.derived.json");
       const derivedAbsolute = resolvePathWithinRoot(inputs.repoRoot, derivedRelative, "output-dir");
       if (!inputs.dryRun) {
         await writeSpecFile(derivedAbsolute, derivation.content);
@@ -51821,7 +53421,7 @@ async function runResolveOne(inputs, dependencies) {
     const provider = new IacLocalProvider(iacScan);
     const exportResult = await provider.exportSpec(only);
     const serviceName = resolveServiceName(only, inputs.serviceMapping);
-    const written = await writeSpecExport(inputs, serviceName, exportResult, dependencies.writeSpecFile);
+    const written = await writeSpecExport(inputs, serviceName, exportResult, dependencies);
     const resolution2 = {
       status: "resolved",
       sourceType: "iac-embedded",
@@ -51829,6 +53429,7 @@ async function runResolveOne(inputs, dependencies) {
       confidence: 100,
       authority: "stored-authoritative",
       specPath: written.specPath,
+      specFilesJson: written.specFilesJson,
       providerType: "iac-local",
       specFormat: written.specFormat,
       ...written.derived ? {
@@ -51912,7 +53513,7 @@ async function runResolveOne(inputs, dependencies) {
       if (provider) {
         const exportResult = await provider.exportSpec(target);
         const serviceName = resolveServiceName(target, inputs.serviceMapping);
-        const written = await writeSpecExport(inputs, serviceName, exportResult, dependencies.writeSpecFile);
+        const written = await writeSpecExport(inputs, serviceName, exportResult, dependencies);
         const resolution3 = {
           status: "resolved",
           sourceType: sourceTypeForProvider(target.providerType, target.sourceType),
@@ -51920,6 +53521,7 @@ async function runResolveOne(inputs, dependencies) {
           confidence: 100,
           authority: resolveCandidateAuthority(target),
           specPath: written.specPath,
+          specFilesJson: written.specFilesJson,
           ...target.apiId ? { apiId: target.apiId } : {},
           providerType: target.providerType,
           specFormat: written.specFormat,
@@ -51997,7 +53599,7 @@ async function runResolveOne(inputs, dependencies) {
       try {
         const exportResult = await provider.exportSpec(target);
         const serviceName = resolveServiceName(target, inputs.serviceMapping);
-        const written = await writeSpecExport(inputs, serviceName, exportResult, dependencies.writeSpecFile);
+        const written = await writeSpecExport(inputs, serviceName, exportResult, dependencies);
         const resolution2 = {
           status: "resolved",
           sourceType: sourceTypeForProvider(target.providerType, target.sourceType),
@@ -52005,6 +53607,7 @@ async function runResolveOne(inputs, dependencies) {
           confidence: best.confidence,
           authority: best.authority,
           specPath: written.specPath,
+          specFilesJson: written.specFilesJson,
           ...target.apiId ? { apiId: target.apiId } : {},
           providerType: target.providerType,
           specFormat: written.specFormat,
@@ -52100,12 +53703,12 @@ async function runDiscoverMany(inputs, dependencies) {
     try {
       const exportResult = await provider.exportSpec(candidate);
       const serviceName = resolveServiceName(candidate, inputs.serviceMapping);
-      const targetPath = import_node_path8.default.posix.join(inputs.outputDir.split(import_node_path8.default.sep).join("/"), projectFolderName(serviceName), exportResult.filename);
+      const targetPath = import_node_path9.default.posix.join(inputs.outputDir.split(import_node_path9.default.sep).join("/"), projectFolderName(serviceName), exportResult.filename);
       const priorOwner = writtenPaths.get(targetPath);
       if (priorOwner && priorOwner !== candidate.id) {
         throw new Error(`Spec path collision at ${targetPath}: already written by ${priorOwner}`);
       }
-      const written = await writeSpecExport(inputs, serviceName, exportResult, dependencies.writeSpecFile);
+      const written = await writeSpecExport(inputs, serviceName, exportResult, dependencies);
       writtenPaths.set(written.specPath, candidate.id);
       discovered.push({
         serviceName,
@@ -52156,6 +53759,7 @@ function buildExecutionOutputs(result) {
       "source-type": "discover-many",
       "mapping-confidence": unresolved ? "0" : discovered.length > 0 ? "100" : "0",
       "spec-path": "",
+      "spec-files-json": "",
       "api-id": "",
       "service-name": "",
       "services-json": JSON.stringify(discovered),
@@ -52196,6 +53800,7 @@ function buildExecutionOutputs(result) {
     "source-type": resolution.sourceType,
     "mapping-confidence": String(resolution.confidence),
     "spec-path": resolution.specPath ?? "",
+    "spec-files-json": resolution.specFilesJson ?? "",
     "api-id": resolution.apiId ?? "",
     "service-name": resolution.serviceName,
     "services-json": "[]",
@@ -52455,15 +54060,23 @@ var outputNames = contractOutputNames;
   buildExecutionOutputs,
   chooseSource,
   collectRepoSignals,
+  decodeUtf8NativeSpec,
   decodeUtf8OpenApi,
   defaultWriteSpecFile,
   deriveOpenApiDocument,
+  detectNativeFormat,
   execute,
+  extractProtoImports,
   findExistingRepoSpecTyped,
   getInput,
+  nativeFilename,
+  normalizeProtoSourcePath,
   outputNames,
+  parseAndValidateNativeFamily,
+  parseAndValidateNativeSpec,
   parseAndValidateOpenApi,
   parseApiGatewayConfigName,
+  parseApiGatewayProtobufConfigName,
   parseApiHubAdditionalSpecName,
   parseApiHubSpecName,
   parseApigeeArchiveDeploymentName,
@@ -52472,6 +54085,7 @@ var outputNames = contractOutputNames;
   parseApigeeRevisionName,
   parseDialogflowToolName,
   parseEndpointConfigName,
+  parseEndpointProtobufConfigName,
   parseGcsSpecLocation,
   parseVertexExtensionName,
   partitionCandidates,
@@ -52479,6 +54093,7 @@ var outputNames = contractOutputNames;
   readActionInputs,
   renderAmbiguityStepSummary,
   resolveInputs,
+  resolveProtoSourceSet,
   resolveServiceCandidate,
   runAction,
   runNarrowingPipeline,

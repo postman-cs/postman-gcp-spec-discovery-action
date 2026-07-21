@@ -1,14 +1,29 @@
 import type { ProviderProbeStatus, SourceAuthority } from '../../contracts.js';
-import type { ApigeePortalApidoc, GcpDiscoveryClient } from '../gcp/clients.js';
-import { decodeUtf8OpenApi } from './source-document.js';
+import type { ApigeePortalApidoc, ApigeePortalDocumentation, GcpDiscoveryClient } from '../gcp/clients.js';
+import { decodeUtf8NativeFamily } from './source-document.js';
 import { probeFailureStatus } from './probe.js';
 import { withAuthority, type SpecCandidate, type SpecExportResult, type SpecProvider } from './types.js';
 
 const PATTERN = /^organizations\/([^/]+)\/sites\/([^/]+)\/apidocs\/([^/]+)$/;
 
+function isSupportedPortalType(
+  type: ApigeePortalDocumentation['type']
+): type is 'oasDocumentation' | 'graphqlDocumentation' | 'asyncApiDocumentation' {
+  return type === 'oasDocumentation' || type === 'graphqlDocumentation' || type === 'asyncApiDocumentation';
+}
+
 export function parseApigeePortalApidocName(value: string) {
   const m = PATTERN.exec(value);
   return m ? { org: m[1]!, siteId: m[2]!, apidocId: m[3]! } : undefined;
+}
+
+function tryDecodePortalDoc(doc: ApigeePortalDocumentation) {
+  if (!doc.family || !doc.contents?.length || !isSupportedPortalType(doc.type)) return undefined;
+  try {
+    return decodeUtf8NativeFamily(doc.contents, doc.family);
+  } catch {
+    return undefined;
+  }
 }
 
 export class ApigeePortalProvider implements SpecProvider {
@@ -40,17 +55,15 @@ export class ApigeePortalProvider implements SpecProvider {
     return Promise.all(docs.map(async ({ siteId, doc }) => {
       const id = `organizations/${this.scope.projectId}/sites/${siteId}/apidocs/${doc.id}`;
       const found = await this.client.getApigeePortalDocumentation(this.scope.projectId, siteId, doc.id);
-      let supported = false;
-      let authority: SourceAuthority = found.type === 'oasDocumentation' ? 'metadata-only' : 'unsupported-format';
-      if (found.type === 'oasDocumentation' && found.contents?.trim()) {
-        try {
-          decodeUtf8OpenApi(found.contents);
-          supported = true;
-          authority = 'stored-authoritative';
-        } catch {
-          supported = false;
-          authority = 'metadata-only';
-        }
+      const decoded = tryDecodePortalDoc(found);
+      const supported = Boolean(decoded);
+      let authority: SourceAuthority = 'unsupported-format';
+      if (found.type === 'missing' || found.type === 'malformed') {
+        authority = 'unsupported-format';
+      } else if (decoded) {
+        authority = 'stored-authoritative';
+      } else if (isSupportedPortalType(found.type)) {
+        authority = 'metadata-only';
       }
       return withAuthority({
         id,
@@ -63,7 +76,7 @@ export class ApigeePortalProvider implements SpecProvider {
         tags: {},
         supported,
         evidence: [`Apigee portal documentation type: ${found.type}`],
-        meta: { siteId, apidocId: doc.id, documentationType: found.type }
+        meta: { siteId, apidocId: doc.id, documentationType: found.type, documentationFamily: found.family ?? '' }
       });
     }));
   }
@@ -71,9 +84,13 @@ export class ApigeePortalProvider implements SpecProvider {
     const p = parseApigeePortalApidocName(candidate.id);
     if (!p || p.org !== this.scope.projectId) throw new Error('Invalid Apigee portal document resource name');
     const doc = await this.client.getApigeePortalDocumentation(p.org, p.siteId, p.apidocId);
-    if (doc.type !== 'oasDocumentation' || !doc.contents?.trim()) {
+    const decoded = tryDecodePortalDoc(doc);
+    if (!decoded) {
       throw new Error(`Apigee portal documentation type ${doc.type} is unsupported`);
     }
-    return { ...decodeUtf8OpenApi(doc.contents), evidence: ['Exported original Apigee portal OpenAPI documentation'] };
+    return {
+      ...decoded,
+      evidence: [`Exported original Apigee portal ${doc.family ?? doc.type} documentation`]
+    };
   }
 }

@@ -78,7 +78,21 @@ export type SourceAuthority =
   | 'metadata-only'
   | 'unsupported-format';
 
-export type SpecFormat = 'openapi-yaml' | 'openapi-json';
+/**
+ * Stable native specification format names used by repository and API Hub
+ * providers. Serialization is part of the name for YAML/JSON families so
+ * artifact writers can preserve native bytes without re-detecting.
+ */
+export type SpecFormat =
+  | 'openapi-yaml'
+  | 'openapi-json'
+  | 'asyncapi-yaml'
+  | 'asyncapi-json'
+  | 'graphql-sdl'
+  | 'graphql-introspection-json'
+  | 'protobuf'
+  | 'wsdl'
+  | 'mcp-json';
 
 /** Authorities that may set supported=true and participate in automatic resolution/export. */
 export function isResolvableAuthority(authority: SourceAuthority): boolean {
@@ -140,6 +154,8 @@ export interface ResolutionResult {
   confidence: number;
   authority?: SourceAuthority;
   specPath?: string;
+  /** Optional R2 inventory JSON; empty/absent for single-file and unresolved results. */
+  specFilesJson?: string;
   apiId?: string;
   providerType?: ProviderType;
   specFormat?: SpecFormat;
@@ -251,6 +267,10 @@ export const actionContract: GCPSpecDiscoveryActionContract = {
     'spec-path': {
       description: 'Path to the resolved or generated specification when available.'
     },
+    'spec-files-json': {
+      description:
+        'Optional JSON inventory of the authoritative multi-file definition set (schemaVersion 1). Empty for single-file, unresolved, and discover-many results.'
+    },
     'api-id': {
       description: 'Full resource name of the exported cloud source (API Gateway config, Cloud Endpoints config, Apigee proxy revision, Apigee archive deployment, API Hub spec, legacy Apigee Registry spec, Apigee portal apidoc, Vertex extension, Dialogflow tool, or CES tool/toolset); empty for repo, generated, or IaC-local resolutions.'
     },
@@ -273,7 +293,8 @@ export const actionContract: GCPSpecDiscoveryActionContract = {
       description: 'Provider that produced the resolved spec: api-gateway, cloud-endpoints, apigee, api-hub, apigee-registry, app-integration, connectors-custom, apigee-portal, vertex-extensions, dialogflow-tools, ces-toolsets, or iac-local.'
     },
     'spec-format': {
-      description: 'Format of the resolved spec: openapi-yaml or openapi-json.'
+      description:
+        'Format of the resolved spec: openapi-yaml, openapi-json, asyncapi-yaml, asyncapi-json, graphql-sdl, graphql-introspection-json, protobuf, wsdl, or mcp-json.'
     },
     'contract-origin': {
       description: 'Compatibility output; always empty in v1.'

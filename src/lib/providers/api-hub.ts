@@ -4,7 +4,14 @@ import {
   type ApiHubSpecSummary,
   type GcpDiscoveryClient
 } from '../gcp/clients.js';
-import { decodeSourceDocument, decodeUtf8OpenApi } from './source-document.js';
+import { isOpenApiFormat } from '../spec/native-formats.js';
+import {
+  decodeNativeSourceDocument,
+  decodeSourceDocument,
+  decodeUtf8NativeFamily,
+  decodeUtf8NativeSpec,
+  type NativeSpecFamily
+} from './source-document.js';
 import { parseGcsSpecLocation } from './connectors-custom.js';
 import { probeFailureStatus } from './probe.js';
 import { withAuthority, type SpecCandidate, type SpecExportResult, type SpecProvider } from './types.js';
@@ -61,28 +68,74 @@ function additionalSourceType(type: ApiHubAdditionalSpecContentType): SourceType
   return type === 'BOOSTED_SPEC_CONTENT' ? 'api-hub-boosted-spec' : 'api-hub-gateway-openapi-spec';
 }
 
-function supportEvidence(spec: ApiHubSpecSummary): { supported: boolean; authority: SourceAuthority; evidence: string[] } {
+/**
+ * Map API Hub declared spec type IDs onto bootstrap-supported native families.
+ * Unspecified (empty) IDs remain eligible for content-first validation on export.
+ */
+export function resolveApiHubNativeFamily(specTypeIds: string[]): NativeSpecFamily | 'unsupported' | 'unspecified' {
+  if (specTypeIds.length === 0) return 'unspecified';
+  for (const id of specTypeIds) {
+    const lower = id.toLowerCase();
+    if (/openapi|oas|swagger|(?:^|[^a-z])rest(?:[^a-z]|$)/i.test(lower)) return 'openapi';
+    if (/asyncapi/i.test(lower)) return 'asyncapi';
+    if (/graphql|gql/i.test(lower)) return 'graphql';
+    if (/proto|protobuf|grpc/i.test(lower)) return 'protobuf';
+    if (/wsdl|soap/i.test(lower)) return 'wsdl';
+    if (/mcp|model.?context.?protocol/i.test(lower)) return 'mcp';
+  }
+  return 'unsupported';
+}
+
+function supportEvidence(spec: ApiHubSpecSummary): {
+  supported: boolean;
+  authority: SourceAuthority;
+  evidence: string[];
+  family: NativeSpecFamily | 'unspecified';
+} {
   const specTypes = spec.specTypeIds;
   const evidence = [
     `API Hub spec ${shortName(spec.name)} declares type ${specTypes.length > 0 ? specTypes.join(',') : 'unspecified'}`
   ];
-  if (specTypes.length > 0 && !specTypes.some((id) => /openapi|oas|swagger/i.test(id))) {
+  const family = resolveApiHubNativeFamily(specTypes);
+  if (family === 'unsupported') {
     return {
       supported: false,
       authority: 'unsupported-format',
-      evidence: [...evidence, 'Only OpenAPI-typed API Hub specs are exportable in v1.0.0']
+      evidence: [
+        ...evidence,
+        'Only bootstrap-supported native API Hub types (OpenAPI, GraphQL, protobuf, WSDL, AsyncAPI, MCP) are exportable'
+      ],
+      family: 'unspecified'
     };
   }
-  return { supported: true, authority: 'stored-authoritative', evidence };
+  if (family === 'unspecified') {
+    return {
+      supported: true,
+      authority: 'stored-authoritative',
+      evidence: [...evidence, 'Unspecified API Hub type; export validates content as a bootstrap-supported native format'],
+      family: 'unspecified'
+    };
+  }
+  return {
+    supported: true,
+    authority: 'stored-authoritative',
+    evidence: [...evidence, `API Hub stored original is bootstrap-supported native family ${family}`],
+    family
+  };
+}
+
+function isOpenApiTyped(spec: ApiHubSpecSummary): boolean {
+  const family = resolveApiHubNativeFamily(spec.specTypeIds);
+  return family === 'openapi' || family === 'unspecified';
 }
 
 /**
- * API Hub is the GCP consolidation layer: it stores verbatim OpenAPI documents
- * registered manually or ingested from Apigee and API Gateway plugins. The
- * provider walks apis -> versions -> specs in the hub's provisioned location
- * and exports spec bytes via specs:contents. Additional Google-generated
+ * API Hub is the GCP consolidation layer: it stores verbatim specification
+ * documents registered manually or ingested from Apigee and API Gateway plugins.
+ * The provider walks apis -> versions -> specs in the hub's provisioned location
+ * and exports original bytes via specs:contents. Additional Google-generated
  * representations (boosted / gateway OpenAPI) are emitted as distinct
- * google-generated candidates and never replace original bytes.
+ * google-generated candidates, remain OpenAPI-only, and never replace original bytes.
  */
 export class ApiHubProvider implements SpecProvider {
   public readonly type = 'api-hub' as const;
@@ -135,6 +188,7 @@ export class ApiHubProvider implements SpecProvider {
     if (contentType === 'BOOSTED_SPEC_CONTENT' || contentType === 'GATEWAY_OPEN_API_SPEC') {
       const contents = await this.client.fetchApiHubAdditionalSpecContent(specName, contentType);
       if (!contents.contents) throw new Error(`API Hub additional ${contentType} is absent`);
+      // Google-generated additional content remains OpenAPI-only.
       return {
         ...decodeSourceDocument(contents.contents),
         evidence: [
@@ -144,17 +198,22 @@ export class ApiHubProvider implements SpecProvider {
       };
     }
 
+    const family = (candidate.meta.nativeFamily || 'unspecified') as NativeSpecFamily | 'unspecified';
     const contents = await this.client.getApiHubSpecContents(specName);
     let decoded;
     const evidence = [`Exported API Hub spec contents for ${shortName(specName)}`];
     if (contents.contents) {
-      decoded = decodeSourceDocument(contents.contents);
+      decoded =
+        family === 'unspecified'
+          ? decodeNativeSourceDocument(contents.contents)
+          : decodeNativeSourceDocument(contents.contents, family);
     } else {
       const gcs = parseGcsSpecLocation(candidate.meta.sourceUri ?? '');
       if (!gcs) {
         throw new Error('API Hub spec contents are absent and sourceUri is not a trusted gs:// object reference');
       }
-      decoded = decodeUtf8OpenApi(await this.client.getStorageObjectText(gcs.bucket, gcs.object));
+      const text = await this.client.getStorageObjectText(gcs.bucket, gcs.object);
+      decoded = family === 'unspecified' ? decodeUtf8NativeSpec(text) : decodeUtf8NativeFamily(text, family);
       evidence.push('Fetched original spec bytes from registered Cloud Storage source_uri');
     }
     return { ...decoded, evidence };
@@ -163,7 +222,8 @@ export class ApiHubProvider implements SpecProvider {
   private async candidatesForSpec(spec: ApiHubSpecSummary): Promise<SpecCandidate[]> {
     const original = this.toOriginalCandidate(spec);
     const result: SpecCandidate[] = [original];
-    if (!original.supported) return result;
+    // Google-generated additional content is OpenAPI-only and requires an OpenAPI-typed base.
+    if (!original.supported || !isOpenApiTyped(spec)) return result;
 
     const types = spec.additionalSpecContentTypes ?? [];
     for (const type of types) {
@@ -182,7 +242,7 @@ export class ApiHubProvider implements SpecProvider {
     options: { includeOriginalBytesGuard?: boolean } = {}
   ): Promise<SpecCandidate[]> {
     const originalSupport = supportEvidence(spec);
-    if (!originalSupport.supported) {
+    if (!originalSupport.supported || !isOpenApiTyped(spec)) {
       return [
         this.toAdditionalCandidate(spec, type, {
           supported: false,
@@ -213,7 +273,11 @@ export class ApiHubProvider implements SpecProvider {
         ];
       }
       try {
-        decodeSourceDocument(fetched.contents);
+        // Additional variants are always validated as OpenAPI, never as native peers.
+        const decoded = decodeSourceDocument(fetched.contents);
+        if (!isOpenApiFormat(decoded.format)) {
+          throw new Error('not openapi');
+        }
       } catch {
         return [
           this.toAdditionalCandidate(spec, type, {
@@ -268,7 +332,8 @@ export class ApiHubProvider implements SpecProvider {
         specId: shortName(spec.name),
         createTime: spec.createTime ?? '',
         sourceUri: spec.sourceUri ?? '',
-        specName: spec.name
+        specName: spec.name,
+        nativeFamily: support.family
       }
     });
   }

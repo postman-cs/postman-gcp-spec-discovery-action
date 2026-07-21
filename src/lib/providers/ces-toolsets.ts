@@ -22,13 +22,14 @@ export class CesToolsetsProvider implements SpecProvider {
     return toolsets.map((toolset) => this.toCandidate(toolset));
   }
   private toCandidate(toolset: CesToolsetSummary): SpecCandidate {
-    const schema = toolset.openApiSchema?.trim();
+    const schema = toolset.openApiSchema ?? '';
+    const hasSchema = Boolean(schema.trim());
     const toolsetScopedTool = /\/toolsets\/[^/]+\/tools\/[^/]+$/.test(toolset.name);
     const standaloneTool = /\/apps\/[^/]+\/tools\/[^/]+$/.test(toolset.name);
     const resourceKind = toolsetScopedTool ? 'toolset-scoped tool' : standaloneTool ? 'tool' : 'toolset';
-    let supported = Boolean(schema);
-    let authority: SourceAuthority = schema ? 'stored-authoritative' : 'metadata-only';
-    if (schema) {
+    let supported = hasSchema;
+    let authority: SourceAuthority = hasSchema ? 'stored-authoritative' : 'metadata-only';
+    if (hasSchema) {
       try { decodeUtf8OpenApi(schema); } catch { supported = false; authority = 'metadata-only'; }
     }
     return withAuthority({
@@ -41,8 +42,8 @@ export class CesToolsetsProvider implements SpecProvider {
       projectId: this.scope.projectId,
       tags: {},
       supported,
-      evidence: [schema ? `CES ${resourceKind} stores an OpenAPI schema` : `CES ${resourceKind} has no OpenAPI schema`],
-      meta: { openApiSchema: schema ?? '', resourceKind }
+      evidence: [hasSchema ? `CES ${resourceKind} stores an OpenAPI schema` : `CES ${resourceKind} has no OpenAPI schema`],
+      meta: { openApiSchema: schema, resourceKind }
     });
   }
   public async exportSpec(candidate: SpecCandidate): Promise<SpecExportResult> {
