@@ -527,4 +527,172 @@ describe('GCP authenticated REST client', () => {
       'Apigee archive deployment list returned a repeated page token; aborting'
     );
   });
+
+  it('GCP-CLIENT-016: Apigee portal documentation maps exact wire arms and base64 contents paths', async () => {
+    const { parseApigeePortalDocumentationBody } = await import('../src/lib/gcp/clients.js');
+    const oas = 'openapi: 3.0.3\ninfo:\n  title: P\n  version: "1"\npaths:\n  /x:\n    get:\n      responses:\n        "200":\n          description: ok\n';
+    const graphql = 'type Query { ping: String! }\n';
+    const asyncapi = JSON.stringify({
+      asyncapi: '2.6.0',
+      info: { title: 'E', version: '1' },
+      channels: { ping: { publish: { message: { payload: { type: 'string' } } } } }
+    });
+
+    expect(
+      parseApigeePortalDocumentationBody({
+        data: { oasDocumentation: { spec: { contents: Buffer.from(oas).toString('base64') } } }
+      })
+    ).toEqual({ type: 'oasDocumentation', family: 'openapi', contents: oas });
+
+    expect(
+      parseApigeePortalDocumentationBody({
+        data: { graphqlDocumentation: { schema: { contents: Buffer.from(graphql).toString('base64') } } }
+      })
+    ).toEqual({ type: 'graphqlDocumentation', family: 'graphql', contents: graphql });
+
+    expect(
+      parseApigeePortalDocumentationBody({
+        data: { asyncApiDocumentation: { spec: { contents: Buffer.from(asyncapi).toString('base64') } } }
+      })
+    ).toEqual({ type: 'asyncApiDocumentation', family: 'asyncapi', contents: asyncapi });
+
+    // Wrong capitalization must not match the AsyncAPI arm.
+    expect(
+      parseApigeePortalDocumentationBody({
+        data: { asyncapiDocumentation: { spec: { contents: Buffer.from(asyncapi).toString('base64') } } }
+      })
+    ).toEqual({ type: 'missing' });
+
+    expect(
+      parseApigeePortalDocumentationBody({
+        data: { graphqlDocumentation: { schema: { contents: '!!!not-base64!!!' } } }
+      })
+    ).toEqual({ type: 'malformed' });
+
+    expect(
+      parseApigeePortalDocumentationBody({
+        data: { oasDocumentation: { spec: {} } }
+      })
+    ).toEqual({ type: 'malformed' });
+
+    const { client, request } = clientWith(async () => ({
+      data: { data: { oasDocumentation: { spec: { contents: Buffer.from(oas).toString('base64') } } } }
+    }));
+    await expect(
+      client.getApigeePortalDocumentation('sample-project-123', 'developer', 'payments')
+    ).resolves.toEqual({ type: 'oasDocumentation', family: 'openapi', contents: oas });
+    expect(request.mock.calls[0]?.[0].url).toContain(
+      '/organizations/sample-project-123/sites/developer/apidocs/payments/documentation'
+    );
+  });
+
+  it('maps FULL API Gateway grpcServices[].source[] and Service Management PROTO_FILE fields exactly', async () => {
+    const proto = 'syntax = "proto3";\nservice Payments { rpc Get(Req) returns (Res); }\n';
+    const protoB64 = Buffer.from(proto).toString('base64');
+    const descriptorB64 = Buffer.from([0x0a, 0x01, 0x00]).toString('base64');
+
+    const gateway = clientWith(async () => ({
+      data: {
+        name: 'projects/sample-project-123/locations/global/apis/payments/configs/v1',
+        labels: {},
+        state: 'ACTIVE',
+        openapiDocuments: [],
+        grpcServices: [
+          {
+            fileDescriptorSet: { path: 'api.pb', contents: descriptorB64 },
+            source: [
+              { path: 'api/payments.proto', contents: protoB64 },
+              { path: 'api/types.proto', contents: Buffer.from('syntax = "proto3";\nmessage Req {}\n').toString('base64') }
+            ]
+          }
+        ],
+        managedServiceConfigs: [{ path: 'service.yaml', contents: Buffer.from('type: google.api.Service\n').toString('base64') }]
+      }
+    }));
+    await expect(
+      gateway.client.getApiGatewayConfig('projects/sample-project-123/locations/global/apis/payments/configs/v1')
+    ).resolves.toEqual({
+      name: 'projects/sample-project-123/locations/global/apis/payments/configs/v1',
+      displayName: undefined,
+      labels: {},
+      state: 'ACTIVE',
+      createTime: undefined,
+      updateTime: undefined,
+      openapiDocuments: [],
+      grpcServices: [
+        {
+          fileDescriptorSet: { path: 'api.pb', contents: descriptorB64 },
+          source: [
+            { path: 'api/payments.proto', contents: protoB64 },
+            {
+              path: 'api/types.proto',
+              contents: Buffer.from('syntax = "proto3";\nmessage Req {}\n').toString('base64')
+            }
+          ]
+        }
+      ],
+      managedServiceConfigs: [
+        { path: 'service.yaml', contents: Buffer.from('type: google.api.Service\n').toString('base64') }
+      ]
+    });
+
+    const endpoints = clientWith(async () => ({
+      data: {
+        id: '2026-07-20r0',
+        name: 'payments.endpoints.sample-project-123.cloud.goog',
+        title: 'payments',
+        producerProjectId: 'sample-project-123',
+        sourceInfo: {
+          sourceFiles: [
+            {
+              '@type': 'type.googleapis.com/google.api.servicemanagement.v1.ConfigFile',
+              filePath: 'api/payments.proto',
+              fileContents: protoB64,
+              fileType: 'PROTO_FILE'
+            },
+            {
+              '@type': 'type.googleapis.com/google.api.servicemanagement.v1.ConfigFile',
+              filePath: 'api.pb',
+              fileContents: descriptorB64,
+              fileType: 'FILE_DESCRIPTOR_SET_PROTO'
+            },
+            {
+              filePath: 'service.yaml',
+              fileContents: Buffer.from('type: google.api.Service\n').toString('base64'),
+              fileType: 'SERVICE_CONFIG_YAML'
+            }
+          ]
+        }
+      }
+    }));
+    await expect(
+      endpoints.client.getEndpointConfig('payments.endpoints.sample-project-123.cloud.goog', '2026-07-20r0')
+    ).resolves.toEqual({
+      id: '2026-07-20r0',
+      name: 'payments.endpoints.sample-project-123.cloud.goog',
+      title: 'payments',
+      producerProjectId: 'sample-project-123',
+      sourceInfo: {
+        sourceFiles: [
+          {
+            '@type': 'type.googleapis.com/google.api.servicemanagement.v1.ConfigFile',
+            filePath: 'api/payments.proto',
+            fileContents: protoB64,
+            fileType: 'PROTO_FILE'
+          },
+          {
+            '@type': 'type.googleapis.com/google.api.servicemanagement.v1.ConfigFile',
+            filePath: 'api.pb',
+            fileContents: descriptorB64,
+            fileType: 'FILE_DESCRIPTOR_SET_PROTO'
+          },
+          {
+            filePath: 'service.yaml',
+            fileContents: Buffer.from('type: google.api.Service\n').toString('base64'),
+            fileType: 'SERVICE_CONFIG_YAML'
+          }
+        ]
+      }
+    });
+  });
 });

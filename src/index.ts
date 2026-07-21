@@ -140,8 +140,17 @@ export { runNarrowingPipeline, type NarrowingCandidate, type NarrowingResult } f
 export { collectRepoSignals } from './lib/repo/signals.js';
 export { scanGCPIac, type IacScanResult, type IacFingerprint } from './lib/repo/gcp-iac-scanner.js';
 export { findExistingRepoSpecTyped, type RepoSpecMatch } from './lib/repo/specs.js';
-export { ApiGatewayProvider, parseApiGatewayConfigName } from './lib/providers/api-gateway.js';
-export { CloudEndpointsProvider, parseEndpointConfigName } from './lib/providers/cloud-endpoints.js';
+export {
+  ApiGatewayProvider,
+  parseApiGatewayConfigName,
+  parseApiGatewayProtobufConfigName
+} from './lib/providers/api-gateway.js';
+export {
+  CloudEndpointsProvider,
+  parseEndpointConfigName,
+  parseEndpointProtobufConfigName
+} from './lib/providers/cloud-endpoints.js';
+export { resolveProtoSourceSet, extractProtoImports, normalizeProtoSourcePath } from './lib/spec/proto-source-set.js';
 export { ApigeeProvider, parseApigeeArchiveDeploymentName, parseApigeeRevisionName } from './lib/providers/apigee.js';
 export { ApiHubProvider, parseApiHubAdditionalSpecName, parseApiHubSpecName } from './lib/providers/api-hub.js';
 export { ApigeeRegistryProvider, parseApigeeRegistrySpecName } from './lib/providers/apigee-registry.js';
@@ -154,7 +163,13 @@ export { DialogflowToolsProvider, parseDialogflowToolName } from './lib/provider
 export { CesToolsetsProvider } from './lib/providers/ces-toolsets.js';
 export { IacLocalProvider } from './lib/providers/iac-local.js';
 export { parseAndValidateOpenApi } from './lib/spec/validate-openapi.js';
-export { decodeUtf8OpenApi } from './lib/providers/source-document.js';
+export {
+  detectNativeFormat,
+  nativeFilename,
+  parseAndValidateNativeFamily,
+  parseAndValidateNativeSpec
+} from './lib/spec/native-formats.js';
+export { decodeUtf8OpenApi, decodeUtf8NativeSpec } from './lib/providers/source-document.js';
 export { deriveOpenApiDocument, type OpenApiDerivationInput, type OpenApiDerivationResult } from './lib/spec/oas-derivation.js';
 export { renderAmbiguityStepSummary, appendAmbiguityStepSummary } from './lib/logging/step-summary.js';
 export const outputNames = contractOutputNames;

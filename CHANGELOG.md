@@ -1,5 +1,14 @@
 # Changelog
 
+## v1.1.0
+
+Multi-protocol and multi-file definition handoff for Postman onboarding.
+
+- Discover OpenAPI, AsyncAPI, GraphQL SDL and introspection, protobuf, WSDL, and MCP JSON from repositories and authoritative provider byte routes.
+- Preserve complete API Gateway and Service Management protobuf source sets with exact paths and a content-free `spec-files-json` inventory.
+- Add atomic staged materialization, rollback, stale-member cleanup, transitive closure validation, and bounded source-set traversal.
+- Keep descriptor-only, incomplete, unsafe, or multi-root protobuf sets explicit as manual review instead of converting or guessing.
+
 ## v1.0.1
 
 Coverage closure and correctness hardening, live-proven against real GCP surfaces (24/24 coverage slots, clean teardown).
