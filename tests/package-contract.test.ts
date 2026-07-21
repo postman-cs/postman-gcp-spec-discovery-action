@@ -29,7 +29,7 @@ const GCP_PINS: Record<string, string> = {
 describe('package contract', () => {
   it('GCP-CONTRACT-005: name, version, engine, GCP pins, and packaged files are locked', () => {
     expect(pkg.name).toBe('@postman-cse/onboarding-gcp-spec-discovery');
-    expect(pkg.version).toBe('1.1.0');
+    expect(pkg.version).toBe('1.1.1');
     expect(pkg.engines?.node).toBe('>=24');
     expect(pkg.bin?.['postman-gcp-spec-discovery']).toBe('dist/cli.cjs');
 
