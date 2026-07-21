@@ -1094,7 +1094,9 @@ describe('GCP live validation contract', () => {
     });
     expect(state.schemaVersion).toBe(LIVE_STATE_SCHEMA_VERSION);
     await saveLiveState(statePath, state);
-    expect(lstatSync(statePath).mode & 0o777).toBe(0o600);
+    if (process.platform !== 'win32') {
+      expect(lstatSync(statePath).mode & 0o777).toBe(0o600);
+    }
     const loaded = await loadLiveState(statePath);
     expect(loaded.manifest?.runId).toBe('abcd');
     expect(() => assertLiveStateSchema({ schemaVersion: 999, manifest: {} })).toThrow(/schemaVersion/);
