@@ -221,7 +221,7 @@ export class ApigeeProvider implements SpecProvider {
   }
 
   private async toArchiveCandidate(deployment: ApigeeArchiveDeploymentSummary): Promise<SpecCandidate> {
-    let count = 0;
+    let count: number;
     let evidence: string[];
     try {
       count = archiveDocuments(await this.downloadArchiveZip(deployment.name)).length;

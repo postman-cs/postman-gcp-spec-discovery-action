@@ -288,7 +288,7 @@ function validateAsyncApi(content: string, expected?: SpecFormat): NativeValidat
     parsed = isJson ? JSON.parse(trimmed) : parse(trimmed);
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
-    throw new Error(`Specification is not parseable JSON or YAML: ${detail}`);
+    throw new Error(`Specification is not parseable JSON or YAML: ${detail}`, { cause: error });
   }
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
     throw new Error('Specification did not parse to an object document');
@@ -361,7 +361,7 @@ function validateGraphqlIntrospection(content: string, expected?: SpecFormat): N
     parsed = JSON.parse(trimmed);
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
-    throw new Error(`Specification is not parseable JSON: ${detail}`);
+    throw new Error(`Specification is not parseable JSON: ${detail}`, { cause: error });
   }
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
     throw new Error('Specification did not parse to an object document');
@@ -390,7 +390,7 @@ function validateMcp(content: string, expected?: SpecFormat): NativeValidationRe
     parsed = JSON.parse(trimmed);
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
-    throw new Error(`Specification is not parseable JSON: ${detail}`);
+    throw new Error(`Specification is not parseable JSON: ${detail}`, { cause: error });
   }
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
     throw new Error('Specification did not parse to an object document');
@@ -464,7 +464,7 @@ export function parseAndValidateNativeSpec(content: string, expectedFormat?: Spe
         else parse(trimmed);
       } catch (error) {
         const detail = error instanceof Error ? error.message : String(error);
-        throw new Error(`Specification is not parseable JSON or YAML: ${detail}`);
+        throw new Error(`Specification is not parseable JSON or YAML: ${detail}`, { cause: error });
       }
     }
     if (isProtobufSource(trimmed) && !hasProtobufServiceRpc(trimmed)) {
