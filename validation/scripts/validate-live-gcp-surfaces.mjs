@@ -1638,7 +1638,7 @@ export async function provision({ runner, token, env, manifest, onCheckpoint } =
   gcloud(runner, ['services', 'enable', ...LIVE_REQUIRED_SERVICES, '--project', env.projectId]);
   const spec = path.join(repoRoot, 'validation/fixtures/gcp/openapi.yaml');
   const managed = await mkdtemp(path.join(os.tmpdir(), 'gcp-managed-'));
-  let endpointsConfigId = '';
+  let endpointsConfigId;
   try {
     const gatewaySpecPath = path.join(managed, 'gateway.yaml');
     await writeFile(gatewaySpecPath, swagger2Document({ title: manifest.gatewayName, backend: true }));

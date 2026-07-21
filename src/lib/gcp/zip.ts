@@ -30,7 +30,7 @@ function addEntry(files: Map<string, Buffer>, total: number, name: string, metho
       content = inflateRawSync(compressed, { maxOutputLength: remaining + 1 });
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === 'ERR_BUFFER_TOO_LARGE') {
-        throw new Error('ZIP extracted contents exceed 10 MiB');
+        throw new Error('ZIP extracted contents exceed 10 MiB', { cause: error });
       }
       throw error;
     }
