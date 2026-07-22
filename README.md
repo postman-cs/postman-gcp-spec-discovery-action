@@ -56,7 +56,7 @@ Exactly one conflict-free exact label match auto-selects. Zero matches, multiple
 
 `postman-repo` is an owner assertion, not a verified binding: anyone with `*.update` on the resource can point it at any repository. Keep IAM label-write privileges scoped to the deployment pipeline; ambiguity still always forces `manual-review`.
 
-A ready-to-distribute per-service-repo workflow using this pattern (adapted from the AWS discovery hub, but hub-less — each repo discovers its own spec) ships in [`templates/postman-gcp-onboard.yml`](templates/postman-gcp-onboard.yml). See [docs/repository-association.md](docs/repository-association.md) for marker placement per provider, ambiguity semantics, and WIF bootstrap.
+A ready-to-distribute per-service-repo workflow using this pattern (adapted from the AWS discovery-hub pattern, but hub-less — each repo discovers its own spec) ships in [`templates/postman-gcp-onboard.yml`](templates/postman-gcp-onboard.yml). See [docs/repository-association.md](docs/repository-association.md) for marker placement per provider, ambiguity semantics, and WIF bootstrap.
 
 ### Resolve a known config or Apigee proxy revision
 

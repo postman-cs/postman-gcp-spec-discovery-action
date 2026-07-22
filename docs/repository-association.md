@@ -1,6 +1,6 @@
 # Repository association
 
-How a service repository is matched to the deployed GCP resource that owns its API, without `api-id` and without service-name hints. This is the GCP adaptation of the AWS discovery-hub pattern (`central AWS discovery hub`) — inverted: the customer runs a central hub that scans every AWS gateway and pushes workflows into repos; here each service repo discovers its own spec directly, so there is no hub repository, no cross-repo PAT, and no estate scan.
+How a service repository is matched to the deployed GCP resource that owns its API, without `api-id` and without service-name hints. This is the GCP adaptation of an AWS discovery-hub pattern (a central hub plus `GithubOrg`/`GithubRepo` tags) — inverted: a central hub scans every AWS gateway and pushes workflows into repos; here each service repo discovers its own spec directly, so there is no hub repository, no cross-repo PAT, and no estate scan.
 
 ## Marker
 
