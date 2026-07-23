@@ -86,6 +86,9 @@ jobs:
       - name: Discover custom connector spec (released pin)
         id: discover
         uses: postman-cs/postman-gcp-spec-discovery-action@v1.1.6
+        env:
+          # v1.1.6 normalizes input names to underscores internally.
+          INPUT_EXPECTED_API_IDS_JSON: ${{ secrets.GCP_LIVE_CONNECTOR_RESOURCE_IDS_JSON }}
         with:
           project-id: ${{ secrets.GCP_PROJECT_ID }}
           expected-api-ids-json: ${{ secrets.GCP_LIVE_CONNECTOR_RESOURCE_IDS_JSON }}

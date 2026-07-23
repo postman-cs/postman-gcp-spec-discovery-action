@@ -723,6 +723,7 @@ describe('live GCS onboarding workflow contract', () => {
     expect(workflow).toContain('secrets.POSTMAN_E2E_API_KEY_NON_ORG_MODE');
 
     expect(workflow).toContain('expected-api-ids-json: ${{ secrets.GCP_LIVE_CONNECTOR_RESOURCE_IDS_JSON }}');
+    expect(workflow).toContain('INPUT_EXPECTED_API_IDS_JSON: ${{ secrets.GCP_LIVE_CONNECTOR_RESOURCE_IDS_JSON }}');
     expect(workflow).not.toContain('api-id:');
     expect(workflow).not.toContain('vars.GCP_');
     expect(workflow).toContain("on:\n  workflow_dispatch: {}");
