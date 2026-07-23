@@ -31,6 +31,7 @@ import {
   extractWorkspaceUidFromResources,
   readVerifierInputs,
   reconcileWorkspaceUids,
+  runCli,
   sanitizeReceipt,
   teardownVerifiedWorkspace,
   verifyLiveGcsOnboarding
@@ -604,6 +605,27 @@ describe('live GCS onboarding verifier', () => {
     expect(receipt.ciProvider).toBe(CI_PROVIDER);
     expect(receipt.releaseCommit).toBe(ALTERNATE_RUNTIME_COMMIT);
   });
+
+  it('writes a sanitized fallback receipt when CLI inputs are incomplete', async () => {
+    const dir = tempDir('gcs-onboard-input-invalid-');
+    const priorExitCode = process.exitCode;
+    process.exitCode = undefined;
+    try {
+      const result = await runCli({
+        root: dir,
+        env: baseEnv({ PROVIDER_TYPE: undefined }),
+        now: () => '2026-07-23T12:00:00.000Z'
+      });
+
+      expect(result.ok).toBe(false);
+      expect(result.receipt.failureClass).toBe('input-invalid');
+      expect(result.receiptPath).toBe(join(dir, DEFAULT_RECEIPT_RELATIVE));
+      expect(existsSync(result.receiptPath)).toBe(true);
+      expect(JSON.parse(readFileSync(result.receiptPath, 'utf8'))).toEqual(result.receipt);
+    } finally {
+      process.exitCode = priorExitCode;
+    }
+  });
 });
 
 describe('live GCS onboarding workflow contract', () => {
@@ -620,6 +642,7 @@ describe('live GCS onboarding workflow contract', () => {
       'GCP_WORKLOAD_IDENTITY_PROVIDER',
       'GCP_SERVICE_ACCOUNT',
       'GCP_PROJECT_ID',
+      'GCP_LIVE_CONNECTOR_RESOURCE_ID',
       'GCP_LIVE_CONNECTOR_RESOURCE_IDS_JSON',
       'POSTMAN_E2E_API_KEY_NON_ORG_MODE'
     ]) {
@@ -638,9 +661,9 @@ describe('live GCS onboarding workflow contract', () => {
     const authStep = workflow.slice(authStart, authEnd);
 
     expect(authStep).toContain('uses: google-github-actions/auth@v3');
-    expect(authStep).toContain('workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}');
-    expect(authStep).toContain('service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}');
-    expect(authStep).toContain('project_id: ${{ vars.GCP_PROJECT_ID }}');
+    expect(authStep).toContain('workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}');
+    expect(authStep).toContain('service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}');
+    expect(authStep).toContain('project_id: ${{ secrets.GCP_PROJECT_ID }}');
     expect(workflow).not.toContain('credentials_json:');
   });
 
@@ -682,13 +705,16 @@ describe('live GCS onboarding workflow contract', () => {
     expect(workflow).toMatch(/Enforce verifier exit[\s\S]*if: always\(\)/);
     expect(workflow).toContain('exit "${VERIFY_EXIT:-1}"');
 
-    expect(workflow).toContain('vars.GCP_WORKLOAD_IDENTITY_PROVIDER');
-    expect(workflow).toContain('vars.GCP_SERVICE_ACCOUNT');
-    expect(workflow).toContain('vars.GCP_PROJECT_ID');
-    expect(workflow).toContain('vars.GCP_LIVE_CONNECTOR_RESOURCE_IDS_JSON');
+    expect(workflow).toContain('secrets.GCP_WORKLOAD_IDENTITY_PROVIDER');
+    expect(workflow).toContain('secrets.GCP_SERVICE_ACCOUNT');
+    expect(workflow).toContain('secrets.GCP_PROJECT_ID');
+    expect(workflow).toContain('secrets.GCP_LIVE_CONNECTOR_RESOURCE_ID');
+    expect(workflow).toContain('secrets.GCP_LIVE_CONNECTOR_RESOURCE_IDS_JSON');
     expect(workflow).toContain('secrets.POSTMAN_E2E_API_KEY_NON_ORG_MODE');
 
-    expect(workflow).toContain('workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}');
+    expect(workflow).toContain('api-id: ${{ secrets.GCP_LIVE_CONNECTOR_RESOURCE_ID }}');
+    expect(workflow).toContain('expected-api-ids-json: ${{ secrets.GCP_LIVE_CONNECTOR_RESOURCE_IDS_JSON }}');
+    expect(workflow).not.toContain('vars.GCP_');
     expect(workflow).toContain("on:\n  workflow_dispatch: {}");
     expect(workflow).not.toContain('pull_request');
   });
