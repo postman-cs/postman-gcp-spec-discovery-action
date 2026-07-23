@@ -7,6 +7,7 @@ validation/evidence/*.local.md
 validation/tmp/
 validation/.cache/
 validation/.live-runs/
+gha-creds-*.json
 
 # Build and TypeScript artifacts
 *.tsbuildinfo
