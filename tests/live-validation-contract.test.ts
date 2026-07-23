@@ -82,6 +82,24 @@ import {
   writeAtomicJson,
   writePhaseReceipt
 } from '../validation/scripts/validate-live-gcp-surfaces.mjs';
+import * as LiveGcpValidation from '../validation/scripts/validate-live-gcp-surfaces.mjs';
+
+/** Runtime helpers not yet mirrored in validate-live-gcp-surfaces.d.mts. */
+function apiConfigReadyHelpers() {
+  return LiveGcpValidation as unknown as {
+    API_CONFIG_READY_MAX_ATTEMPTS: number;
+    API_CONFIG_READY_DELAY_MS: number;
+    isApiConfigReadinessError: (error: unknown) => boolean;
+    createApiConfigWithReadyRetry: <T>(
+      operation: () => T | Promise<T>,
+      options?: {
+        maxAttempts?: number;
+        delayMs?: number;
+        sleep?: (delayMs: number) => Promise<void>;
+      }
+    ) => Promise<T>;
+  };
+}
 
 const root = process.cwd();
 const tempDirs: string[] = [];
@@ -718,6 +736,83 @@ describe('GCP live validation contract', () => {
     expect(manifest.resources?.gateway).toEqual({ attempted: true, created: false });
     expect(manifest.resources?.endpoints).toEqual({ attempted: false, created: false });
     expect(manifest.resources?.apigee).toEqual({ attempted: false, created: false });
+  });
+
+  it('retries only API-config readiness failures with a fixed bound, then succeeds', async () => {
+    const {
+      API_CONFIG_READY_MAX_ATTEMPTS,
+      API_CONFIG_READY_DELAY_MS,
+      isApiConfigReadinessError,
+      createApiConfigWithReadyRetry
+    } = apiConfigReadyHelpers();
+
+    expect(API_CONFIG_READY_MAX_ATTEMPTS).toBe(15);
+    expect(API_CONFIG_READY_DELAY_MS).toBe(30_000);
+    expect((API_CONFIG_READY_MAX_ATTEMPTS - 1) * API_CONFIG_READY_DELAY_MS).toBe(420_000);
+    expect(isApiConfigReadinessError(new Error('ABORTED: parent resource not in ready state'))).toBe(true);
+    expect(isApiConfigReadinessError(new Error(
+      'FAILED_PRECONDITION: API Gateway Management Service Agent does not have permission to create Service Configs for Service "x.apigateway.p.cloud.goog", or the Service does not exist.'
+    ))).toBe(true);
+    expect(isApiConfigReadinessError(new Error('403 permission denied'))).toBe(false);
+    expect(isApiConfigReadinessError(new Error('FAILED_PRECONDITION: unrelated precondition'))).toBe(false);
+
+    const sleeps: number[] = [];
+    let attempts = 0;
+    await expect(createApiConfigWithReadyRetry(() => {
+      attempts += 1;
+      if (attempts === 1) {
+        throw new Error('ABORTED: parent resource not in ready state');
+      }
+      if (attempts === 2) {
+        throw new Error(
+          'FAILED_PRECONDITION: API Gateway Management Service Agent does not have permission to create Service Configs for Service "x.apigateway.p.cloud.goog", or the Service does not exist.'
+        );
+      }
+      return 'created';
+    }, {
+      sleep: async (ms) => {
+        sleeps.push(ms);
+      }
+    })).resolves.toBe('created');
+    expect(attempts).toBe(3);
+    expect(sleeps).toEqual([API_CONFIG_READY_DELAY_MS, API_CONFIG_READY_DELAY_MS]);
+  });
+
+  it('does not retry unrelated API-config errors and throws when readiness retries are exhausted', async () => {
+    const {
+      API_CONFIG_READY_MAX_ATTEMPTS,
+      API_CONFIG_READY_DELAY_MS,
+      createApiConfigWithReadyRetry
+    } = apiConfigReadyHelpers();
+
+    let unrelatedAttempts = 0;
+    let unrelatedSleeps = 0;
+    await expect(createApiConfigWithReadyRetry(() => {
+      unrelatedAttempts += 1;
+      throw new Error('403 permission denied creating api config');
+    }, {
+      sleep: async () => {
+        unrelatedSleeps += 1;
+      }
+    })).rejects.toThrow(/permission denied/);
+    expect(unrelatedAttempts).toBe(1);
+    expect(unrelatedSleeps).toBe(0);
+
+    const sleeps: number[] = [];
+    let exhaustedAttempts = 0;
+    await expect(createApiConfigWithReadyRetry(() => {
+      exhaustedAttempts += 1;
+      throw new Error('ABORTED: parent resource not in ready state');
+    }, {
+      sleep: async (ms) => {
+        sleeps.push(ms);
+      }
+    })).rejects.toThrow(/ABORTED: parent resource not in ready state/);
+    expect(exhaustedAttempts).toBe(API_CONFIG_READY_MAX_ATTEMPTS);
+    expect(sleeps).toEqual(Array.from(
+      { length: API_CONFIG_READY_MAX_ATTEMPTS - 1 },
+      () => API_CONFIG_READY_DELAY_MS
+    ));
   });
 
   it('marks Apigee attempted but not created when proxy import fails after Gateway and Endpoints succeed', async () => {
