@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.1.6
+
+Local harness release: ADC-backed live `gcloud` auth, plus a durable GCS-discovery-to-onboarding receipt workflow with guarded teardown.
+
 ## v1.1.4
 
 Corrective release from protected `main` after repository-history sanitization changed

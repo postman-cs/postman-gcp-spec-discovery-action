@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { RETAINED_PROVIDER_ORDER as SOURCE_PROVIDER_ORDER } from '../src/contracts.js';
 import {
+  ADC_ACCESS_TOKEN_FILENAME,
   DEFAULT_COMMAND_TIMEOUT_MS,
   DEFAULT_PHASE_TIMEOUT_MS,
   LIVE_COVERAGE_MATRIX,
@@ -34,12 +35,14 @@ import {
   compareSemanticOpenApi,
   computeDistBinding,
   confinePathWithinRoot,
+  createAdcAccessTokenBridge,
   createEmptyLiveState,
   createEmptyResourceStates,
   createPhaseDeadline,
   createTimedRunner,
   deriveFixtureSelectionStrategy,
   extractCliProbeStatuses,
+  isAdcAccessTokenMintArgs,
   isHistoricalEvidence,
   isResourceNotFoundError,
   loadLiveState,
@@ -56,6 +59,7 @@ import {
   proveExactNameAbsent,
   provision,
   requiredEnv,
+  resolveAdcAccessTokenFilePath,
   resolveCommandTimeoutMs,
   resolveFixtureSelectionStrategy,
   resolveReceiptPath,
@@ -74,6 +78,7 @@ import {
   verifyRemoteApigeeOwnership,
   verifyRemoteEndpointsOwnership,
   verifyRemoteGatewayOwnership,
+  withAdcAccessTokenFile,
   writeAtomicJson,
   writePhaseReceipt
 } from '../validation/scripts/validate-live-gcp-surfaces.mjs';
@@ -599,11 +604,20 @@ describe('GCP live validation contract', () => {
   }
 
   it('continues Endpoints and Apigee teardown when Gateway is absent and records sanitized teardown', async () => {
+    const root = tempDir('gcp-live-td-absent-');
+    mkdirSync(join(root, 'validation/.live-runs'), { recursive: true });
+    const tokenFilePath = resolveAdcAccessTokenFilePath({ root });
     const calls: string[] = [];
     const runner = (command: string, args: string[]) => {
       calls.push(`${command} ${args.join(' ')}`);
-      if (command === 'gcloud' && args[0] === 'auth') return 'token';
-      if (args.includes('describe') && args.includes('api-gateway')) throw new Error('404 NOT_FOUND');
+      if (command === 'gcloud' && isAdcAccessTokenMintArgs(args)) return 'token';
+      if (command === 'gcloud' && args[0] === 'auth' && args[1] === 'print-access-token') {
+        throw new Error('ordinary gcloud CLI auth must not be used');
+      }
+      if (args.includes('describe') && args.includes('api-gateway')) {
+        expect(args).toContain(`--access-token-file=${tokenFilePath}`);
+        throw new Error('404 NOT_FOUND');
+      }
       if (args.includes('describe') && args.includes('endpoints')) throw new Error('404 NOT_FOUND');
       if (args.includes('services') && args.includes('delete')) return '';
       if (command === 'curl' && args.includes('GET')) throw new Error('404 not found');
@@ -621,9 +635,11 @@ describe('GCP live validation contract', () => {
       runner,
       env: { projectId: 'p', location: 'global', apigeeOrg: 'p', apigeeEnv: 'test-env' },
       manifest,
-      log: () => {}
+      log: () => {},
+      root
     });
     expect(result).toEqual({ status: 'pass' });
+    expect(existsSync(tokenFilePath)).toBe(false);
     expect(calls.some((call) => call.includes('endpoints services delete'))).toBe(true);
     expect(verifyRemoteGatewayOwnership(manifest, { labels: { 'postman-run-marker': manifest.runMarker } })).toBe(true);
     expect(() => verifyRemoteGatewayOwnership(manifest, { labels: { 'postman-run-marker': 'foreign' } })).toThrow('REFUSING');
@@ -634,17 +650,32 @@ describe('GCP live validation contract', () => {
   });
 
   it('tracks attempted/created state through each provisioning stage and fails without marking later surfaces', async () => {
+    const root = tempDir('gcp-live-prov-stages-');
+    mkdirSync(join(root, 'validation/.live-runs'), { recursive: true });
+    const tokenFilePath = resolveAdcAccessTokenFilePath({ root });
     const stages: string[] = [];
     const manifest = baseManifest();
     const runner = (command: string, args: string[]) => {
       const joined = `${command} ${args.join(' ')}`;
       stages.push(joined);
-      if (command === 'gcloud' && args[0] === 'services' && args[1] === 'enable') return '';
+      if (command === 'gcloud' && isAdcAccessTokenMintArgs(args)) {
+        expect(args.some((arg) => String(arg).startsWith('--access-token-file'))).toBe(false);
+        return 'mock-adc-token';
+      }
+      if (command === 'gcloud' && args[0] === 'auth' && args[1] === 'print-access-token') {
+        throw new Error('ordinary gcloud CLI auth must not be used');
+      }
+      if (command === 'gcloud' && args[0] === 'services' && args[1] === 'enable') {
+        expect(args).toContain(`--access-token-file=${tokenFilePath}`);
+        return '';
+      }
       if (args.includes('apis') && args.includes('create') && args.includes(manifest.gatewayName) && !args.includes('api-configs')) {
+        expect(args).toContain(`--access-token-file=${tokenFilePath}`);
         return '';
       }
       if (args.includes('api-configs') && args.includes('create')) return '';
       if (args.includes('services') && args.includes('deploy')) {
+        expect(args).toContain(`--access-token-file=${tokenFilePath}`);
         throw new Error('403 permission denied on endpoints deploy');
       }
       if (command === 'zip') return '';
@@ -654,18 +685,23 @@ describe('GCP live validation contract', () => {
       runner,
       token: 'token',
       env: { projectId: 'p', location: 'global', apigeeOrg: 'p', apigeeEnv: 'test-env' },
-      manifest
+      manifest,
+      root
     })).rejects.toThrow(/permission denied/);
     expect(manifest.resources?.gateway).toEqual({ attempted: true, created: true });
     expect(manifest.resources?.endpoints).toEqual({ attempted: true, created: false });
     expect(manifest.resources?.apigee).toEqual({ attempted: false, created: false });
     expect(stages.some((call) => call.includes('endpoints services deploy'))).toBe(true);
     expect(stages.some((call) => call.includes('apigee.googleapis.com'))).toBe(false);
+    expect(existsSync(tokenFilePath)).toBe(false);
   });
 
   it('marks gateway attempted but not created when Gateway create fails before any resource exists', async () => {
+    const root = tempDir('gcp-live-prov-gw-');
+    mkdirSync(join(root, 'validation/.live-runs'), { recursive: true });
     const manifest = baseManifest();
     const runner = (command: string, args: string[]) => {
+      if (command === 'gcloud' && isAdcAccessTokenMintArgs(args)) return 'mock-adc-token';
       if (command === 'gcloud' && args[0] === 'services' && args[1] === 'enable') return '';
       if (args.includes('apis') && args.includes('create') && !args.includes('api-configs')) {
         throw new Error('403 permission denied creating gateway api');
@@ -676,7 +712,8 @@ describe('GCP live validation contract', () => {
       runner,
       token: 'token',
       env: { projectId: 'p', location: 'global', apigeeOrg: 'p', apigeeEnv: 'test-env' },
-      manifest
+      manifest,
+      root
     })).rejects.toThrow(/permission denied/);
     expect(manifest.resources?.gateway).toEqual({ attempted: true, created: false });
     expect(manifest.resources?.endpoints).toEqual({ attempted: false, created: false });
@@ -684,8 +721,11 @@ describe('GCP live validation contract', () => {
   });
 
   it('marks Apigee attempted but not created when proxy import fails after Gateway and Endpoints succeed', async () => {
+    const root = tempDir('gcp-live-prov-apigee-');
+    mkdirSync(join(root, 'validation/.live-runs'), { recursive: true });
     const manifest = baseManifest();
     const runner = (command: string, args: string[]) => {
+      if (command === 'gcloud' && isAdcAccessTokenMintArgs(args)) return 'mock-adc-token';
       if (command === 'gcloud' && args[0] === 'services' && args[1] === 'enable') return '';
       if (args.includes('apis') && args.includes('create')) return '';
       if (args.includes('api-configs') && args.includes('create')) return '';
@@ -701,7 +741,8 @@ describe('GCP live validation contract', () => {
       runner,
       token: 'token',
       env: { projectId: 'p', location: 'global', apigeeOrg: 'p', apigeeEnv: 'test-env' },
-      manifest
+      manifest,
+      root
     })).rejects.toThrow(/permission denied/);
     expect(manifest.resources?.gateway).toEqual({ attempted: true, created: true });
     expect(manifest.resources?.endpoints).toEqual({ attempted: true, created: true });
@@ -709,10 +750,12 @@ describe('GCP live validation contract', () => {
   });
 
   it('tears down cleanly after Gateway permission failure when exact Gateway absence is proven and unattempted Apigee is unavailable', async () => {
+    const root = tempDir('gcp-live-td-clean-');
+    mkdirSync(join(root, 'validation/.live-runs'), { recursive: true });
     const calls: string[] = [];
     const runner = (command: string, args: string[]) => {
       calls.push(`${command} ${args.join(' ')}`);
-      if (command === 'gcloud' && args[0] === 'auth') return 'token';
+      if (command === 'gcloud' && isAdcAccessTokenMintArgs(args)) return 'token';
       if (args.includes('describe') && args.includes('api-gateway')) throw new Error('404 NOT_FOUND');
       if (command === 'curl') throw new Error('503 Apigee unavailable');
       return '';
@@ -728,7 +771,8 @@ describe('GCP live validation contract', () => {
       runner,
       env: { projectId: 'p', location: 'global', apigeeOrg: 'p', apigeeEnv: 'test-env' },
       manifest,
-      log: () => {}
+      log: () => {},
+      root
     });
     expect(result).toEqual({ status: 'pass' });
     expect(calls.some((call) => call.includes('api-gateway apis describe'))).toBe(true);
@@ -738,8 +782,10 @@ describe('GCP live validation contract', () => {
   });
 
   it('fails teardown for attempted-but-unprovable resources instead of claiming clean', async () => {
+    const root = tempDir('gcp-live-td-unprov-');
+    mkdirSync(join(root, 'validation/.live-runs'), { recursive: true });
     const runner = (command: string, args: string[]) => {
-      if (command === 'gcloud' && args[0] === 'auth') return 'token';
+      if (command === 'gcloud' && isAdcAccessTokenMintArgs(args)) return 'token';
       if (args.includes('describe') && args.includes('api-gateway')) throw new Error('403 permission denied');
       return '';
     };
@@ -754,17 +800,20 @@ describe('GCP live validation contract', () => {
       runner,
       env: { projectId: 'p', location: 'global', apigeeOrg: 'p', apigeeEnv: 'test-env' },
       manifest,
-      log: () => {}
+      log: () => {},
+      root
     })).rejects.toThrow(/absence-unprovable|iam-denied/);
     expect(() => proveExactNameAbsent(() => { throw new Error('403 permission denied'); })).toThrow(/absence-unprovable|iam-denied/);
     expect(proveExactNameAbsent(() => { throw new Error('404 not found'); })).toBe(true);
   });
 
   it('refuses attempted-unconfirmed residue and never deletes it', async () => {
+    const root = tempDir('gcp-live-td-residue-');
+    mkdirSync(join(root, 'validation/.live-runs'), { recursive: true });
     const calls: string[] = [];
     const runner = (command: string, args: string[]) => {
       calls.push(`${command} ${args.join(' ')}`);
-      if (command === 'gcloud' && args[0] === 'auth') return 'token';
+      if (command === 'gcloud' && isAdcAccessTokenMintArgs(args)) return 'token';
       if (args.includes('api-gateway') && args.includes('describe')) {
         return JSON.stringify({ labels: { 'postman-run-marker': 'postman-live-1234' } });
       }
@@ -781,16 +830,19 @@ describe('GCP live validation contract', () => {
       runner,
       env: { projectId: 'p', location: 'global', apigeeOrg: 'p', apigeeEnv: 'test-env' },
       manifest,
-      log: () => {}
+      log: () => {},
+      root
     })).rejects.toThrow(/residue-detected/);
     expect(calls.some((call) => call.includes(' delete '))).toBe(false);
   });
 
   it('refuses foreign markers before deleting confirmed resources', async () => {
+    const root = tempDir('gcp-live-td-foreign-');
+    mkdirSync(join(root, 'validation/.live-runs'), { recursive: true });
     const calls: string[] = [];
     const runner = (command: string, args: string[]) => {
       calls.push(`${command} ${args.join(' ')}`);
-      if (command === 'gcloud' && args[0] === 'auth') return 'token';
+      if (command === 'gcloud' && isAdcAccessTokenMintArgs(args)) return 'token';
       if (args.includes('api-gateway') && args.includes('describe')) {
         return JSON.stringify({ labels: { 'postman-run-marker': 'foreign' } });
       }
@@ -807,17 +859,20 @@ describe('GCP live validation contract', () => {
       runner,
       env: { projectId: 'p', location: 'global', apigeeOrg: 'p', apigeeEnv: 'test-env' },
       manifest,
-      log: () => {}
+      log: () => {},
+      root
     })).rejects.toThrow(/REFUSING/);
     expect(calls.some((call) => call.includes(' delete '))).toBe(false);
   });
 
   it('deletes only confirmed-created resources after ownership verification and proves post-delete absence', async () => {
+    const root = tempDir('gcp-live-td-delete-');
+    mkdirSync(join(root, 'validation/.live-runs'), { recursive: true });
     const calls: string[] = [];
     let gatewayPresent = true;
     const runner = (command: string, args: string[]) => {
       calls.push(`${command} ${args.join(' ')}`);
-      if (command === 'gcloud' && args[0] === 'auth') return 'token';
+      if (command === 'gcloud' && isAdcAccessTokenMintArgs(args)) return 'token';
       if (args.includes('api-gateway') && args.includes('apis') && args.includes('describe')) {
         if (!gatewayPresent) throw new Error('404 NOT_FOUND');
         return JSON.stringify({ labels: { 'postman-run-marker': 'postman-live-1234' } });
@@ -840,7 +895,8 @@ describe('GCP live validation contract', () => {
       runner,
       env: { projectId: 'p', location: 'global', apigeeOrg: 'p', apigeeEnv: 'test-env' },
       manifest,
-      log: () => {}
+      log: () => {},
+      root
     });
     expect(result).toEqual({ status: 'pass' });
     expect(calls.some((call) => call.includes('api-gateway apis delete'))).toBe(true);
@@ -851,7 +907,8 @@ describe('GCP live validation contract', () => {
       runner,
       env: { projectId: 'p', location: 'global', apigeeOrg: 'p', apigeeEnv: 'test-env' },
       manifest,
-      log: () => {}
+      log: () => {},
+      root
     })).resolves.toEqual({ status: 'pass' });
     expect(calls.filter((call) => call.includes(' delete '))).toHaveLength(deletesAfterFirstTeardown);
     expect(markResourceAttempted(manifest, 'endpoints').attempted).toBe(true);
@@ -1033,6 +1090,9 @@ describe('GCP live validation contract', () => {
     expect(runbook).toContain('selectionStrategy');
     expect(runbook).toContain('archiveDeployments');
     expect(runbook).toContain('Agent Engines are excluded');
+    expect(runbook).toContain('gcloud auth application-default print-access-token');
+    expect(runbook).toContain('--access-token-file=<path>');
+    expect(runbook).toContain('Ordinary `gcloud auth login` CLI user credentials are not used');
   });
 
   it('records failure receipts with reason codes without leaking fixture env contents', () => {
@@ -1107,6 +1167,83 @@ describe('GCP live validation contract', () => {
     await expect(loadLiveState(join(root, 'validation/.live-runs/missing.json'))).rejects.toThrow(/missing|state-invalid/);
   });
 
+  it('bridges ADC into gcloud resource commands via confined --access-token-file and cleans up without leakage', async () => {
+    const root = tempDir('gcp-live-adc-bridge-');
+    mkdirSync(join(root, 'validation/.live-runs'), { recursive: true });
+    const tokenFilePath = resolveAdcAccessTokenFilePath({ root });
+    expect(tokenFilePath.endsWith(join('validation/.live-runs', ADC_ACCESS_TOKEN_FILENAME))).toBe(true);
+    expect(isAdcAccessTokenMintArgs(['auth', 'application-default', 'print-access-token'])).toBe(true);
+    expect(isAdcAccessTokenMintArgs(['auth', 'print-access-token'])).toBe(false);
+    expect(isAdcAccessTokenMintArgs(['projects', 'describe', 'p'])).toBe(false);
+
+    const SECRET = 'ya29.adc-secret-token-value-q1';
+    const calls: string[][] = [];
+    const logs: string[] = [];
+    const runner = (command: string, args: string[]) => {
+      calls.push([command, ...args]);
+      if (command === 'gcloud' && args[0] === 'auth' && args[1] === 'print-access-token' && args[2] !== 'application-default') {
+        throw new Error('ordinary gcloud CLI auth expired/unavailable');
+      }
+      if (command === 'gcloud' && isAdcAccessTokenMintArgs(args)) {
+        expect(args).toEqual(['auth', 'application-default', 'print-access-token']);
+        return `${SECRET}\n`;
+      }
+      if (command === 'gcloud' && args[0] === 'projects' && args[1] === 'describe') {
+        expect(args).toEqual([
+          'projects', 'describe', 'sample-project', '--format', 'value(projectId)',
+          `--access-token-file=${tokenFilePath}`
+        ]);
+        return 'sample-project\n';
+      }
+      throw new Error(`unexpected ${command} ${args.join(' ')}`);
+    };
+
+    const wrapped = withAdcAccessTokenFile(runner, tokenFilePath);
+    expect(wrapped('gcloud', ['auth', 'application-default', 'print-access-token'])).toBe(`${SECRET}\n`);
+    expect(calls.at(-1)).toEqual(['gcloud', 'auth', 'application-default', 'print-access-token']);
+
+    const bridge = await createAdcAccessTokenBridge({ runner, root });
+    expect(bridge.token).toBe(SECRET);
+    expect(bridge.tokenFilePath).toBe(tokenFilePath);
+    if (process.platform !== 'win32') {
+      expect(lstatSync(tokenFilePath).mode & 0o777).toBe(0o600);
+    }
+    expect(bridge.runner('gcloud', ['projects', 'describe', 'sample-project', '--format', 'value(projectId)'])).toBe('sample-project\n');
+    bridge.dispose();
+    expect(existsSync(tokenFilePath)).toBe(false);
+    bridge.dispose(); // idempotent
+
+    const binding = {
+      actionVersion: '1.0.0',
+      gitCommit: 'a'.repeat(40),
+      distCliSha256: 'b'.repeat(64),
+      distIndexSha256: 'c'.repeat(64),
+      cliPath: 'unused',
+      indexPath: 'unused'
+    };
+    const preflight = await runPhasePreflight({
+      runner,
+      env: { projectId: 'sample-project', location: 'global', apigeeOrg: 'sample-project', apigeeEnv: 'test-env' },
+      binding,
+      statePath: resolveStatePath({ root }),
+      receiptPath: resolveReceiptPath({ root, phase: 'preflight' }),
+      deadline: createPhaseDeadline(DEFAULT_PHASE_TIMEOUT_MS),
+      log: (message) => logs.push(message),
+      root
+    });
+    expect(preflight.token).toBe(SECRET);
+    expect(preflight.receipt.status).toBe('pass');
+    expect(existsSync(tokenFilePath)).toBe(false);
+    expect(logs.join('\n')).not.toContain(SECRET);
+    expect(logs.join('\n')).not.toContain(tokenFilePath);
+    expect(calls.some((args) => args[0] === 'gcloud' && args[1] === 'auth' && args[2] === 'print-access-token' && args[3] !== 'application-default')).toBe(false);
+    const mintCalls = calls.filter((args) => args[0] === 'gcloud' && isAdcAccessTokenMintArgs(args.slice(1)));
+    expect(mintCalls.length).toBeGreaterThanOrEqual(1);
+    for (const mint of mintCalls) {
+      expect(mint.some((arg) => String(arg).startsWith('--access-token-file'))).toBe(false);
+    }
+  });
+
   it('rejects phase bypasses and stale bindings before a remote phase can run', async () => {
     const root = tempDir('gcp-live-order-');
     mkdirSync(join(root, 'validation/.live-runs'), { recursive: true });
@@ -1162,11 +1299,21 @@ describe('GCP live validation contract', () => {
       indexPath: join(root, 'dist/index.cjs')
     };
     const env = { projectId: 'sample-project', location: 'global', apigeeOrg: 'sample-project', apigeeEnv: 'test-env' };
-    const commands: string[] = [];
+    const tokenFilePath = resolveAdcAccessTokenFilePath({ root });
+    const commands: string[][] = [];
     const runner = (command: string, args: string[]) => {
-      commands.push([command, ...args].join(' '));
-      if (args[0] === 'projects' && args[1] === 'describe') return 'sample-project\n';
-      if (args[0] === 'auth') return 'token\n';
+      commands.push([command, ...args]);
+      if (command === 'gcloud' && isAdcAccessTokenMintArgs(args)) {
+        expect(args.some((arg) => String(arg).startsWith('--access-token-file'))).toBe(false);
+        return 'token\n';
+      }
+      if (command === 'gcloud' && args[0] === 'auth' && args[1] === 'print-access-token') {
+        throw new Error('ordinary gcloud CLI auth must not be used');
+      }
+      if (args[0] === 'projects' && args[1] === 'describe') {
+        expect(args).toContain(`--access-token-file=${tokenFilePath}`);
+        return 'sample-project\n';
+      }
       if (args.includes('apis') && args.includes('create')) return '';
       if (args.includes('api-configs') && args.includes('create')) return '';
       if (args.includes('services') && args.includes('deploy')) return '';
@@ -1194,11 +1341,13 @@ describe('GCP live validation contract', () => {
       statePath,
       receiptPath: preflightReceipt,
       deadline: createPhaseDeadline(DEFAULT_PHASE_TIMEOUT_MS),
-      log: () => undefined
+      log: () => undefined,
+      root
     });
     expect(preflight.receipt.status).toBe('pass');
-    expect(commands.some((line) => /apis create|services deploy|action=import/.test(line))).toBe(false);
-    expect(commands.some((line) => line.includes('projects describe sample-project'))).toBe(true);
+    expect(existsSync(tokenFilePath)).toBe(false);
+    expect(commands.some((args) => /apis create|services deploy|action=import/.test(args.join(' ')))).toBe(false);
+    expect(commands.some((args) => args[0] === 'gcloud' && args[1] === 'projects' && args[2] === 'describe')).toBe(true);
 
     let checkpoints = 0;
     const provisionReceipt = resolveReceiptPath({ root, phase: 'provision' });

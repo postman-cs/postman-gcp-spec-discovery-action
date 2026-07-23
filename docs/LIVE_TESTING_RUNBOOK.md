@@ -5,7 +5,7 @@ Live validation is an operator-triggered, phase-addressable job. It binds a sani
 ## Prerequisites
 
 - An explicitly selected disposable project via `GCP_PROJECT_ID`. Never rely on an ambient `gcloud` project; every mutating command passes `--project` from that env value.
-- ADC credentials from `gcloud auth application-default login`, or equivalent workload identity credentials.
+- Application Default Credentials (ADC) only: `gcloud auth application-default login`, `GOOGLE_APPLICATION_CREDENTIALS`, or equivalent workload identity. Ordinary `gcloud auth login` CLI user credentials are not used for live resource commands — ADC is not applied to `gcloud` resource commands automatically, so the runner mints a token with `gcloud auth application-default print-access-token`, writes it to a gitignored mode-`0600` file under `validation/.live-runs/`, and passes the gcloud-wide `--access-token-file=<path>` flag on every non-mint resource command. The mint command itself never receives that flag. Each phase creates and removes its own token file in `finally` (success or failure). Never log the token or token-file path contents.
 - A clean committed candidate build: `npm run build`, then commit the resulting `dist/` before live validation (the runner refuses missing or dirty `dist/` and never runs `npm run build` itself).
 
 ## Fresh-job orchestration
@@ -66,7 +66,7 @@ CLI bounds: `--command-timeout-ms` default `180000` (min `5000`, max `600000`); 
 
 ## Phase semantics
 
-- `preflight` — exact project/env/auth/binding checks; writes state + receipt; no GCP resource creation.
+- `preflight` — exact project/env/ADC-auth/binding checks (ADC token bridge + `--access-token-file` on `projects describe`); writes state + receipt; no GCP resource creation.
 - `provision` — consumes state; enables/verifies APIs; provisions one manifest; saves state after every successful create and state transition; does not validate.
 - `validate` — consumes the same state; validates only requested allowed slots (`--slots`) or the full allowlist; fail-fast on first unexpected failure; preserves prior completed slot receipts; no provisioning/teardown.
 - `teardown` — consumes state; exact ownership cleanup and absence proof only; idempotent; writes clean/fail receipt.
@@ -123,5 +123,5 @@ Receipt acceptance is dual-mode: historical migration must declare `historical` 
 - Teardown: unattempted surfaces are not probed; attempted-but-unconfirmed surfaces must prove exact-name absence and are never deleted; confirmed resources must prove the current-run marker/name before deletion and exact-name absence afterward. Repeated teardown is safe because an already-absent confirmed resource is accepted as absent.
 - Shared Apigee organization, environment, environment group, and instance resources are never deleted.
 - Do not use a production project or broaden cleanup beyond the current run.
-- Never log `GCP_LIVE_FIXTURES_JSON` or credential material.
+- Never log `GCP_LIVE_FIXTURES_JSON`, credential material, ADC tokens, or access-token file path contents.
 - Never put private IDs/specs/tokens in tracked evidence.
