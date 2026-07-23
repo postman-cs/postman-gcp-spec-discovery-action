@@ -64,7 +64,8 @@ describe('CI workflow contract', () => {
     expect(jobMatches).toEqual(['  gate:', '  windows:']);
 
     expect(ciWorkflow).toContain("node-version: '24'");
-    expect(ciWorkflow.match(/^\s*- run: npm ci\s*$/gm) ?? []).toHaveLength(2);
+    expect(linux.match(/^\s*- run: npm ci\s*$/gm) ?? []).toHaveLength(1);
+    expect(windows).toContain('run: npm ci --prefer-offline --no-audit --no-fund');
     expect(ciWorkflow).toContain('runs-on: windows-latest');
     expect(ciWorkflow).toContain(
       'group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}',
@@ -128,46 +129,76 @@ describe('CI workflow contract', () => {
   it('GCP-CI-003: actionlint 1.7.11 at RUNNER_TEMP with no Go toolchain', () => {
     const install = namedStep(linux, 'Install actionlint');
     expect(install.length).toBeGreaterThan(0);
+    expect(install).toContain(
+      'https://raw.githubusercontent.com/rhysd/actionlint/393031adb9afb225ee52ae2ccd7a5af5525e03e8/scripts/download-actionlint.bash',
+    );
+    expect(install).toMatch(/393031adb9afb225ee52ae2ccd7a5af5525e03e8/);
+    expect(install.match(/393031adb9afb225ee52ae2ccd7a5af5525e03e8/)?.[0]).toHaveLength(40);
     expect(install).toContain('download-actionlint.bash) 1.7.11 "$RUNNER_TEMP"');
     expect(install).toContain('ACTIONLINT_BIN=$RUNNER_TEMP/actionlint');
+    expect(ciWorkflow).not.toContain('/main/scripts/download-actionlint.bash');
 
     expect(ciWorkflow).not.toContain('actions/setup-go');
     expect(ciWorkflow).not.toContain('go install github.com/rhysd/actionlint');
     expect(ciWorkflow).not.toMatch(/\bgo install\b/);
   });
 
-  it('GCP-CI-004: Windows one bundle before at-most-two argument-safe jobs with grouped diagnostics', () => {
+  it('GCP-CI-004: Windows exact cache pin, guarded miss npm ci, sole direct npm test, no queue', () => {
+    expect(windows).toContain('name: Windows gate');
     expect(windows).toContain('runs-on: windows-latest');
     expect(windows).not.toMatch(/^\s*fetch-depth:\s*/m);
-    expect(windows.match(/^\s*- run: npm run bundle\s*$/gm) ?? []).toHaveLength(1);
-    expect(windows.indexOf('- run: npm run bundle')).toBeLessThan(windows.indexOf('- name: Run gates'));
 
-    const runGates = namedStep(windows, 'Run gates');
-    expect(runGates.length).toBeGreaterThan(0);
-    expect(runGates).toContain('shell: pwsh');
-    expect(runGates).toContain('$MAX_PARALLEL_GATES = 2');
-    expect(runGates).toContain('while ($running.Count -ge $MAX_PARALLEL_GATES)');
-    expect(runGates).toContain('Start-Job');
-    expect(runGates).toContain("@{ Name = 'lint'; Args = @('run', 'lint') }");
-    expect(runGates).toContain("@{ Name = 'test'; Args = @('test') }");
-    expect(runGates).toContain("@{ Name = 'typecheck'; Args = @('run', 'typecheck') }");
-    expect(runGates).toContain("@{ Name = 'dist'; Args = @('run', 'verify:dist:assert') }");
-    expect(runGates).toContain('& npm @npmArgs');
-    expect(runGates).not.toContain('Invoke-Expression');
+    expect(windows).toContain("node-version: '24'");
+    expect(windows).not.toMatch(/^\s*cache:\s*npm\s*$/m);
 
-    expect(runGates).toContain('Receive-Job -Job $completed -ErrorAction Continue 2>&1');
-    expect(runGates).toContain('Receive-Job -Job $job -ErrorAction Continue 2>&1');
-    expect(runGates).toContain('::group::');
-    expect(runGates).toContain('::endgroup::');
-    expect(runGates).toContain('Where-Object Id -ne $completed.Id');
-    expect(runGates).toContain('$LASTEXITCODE');
-    expect(runGates).toContain('throw');
+    expect(windows).toContain('id: windows-node-modules');
+    expect(windows).toContain(
+      'uses: actions/cache@1bd1e32a3bdc45362d1e726936510720a7c30a57 # v4.2.0',
+    );
+    expect(windows).toContain('path: node_modules');
+    expect(windows).toContain(
+      "key: Windows/node-24/exact-${{ hashFiles('package-lock.json') }}",
+    );
+    expect(windows).not.toContain('restore-keys');
+    expect(windows).not.toContain('restore-key');
 
-    expect(runGates).not.toContain('npm run build');
-    expect(runGates).not.toContain('npm run bundle');
-    expect(runGates).not.toMatch(/npm run verify:dist(?:\s|$|"|')/);
-    expect(runGates).not.toContain('actionlint');
-    expect(runGates).not.toContain('commitlint');
+    expect(windows).toContain("if: steps.windows-node-modules.outputs.cache-hit != 'true'");
+    expect(windows).toContain('run: npm ci --prefer-offline --no-audit --no-fund');
+    expect(windows.match(/npm ci --prefer-offline --no-audit --no-fund/g) ?? []).toHaveLength(1);
+    expect(windows.match(/^\s*- run: npm ci\s*$/gm) ?? []).toHaveLength(0);
+
+    expect(windows.match(/^\s*- run: npm test\s*$/gm) ?? []).toHaveLength(1);
+    expect(windows).not.toMatch(/npm test --/);
+    expect(windows).not.toMatch(/npm test -/);
+
+    expect(windows).not.toContain('Run gates');
+    expect(windows).not.toContain('shell: pwsh');
+    expect(windows).not.toContain('$MAX_PARALLEL_GATES');
+    expect(windows).not.toContain('Start-Job');
+    expect(windows).not.toContain('Wait-Job');
+    expect(windows).not.toContain('Receive-Job');
+    expect(windows).not.toMatch(/@\{ Name = '/);
+
+    expect(windows).not.toContain('npm run bundle');
+    expect(windows).not.toContain('npm run build');
+    expect(windows).not.toContain('npm run lint');
+    expect(windows).not.toContain('npm run typecheck');
+    expect(windows).not.toContain('npm run verify:dist');
+    expect(windows).not.toContain('actionlint');
+    expect(windows).not.toContain('commitlint');
+  });
+
+  it('GCP-CI-006: Linux and Windows jobs stay independent with no needs edges', () => {
+    expect(linux).not.toMatch(/^\s*needs:/m);
+    expect(windows).not.toMatch(/^\s*needs:/m);
+    expect(ciWorkflow).not.toMatch(/^\s*needs:/m);
+
+    const upload = namedStep(linux, 'Upload expected dist on mismatch');
+    expect(upload.length).toBeGreaterThan(0);
+    expect(upload).toContain('if: failure()');
+    expect(upload).toContain('uses: actions/upload-artifact@v7');
+    expect(upload).toContain('name: expected-dist');
+    expect(upload).toContain('path: dist/');
   });
 
   it(
