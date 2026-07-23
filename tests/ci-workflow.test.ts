@@ -143,7 +143,7 @@ describe('CI workflow contract', () => {
     expect(ciWorkflow).not.toMatch(/\bgo install\b/);
   });
 
-  it('GCP-CI-004: Windows exact cache pin, guarded miss npm ci, sole direct npm test, no queue', () => {
+  it('GCP-CI-004: Windows exact cache pin, guarded miss npm ci, node-run test, no queue', () => {
     expect(windows).toContain('name: Windows gate');
     expect(windows).toContain('runs-on: windows-latest');
     expect(windows).not.toMatch(/^\s*fetch-depth:\s*/m);
@@ -167,9 +167,8 @@ describe('CI workflow contract', () => {
     expect(windows.match(/npm ci --prefer-offline --no-audit --no-fund/g) ?? []).toHaveLength(1);
     expect(windows.match(/^\s*- run: npm ci\s*$/gm) ?? []).toHaveLength(0);
 
-    expect(windows.match(/^\s*- run: npm test\s*$/gm) ?? []).toHaveLength(1);
-    expect(windows).not.toMatch(/npm test --/);
-    expect(windows).not.toMatch(/npm test -/);
+    expect(windows.match(/^\s*- run: node --run test\s*$/gm) ?? []).toHaveLength(1);
+    expect(windows).not.toMatch(/^\s*- run: npm test(?:\s|$)/m);
 
     expect(windows).not.toContain('Run gates');
     expect(windows).not.toContain('shell: pwsh');
