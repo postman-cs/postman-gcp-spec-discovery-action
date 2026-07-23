@@ -15,6 +15,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import {
+  assertNpmReleaseIdentity,
   assertNpmSriMatch,
   computeNpmSri,
   decideAliasVersion,
@@ -36,13 +37,14 @@ const packageJson = JSON.parse(readFileSync(join(process.cwd(), 'package.json'),
   files: string[];
 };
 const npmCliPath = process.env.npm_execpath;
+const ACTIONLINT_PIN = '393031adb9afb225ee52ae2ccd7a5af5525e03e8';
 
 const expected = {
   repository: 'postman-cs/postman-gcp-spec-discovery-action',
   commitSha: 'a'.repeat(40),
-  tag: 'v1.1.4',
+  tag: `v${packageJson.version}`,
   packageName: '@postman-cse/onboarding-gcp-spec-discovery',
-  packageVersion: '1.1.4',
+  packageVersion: packageJson.version,
 };
 
 const baseManifest = {
@@ -75,18 +77,29 @@ function freshStage(): string {
   return mkdtempSync(join(tmpdir(), 'gcp-release-artifact-'));
 }
 
+function job(name: string): string {
+  return releaseWorkflow.match(new RegExp(`  ${name}:\\n[\\s\\S]*?(?=\\n  [a-zA-Z0-9_-]+:|$)`))?.[0] ?? '';
+}
+
 describe('release artifact contract', () => {
   const manifest = { ...baseManifest, artifacts: [{ path: 'release.tgz', sha256: sha256hex('tarball') }] };
 
-  it('GCP-RELEASE-ARTIFACT-001: release.yml is required and pins verifier digest to the script on disk', () => {
+  it('GCP-RELEASE-ARTIFACT-001: release.yml pins verifier digest, actionlint commit, and trusted identity', () => {
     expect(releaseWorkflow.length).toBeGreaterThan(0);
     expect(releaseWorkflow).toContain('name: Release');
-    const publishJob = releaseWorkflow.match(/ {2}publish:\n[\s\S]*?(?=\n {2}[a-zA-Z0-9_-]+:|$)/)?.[0] ?? '';
+    const publishJob = job('publish');
     expect(publishJob).toContain(`EXPECTED_SHA256='${verifierDigest}'`);
     expect(publishJob).toContain('test "$ACTUAL_SHA256" = "$EXPECTED_SHA256"');
     expect(publishJob).toContain("PACKAGE_NAME='@postman-cse/onboarding-gcp-spec-discovery'");
     expect(publishJob).toContain('PACKAGE_VERSION="${GITHUB_REF_NAME#v}"');
     expect(packageJson.files).toContain('scripts/verify-release-artifacts.mjs');
+
+    const verify = job('verify-package');
+    expect(verify).toContain(
+      `https://raw.githubusercontent.com/rhysd/actionlint/${ACTIONLINT_PIN}/scripts/download-actionlint.bash) 1.7.11 "$RUNNER_TEMP"`,
+    );
+    expect(verify).not.toContain('/main/scripts/download-actionlint.bash');
+    expect(ACTIONLINT_PIN).toHaveLength(40);
   });
 
   it('GCP-RELEASE-ARTIFACT-002: accepts only a manifest bound to this release identity', () => {
@@ -164,7 +177,7 @@ describe('release artifact contract', () => {
     });
   });
 
-  it('GCP-RELEASE-ARTIFACT-004: matching/mismatching npm SRI and older/equal/newer alias decisions', () => {
+  it('GCP-RELEASE-ARTIFACT-004: matching/mismatching npm SRI, gitHead identity, and alias decisions', () => {
     const bytes = Buffer.from('gcp-release-tarball');
     const sri = computeNpmSri(bytes);
     expect(sri).toMatch(/^sha512-/);
@@ -176,18 +189,70 @@ describe('release artifact contract', () => {
     const dir = freshStage();
     try {
       writeTarball(dir, expected.packageName, expected.packageVersion);
-      const stagedSri = computeNpmSri(join(dir, 'release.tgz'));
-      expect(() => assertNpmSriMatch(stagedSri, computeNpmSri(join(dir, 'release.tgz')))).not.toThrow();
-      expect(() => assertNpmSriMatch(stagedSri, 'sha512-not-matching')).toThrow(/integrity/);
-      execFileSync(process.execPath, [verifierPath, '--check-npm-sri', join(dir, 'release.tgz'), stagedSri], {
-        encoding: 'utf8',
-        timeout: EXTERNAL_COMMAND_TIMEOUT_MS,
-      });
+      const stagedPath = join(dir, 'release.tgz');
+      const stagedSri = computeNpmSri(stagedPath);
+      const commit = 'c'.repeat(40);
+
       expect(() =>
-        execFileSync(process.execPath, [verifierPath, '--check-npm-sri', join(dir, 'release.tgz'), 'sha512-bad'], {
+        assertNpmReleaseIdentity({
+          registrySri: stagedSri,
+          stagedTarball: stagedPath,
+          registryGitHead: commit,
+          expectedGitHead: commit,
+        }),
+      ).not.toThrow();
+
+      expect(() =>
+        assertNpmReleaseIdentity({
+          registrySri: 'sha512-not-matching',
+          stagedTarball: stagedPath,
+          registryGitHead: commit,
+          expectedGitHead: commit,
+        }),
+      ).toThrow(/integrity/);
+
+      expect(() =>
+        assertNpmReleaseIdentity({
+          registrySri: stagedSri,
+          stagedTarball: stagedPath,
+          registryGitHead: '',
+          expectedGitHead: commit,
+        }),
+      ).toThrow(/gitHead is missing/);
+
+      expect(() =>
+        assertNpmReleaseIdentity({
+          registrySri: stagedSri,
+          stagedTarball: stagedPath,
+          registryGitHead: 'd'.repeat(40),
+          expectedGitHead: commit,
+        }),
+      ).toThrow(/does not match expected commit/);
+
+      execFileSync(
+        process.execPath,
+        [verifierPath, '--check-npm-release-identity', stagedPath, stagedSri, commit, commit],
+        { encoding: 'utf8', timeout: EXTERNAL_COMMAND_TIMEOUT_MS },
+      );
+      expect(() =>
+        execFileSync(
+          process.execPath,
+          [verifierPath, '--check-npm-release-identity', stagedPath, stagedSri, '', commit],
+          { encoding: 'utf8', timeout: EXTERNAL_COMMAND_TIMEOUT_MS },
+        ),
+      ).toThrow();
+      expect(() =>
+        execFileSync(
+          process.execPath,
+          [verifierPath, '--check-npm-sri', stagedPath, stagedSri],
+          { encoding: 'utf8', timeout: EXTERNAL_COMMAND_TIMEOUT_MS },
+        ),
+      ).not.toThrow();
+      expect(() =>
+        execFileSync(process.execPath, [verifierPath, '--check-npm-sri', stagedPath, 'sha512-bad'], {
           encoding: 'utf8',
           timeout: EXTERNAL_COMMAND_TIMEOUT_MS,
-        })
+        }),
       ).toThrow();
     } finally {
       rmSync(dir, { recursive: true, force: true });
@@ -219,8 +284,31 @@ describe('release artifact contract', () => {
     ).toBe('skip');
   });
 
+  it('GCP-RELEASE-ARTIFACT-005: publish shape pins RUNNER_TEMP stage, checkout, repack cmp, directory publish, gitHead retry', () => {
+    const publish = job('publish');
+    const verify = job('verify-package');
+
+    expect(publish).toContain('actions/checkout@v7');
+    expect(publish).toContain('ref: ${{ github.sha }}');
+    expect(publish).toContain('path: ${{ runner.temp }}/release-stage');
+    expect(publish).toContain('STAGE_DIR="$RUNNER_TEMP/release-stage"');
+    expect(publish).toContain('npm pack --ignore-scripts --pack-destination "$REPACK_DIR"');
+    expect(publish).toContain('cmp -s "$REPACKED" "$STAGED_TGZ"');
+    expect(publish).toContain('npm publish --ignore-scripts --provenance --access public');
+    expect(publish).not.toContain('npm publish ./release.tgz');
+    expect(publish).toContain('--check-npm-release-identity');
+    expect(publish).toContain('"$GITHUB_SHA"');
+    expect(publish).toContain('for attempt in 1 2 3 4 5 6 7 8 9 10');
+    expect(publish).toContain('files: ${{ runner.temp }}/release-stage/release.tgz');
+
+    expect(verify).toContain('npm pack --ignore-scripts --pack-destination .');
+    expect(verify).toContain(
+      `https://raw.githubusercontent.com/rhysd/actionlint/${ACTIONLINT_PIN}/scripts/download-actionlint.bash`,
+    );
+  });
+
   it(
-    'GCP-RELEASE-ARTIFACT-005: real npm-packed verifier handoff matches pin and verifies the exact two-file stage',
+    'GCP-RELEASE-ARTIFACT-006: real npm-packed verifier handoff matches pin and verifies the exact two-file stage',
     () => {
       const packDir = mkdtempSync(join(tmpdir(), 'gcp-npm-pack-'));
       const stageDir = mkdtempSync(join(tmpdir(), 'gcp-packed-stage-'));
