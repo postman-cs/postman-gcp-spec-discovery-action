@@ -40,9 +40,9 @@ const npmCliPath = process.env.npm_execpath;
 const expected = {
   repository: 'postman-cs/postman-gcp-spec-discovery-action',
   commitSha: 'a'.repeat(40),
-  tag: 'v1.1.3',
+  tag: 'v1.1.4',
   packageName: '@postman-cse/onboarding-gcp-spec-discovery',
-  packageVersion: '1.1.3',
+  packageVersion: '1.1.4',
 };
 
 const baseManifest = {
