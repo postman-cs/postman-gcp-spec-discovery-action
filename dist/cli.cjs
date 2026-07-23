@@ -3357,7 +3357,7 @@ var require_data_url = __commonJS({
 var require_webidl = __commonJS({
   "node_modules/undici/lib/web/fetch/webidl.js"(exports2, module2) {
     "use strict";
-    var { types: types3, inspect } = require("node:util");
+    var { types: types3, inspect: inspect2 } = require("node:util");
     var { markAsUncloneable } = require("node:worker_threads");
     var { toUSVString } = require_util();
     var webidl = {};
@@ -3504,7 +3504,7 @@ var require_webidl = __commonJS({
         case "Symbol":
           return `Symbol(${V.description})`;
         case "Object":
-          return inspect(V);
+          return inspect2(V);
         case "String":
           return `"${V}"`;
         default:
@@ -46486,10 +46486,12 @@ var POSTMAN_ENDPOINT_PROFILES = {
 // src/lib/postman/token-provider.ts
 var MintError = class extends Error {
   permanent;
-  constructor(message, permanent) {
+  status;
+  constructor(message, permanent, status) {
     super(message);
     this.name = "MintError";
     this.permanent = permanent;
+    this.status = status;
   }
 };
 function extractAccessToken(payload) {
@@ -46570,7 +46572,8 @@ var AccessTokenProvider = class {
       if (status === 401 || status === 403) {
         throw new MintError(
           `postman: re-mint failed because the postman-api-key was rejected (PMAK rejected, HTTP ${status}); confirm it is a valid, enabled service-account PMAK for the intended team.`,
-          true
+          true,
+          status
         );
       }
       if (status === 400 && body.toLowerCase().includes("service accounts not enabled")) {
@@ -46579,7 +46582,7 @@ var AccessTokenProvider = class {
           true
         );
       }
-      throw new MintError(`postman: re-mint failed (service-account-tokens HTTP ${status}).`, false);
+      throw new MintError(`postman: re-mint failed (service-account-tokens HTTP ${status}).`, false, status);
     }
     let parsed;
     try {
@@ -46594,6 +46597,92 @@ var AccessTokenProvider = class {
     return token;
   }
 };
+
+// src/lib/postman/pmak-diagnostics.ts
+var memo = /* @__PURE__ */ new Map();
+function asRecord2(value) {
+  return value && typeof value === "object" && !Array.isArray(value) ? value : void 0;
+}
+function normalizeApiBaseUrl(apiBaseUrl) {
+  return new URL(apiBaseUrl.trim()).toString().replace(/\/+$/, "");
+}
+function diagnosticSignal(signal, timeoutMs) {
+  const timeout = AbortSignal.timeout(timeoutMs);
+  return signal ? AbortSignal.any([signal, timeout]) : timeout;
+}
+async function inspect(options, normalizedApiBase) {
+  try {
+    const response = await (options.fetchImpl ?? fetch)(`${normalizedApiBase}/me`, {
+      headers: { "x-api-key": options.apiKey },
+      signal: diagnosticSignal(options.signal, options.timeoutMs ?? 2e3)
+    });
+    if (response.status === 401 || response.status === 403) {
+      return { kind: "invalid", status: response.status };
+    }
+    if (!response.ok) {
+      return { kind: "inconclusive", status: response.status };
+    }
+    let payload;
+    try {
+      payload = asRecord2(await response.json());
+    } catch {
+      return { kind: "inconclusive", status: response.status };
+    }
+    const user = asRecord2(payload?.user);
+    if (!user) {
+      return { kind: "inconclusive", status: response.status };
+    }
+    const username = user.username;
+    const email = user.email;
+    if (typeof username === "string" && username.trim() || typeof email === "string" && email.trim()) {
+      return { kind: "personal", status: response.status };
+    }
+    if (Object.hasOwn(user, "username") && Object.hasOwn(user, "email") && (username === null || username === "") && (email === null || email === "")) {
+      return { kind: "service-account", status: response.status };
+    }
+    return { kind: "inconclusive", status: response.status };
+  } catch {
+    return { kind: "inconclusive" };
+  }
+}
+function inspectPmakIdentity(options) {
+  const normalizedApiBase = normalizeApiBaseUrl(options.apiBaseUrl);
+  const key = `${normalizedApiBase}\0${options.apiKey}`;
+  let result = memo.get(key);
+  if (!result) {
+    result = inspect(options, normalizedApiBase);
+    memo.set(key, result);
+    if (options.mode === "preflight") {
+      void result.then((value) => {
+        if (value.kind === "inconclusive") memo.delete(key);
+      });
+    }
+  }
+  return result;
+}
+function maskPmakDiagnostic(message, secrets) {
+  let masked = message;
+  for (const secret of secrets) {
+    if (secret) masked = masked.split(secret).join("***");
+  }
+  const controls = new RegExp(
+    `[${String.fromCharCode(0)}-${String.fromCharCode(31)}${String.fromCharCode(127)}-${String.fromCharCode(159)}]`,
+    "g"
+  );
+  return masked.replace(controls, " ").replace(/\s+/g, " ").trim();
+}
+function formatRejectedMint(originalMintError, result) {
+  switch (result.kind) {
+    case "personal":
+      return `${originalMintError} Personal API key detected, cannot mint a service-account access token.`;
+    case "service-account":
+      return `${originalMintError} postman-api-key authenticates (GET /me OK) but was rejected by POST /service-account-tokens and lacks permission to mint access tokens.`;
+    case "invalid":
+      return `${originalMintError} postman-api-key is invalid, disabled, or expired.`;
+    default:
+      return originalMintError;
+  }
+}
 
 // src/lib/postman/telemetry-credentials.ts
 function resolveTelemetryTeamId(env) {
@@ -46615,7 +46704,16 @@ async function prepareTelemetryCredentials(options) {
   if (!accessToken && apiKey && provider.canRefresh()) {
     try {
       await provider.refresh();
-    } catch {
+    } catch (error) {
+      const original = maskPmakDiagnostic(error instanceof Error ? error.message : String(error), [apiKey]);
+      const status = error instanceof Error && "status" in error && typeof error.status === "number" ? error.status : void 0;
+      const diagnosis = status === 401 || status === 403 ? formatRejectedMint(original, await inspectPmakIdentity({
+        apiBaseUrl: options.apiBaseUrl || POSTMAN_ENDPOINT_PROFILES.prod.apiBaseUrl,
+        apiKey,
+        ...options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}
+      })) : original;
+      options.onWarning?.(`postman: telemetry credential enrichment failed. ${diagnosis}`);
+      return { provider };
     }
   }
   const accountType = await resolveTelemetryAccountType(provider.current(), options.fetchImpl);
@@ -51271,7 +51369,8 @@ async function runCli(argv = process.argv.slice(2), runtime = {}) {
   telemetry.setTeamId(resolveTelemetryTeamId(config.inputEnv));
   const { accountType } = await prepareTelemetryCredentials({
     postmanApiKey: config.inputEnv.INPUT_POSTMAN_API_KEY ?? env.POSTMAN_API_KEY,
-    postmanAccessToken: config.inputEnv.INPUT_POSTMAN_ACCESS_TOKEN ?? env.POSTMAN_ACCESS_TOKEN
+    postmanAccessToken: config.inputEnv.INPUT_POSTMAN_ACCESS_TOKEN ?? env.POSTMAN_ACCESS_TOKEN,
+    onWarning: (message) => reporter.warning(message)
   });
   try {
     const sdkOptions = { requestTimeoutMs: inputs.requestTimeoutMs, maxAttempts: inputs.maxAttempts };
