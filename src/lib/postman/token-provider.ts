@@ -22,11 +22,13 @@ export interface AccessTokenProviderOptions {
 
 class MintError extends Error {
   readonly permanent: boolean;
+  readonly status?: number;
 
-  constructor(message: string, permanent: boolean) {
+  constructor(message: string, permanent: boolean, status?: number) {
     super(message);
     this.name = 'MintError';
     this.permanent = permanent;
+    this.status = status;
   }
 }
 
@@ -129,7 +131,8 @@ export class AccessTokenProvider {
         throw new MintError(
           `postman: re-mint failed because the postman-api-key was rejected (PMAK rejected, HTTP ${status}); ` +
             'confirm it is a valid, enabled service-account PMAK for the intended team.',
-          true
+          true,
+          status
         );
       }
       if (status === 400 && body.toLowerCase().includes('service accounts not enabled')) {
@@ -139,7 +142,7 @@ export class AccessTokenProvider {
           true
         );
       }
-      throw new MintError(`postman: re-mint failed (service-account-tokens HTTP ${status}).`, false);
+      throw new MintError(`postman: re-mint failed (service-account-tokens HTTP ${status}).`, false, status);
     }
 
     let parsed: unknown;

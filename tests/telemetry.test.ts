@@ -10,6 +10,8 @@ import type { GcpDiscoveryClient } from '../src/lib/gcp/clients.js';
 import type { SpecProvider } from '../src/lib/providers/types.js';
 import { AccessTokenProvider } from '../src/lib/postman/token-provider.js';
 import { __resetIdentityMemo, resolveSessionIdentity } from '../src/lib/postman/credential-identity.js';
+import { __resetPmakDiagnosticMemo } from '../src/lib/postman/pmak-diagnostics.js';
+import { prepareTelemetryCredentials } from '../src/lib/postman/telemetry-credentials.js';
 
 let repoRoot: string;
 
@@ -73,6 +75,49 @@ function deps(overrides: Partial<GitHubActionDependencies> = {}): GitHubActionDe
 }
 
 describe('telemetry contract', () => {
+  it('GCP-TELEMETRY-002: rejected telemetry mint diagnoses a personal PMAK once and continues without account enrichment', async () => {
+    __resetPmakDiagnosticMemo();
+    const warnings: string[] = [];
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith('/service-account-tokens')) {
+        return new Response('', { status: 401 });
+      }
+      if (url.endsWith('/me')) {
+        return new Response(JSON.stringify({ user: { username: 'jane-doe', email: 'jane@example.com' } }));
+      }
+      throw new Error(`unexpected request: ${url}`);
+    }) as typeof fetch;
+
+    const credentials = await prepareTelemetryCredentials({
+      postmanApiKey: 'PMAK-sentinel',
+      fetchImpl,
+      onWarning: (message) => warnings.push(message)
+    });
+    expect(credentials.accountType).toBeUndefined();
+
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    expect(warnings).toEqual([
+      expect.stringContaining('Personal API key detected, cannot mint a service-account access token')
+    ]);
+    expect(warnings[0]).not.toContain('PMAK-sentinel');
+    expect(warnings[0]).not.toContain('jane-doe');
+    expect(warnings[0]).not.toContain('jane@example.com');
+  });
+
+  it('GCP-TELEMETRY-002: diagnostic probes are cached by normalized host and PMAK', async () => {
+    __resetPmakDiagnosticMemo();
+    const { inspectPmakIdentity } = await import('../src/lib/postman/pmak-diagnostics.js');
+    const fetchImpl = vi.fn(async () => new Response('', { status: 401 })) as typeof fetch;
+
+    await Promise.all([
+      inspectPmakIdentity({ apiBaseUrl: 'https://api.test/', apiKey: 'PMAK-sentinel', fetchImpl }),
+      inspectPmakIdentity({ apiBaseUrl: 'https://api.test', apiKey: 'PMAK-sentinel', fetchImpl })
+    ]);
+
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
   it('bounds telemetry credential fetches with AbortSignals', async () => {
     const mintInits: Array<RequestInit | undefined> = [];
     const mintFetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
