@@ -642,7 +642,6 @@ describe('live GCS onboarding workflow contract', () => {
       'GCP_WORKLOAD_IDENTITY_PROVIDER',
       'GCP_SERVICE_ACCOUNT',
       'GCP_PROJECT_ID',
-      'GCP_LIVE_CONNECTOR_RESOURCE_ID',
       'GCP_LIVE_CONNECTOR_RESOURCE_IDS_JSON',
       'POSTMAN_E2E_API_KEY_NON_ORG_MODE'
     ]) {
@@ -665,6 +664,18 @@ describe('live GCS onboarding workflow contract', () => {
     expect(authStep).toContain('service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}');
     expect(authStep).toContain('project_id: ${{ secrets.GCP_PROJECT_ID }}');
     expect(workflow).not.toContain('credentials_json:');
+  });
+
+  it('isolates the checked-in validation fixture before released cloud discovery', () => {
+    const isolateStart = workflow.indexOf('- name: Isolate cloud discovery from validation fixture');
+    const discoverStart = workflow.indexOf('- name: Discover custom connector spec (released pin)');
+    expect(isolateStart).toBeGreaterThan(0);
+    expect(discoverStart).toBeGreaterThan(isolateStart);
+
+    const isolateStep = workflow.slice(isolateStart, discoverStart);
+    expect(isolateStep).toContain(
+      'mv validation/fixtures/gcp/openapi.yaml "$RUNNER_TEMP/live-gcs-openapi.yaml"'
+    );
   });
 
   it('pins immutable discovery release, env-safe shell binding, always cleanup, artifact path, and required vars/secret', () => {
@@ -708,12 +719,11 @@ describe('live GCS onboarding workflow contract', () => {
     expect(workflow).toContain('secrets.GCP_WORKLOAD_IDENTITY_PROVIDER');
     expect(workflow).toContain('secrets.GCP_SERVICE_ACCOUNT');
     expect(workflow).toContain('secrets.GCP_PROJECT_ID');
-    expect(workflow).toContain('secrets.GCP_LIVE_CONNECTOR_RESOURCE_ID');
     expect(workflow).toContain('secrets.GCP_LIVE_CONNECTOR_RESOURCE_IDS_JSON');
     expect(workflow).toContain('secrets.POSTMAN_E2E_API_KEY_NON_ORG_MODE');
 
-    expect(workflow).toContain('api-id: ${{ secrets.GCP_LIVE_CONNECTOR_RESOURCE_ID }}');
     expect(workflow).toContain('expected-api-ids-json: ${{ secrets.GCP_LIVE_CONNECTOR_RESOURCE_IDS_JSON }}');
+    expect(workflow).not.toContain('api-id:');
     expect(workflow).not.toContain('vars.GCP_');
     expect(workflow).toContain("on:\n  workflow_dispatch: {}");
     expect(workflow).not.toContain('pull_request');

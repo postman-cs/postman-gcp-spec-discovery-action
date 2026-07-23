@@ -26,7 +26,6 @@ jobs:
           GCP_WORKLOAD_IDENTITY_PROVIDER: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           GCP_SERVICE_ACCOUNT: ${{ secrets.GCP_SERVICE_ACCOUNT }}
           GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
-          GCP_LIVE_CONNECTOR_RESOURCE_ID: ${{ secrets.GCP_LIVE_CONNECTOR_RESOURCE_ID }}
           GCP_LIVE_CONNECTOR_RESOURCE_IDS_JSON: ${{ secrets.GCP_LIVE_CONNECTOR_RESOURCE_IDS_JSON }}
           POSTMAN_E2E_API_KEY_NON_ORG_MODE: ${{ secrets.POSTMAN_E2E_API_KEY_NON_ORG_MODE }}
         run: |
@@ -36,7 +35,6 @@ jobs:
             GCP_WORKLOAD_IDENTITY_PROVIDER \
             GCP_SERVICE_ACCOUNT \
             GCP_PROJECT_ID \
-            GCP_LIVE_CONNECTOR_RESOURCE_ID \
             GCP_LIVE_CONNECTOR_RESOURCE_IDS_JSON \
             POSTMAN_E2E_API_KEY_NON_ORG_MODE
           do
@@ -82,12 +80,14 @@ jobs:
           fi
           echo "release_commit=${peeled}" >> "$GITHUB_OUTPUT"
 
+      - name: Isolate cloud discovery from validation fixture
+        run: mv validation/fixtures/gcp/openapi.yaml "$RUNNER_TEMP/live-gcs-openapi.yaml"
+
       - name: Discover custom connector spec (released pin)
         id: discover
         uses: postman-cs/postman-gcp-spec-discovery-action@v1.1.6
         with:
           project-id: ${{ secrets.GCP_PROJECT_ID }}
-          api-id: ${{ secrets.GCP_LIVE_CONNECTOR_RESOURCE_ID }}
           expected-api-ids-json: ${{ secrets.GCP_LIVE_CONNECTOR_RESOURCE_IDS_JSON }}
 
       - name: Assert discovery handoff
