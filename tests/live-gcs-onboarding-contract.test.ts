@@ -712,6 +712,7 @@ describe('live GCS onboarding workflow contract', () => {
     expect(workflow).toMatch(/Upload GCS onboarding receipt[\s\S]*if: always\(\)/);
     expect(workflow).toContain('path: validation/.live-runs/gcs-onboarding-receipt.json');
     expect(workflow).toContain('name: gcs-onboarding-receipt-${{ github.run_id }}-${{ github.run_attempt }}');
+    expect(workflow).toContain('if-no-files-found: error');
 
     expect(workflow).toMatch(/Enforce verifier exit[\s\S]*if: always\(\)/);
     expect(workflow).toContain('exit "${VERIFY_EXIT:-1}"');

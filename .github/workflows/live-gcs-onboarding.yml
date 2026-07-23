@@ -153,7 +153,7 @@ jobs:
         with:
           name: gcs-onboarding-receipt-${{ github.run_id }}-${{ github.run_attempt }}
           path: validation/.live-runs/gcs-onboarding-receipt.json
-          if-no-files-found: warn
+          if-no-files-found: error
 
       - name: Enforce verifier exit
         if: always()
