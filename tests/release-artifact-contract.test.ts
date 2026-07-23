@@ -35,7 +35,7 @@ const packageJson = JSON.parse(readFileSync(join(process.cwd(), 'package.json'),
   version: string;
   files: string[];
 };
-const npmBin = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+const npmCliPath = process.env.npm_execpath;
 
 const expected = {
   repository: 'postman-cs/postman-gcp-spec-discovery-action',
@@ -226,7 +226,8 @@ describe('release artifact contract', () => {
       const stageDir = mkdtempSync(join(tmpdir(), 'gcp-packed-stage-'));
       const extractDir = mkdtempSync(join(tmpdir(), 'gcp-extracted-verifier-'));
       try {
-        execFileSync(npmBin, ['pack', '--ignore-scripts', '--pack-destination', packDir], {
+        if (!npmCliPath) throw new Error('npm_execpath is required for the npm-packed verifier contract');
+        execFileSync(process.execPath, [npmCliPath, 'pack', '--ignore-scripts', '--pack-destination', packDir], {
           cwd: process.cwd(),
           encoding: 'utf8',
           stdio: ['ignore', 'pipe', 'pipe'],
