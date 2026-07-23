@@ -12,7 +12,7 @@ import { execFileSync } from 'node:child_process';
 import { Buffer } from 'node:buffer';
 import { createHash, randomBytes } from 'node:crypto';
 import { cp, mkdir, mkdtemp, readFile, rename, rm, writeFile } from 'node:fs/promises';
-import { closeSync, existsSync, fsyncSync, lstatSync, openSync, readFileSync, realpathSync, writeSync } from 'node:fs';
+import { closeSync, existsSync, fsyncSync, lstatSync, openSync, readFileSync, realpathSync, unlinkSync, writeSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
@@ -85,6 +85,8 @@ export const LIVE_REQUIRED_SERVICES = Object.freeze([
 export const LIVE_RECEIPT_SCHEMA_VERSION = 1;
 export const DEFAULT_LIVE_RUNS_DIR = 'validation/.live-runs';
 export const DEFAULT_STATE_FILENAME = 'state.json';
+/** Gitignored private ADC access-token file used only for gcloud `--access-token-file`. */
+export const ADC_ACCESS_TOKEN_FILENAME = 'adc-access-token';
 export const DEFAULT_COMMAND_TIMEOUT_MS = 180_000;
 export const DEFAULT_PHASE_TIMEOUT_MS = 1_200_000;
 export const MIN_COMMAND_TIMEOUT_MS = 5_000;
@@ -335,6 +337,106 @@ export function createTimedRunner(baseRunner, { commandTimeoutMs, deadline }) {
 
 export function defaultLiveRunsRoot(root = repoRoot) {
   return path.join(root, DEFAULT_LIVE_RUNS_DIR);
+}
+
+export function resolveAdcAccessTokenFilePath(options = {}) {
+  const root = options.root ?? repoRoot;
+  const liveRoot = defaultLiveRunsRoot(root);
+  const target = path.join(liveRoot, ADC_ACCESS_TOKEN_FILENAME);
+  assertSafePrivatePath(liveRoot, target, 'adc-access-token-file');
+  return target;
+}
+
+/** ADC mint args must never receive `--access-token-file` (circular / wrong credential plane). */
+export function isAdcAccessTokenMintArgs(args) {
+  return Array.isArray(args)
+    && args[0] === 'auth'
+    && args[1] === 'application-default'
+    && args[2] === 'print-access-token';
+}
+
+export function withAdcAccessTokenFile(baseRunner, tokenFilePath) {
+  if (!tokenFilePath) {
+    throw new Error('adc-access-token-file path required');
+  }
+  const flag = `--access-token-file=${tokenFilePath}`;
+  return (command, args, options = {}) => {
+    if (command === 'gcloud' && Array.isArray(args) && !isAdcAccessTokenMintArgs(args)) {
+      if (args.some((arg) => String(arg).startsWith('--access-token-file'))) {
+        return baseRunner(command, args, options);
+      }
+      return baseRunner(command, [...args, flag], options);
+    }
+    return baseRunner(command, args, options);
+  };
+}
+
+/**
+ * Mint an ADC access token, write it to a repo-confined mode-0600 file under
+ * validation/.live-runs/, and return a runner that injects `--access-token-file`
+ * on every non-mint gcloud resource command. Dispose removes the file.
+ * Never logs token or path contents. Compatible with workload identity and
+ * GOOGLE_APPLICATION_CREDENTIALS via `gcloud auth application-default print-access-token`.
+ */
+export async function createAdcAccessTokenBridge({ runner, root = repoRoot } = {}) {
+  if (typeof runner !== 'function') {
+    throw new Error('createAdcAccessTokenBridge requires a runner');
+  }
+  const tokenFilePath = resolveAdcAccessTokenFilePath({ root });
+  const liveRoot = defaultLiveRunsRoot(root);
+  await mkdir(liveRoot, { recursive: true, mode: 0o700 });
+  assertNotSymlink(liveRoot, 'adc-access-token-file parent');
+  if (existsSync(tokenFilePath)) {
+    assertNotSymlink(tokenFilePath, 'adc-access-token-file');
+    unlinkSync(tokenFilePath);
+  }
+  // Mint from ADC only — never ordinary `gcloud auth print-access-token` CLI user auth.
+  const token = String(runner('gcloud', ['auth', 'application-default', 'print-access-token'])).trim();
+  if (!token) {
+    throw new Error('preflight: ADC/access token unavailable');
+  }
+  const fd = openSync(tokenFilePath, 'w', 0o600);
+  try {
+    writeSync(fd, token, null, 'utf8');
+    fsyncSync(fd);
+  } finally {
+    closeSync(fd);
+  }
+  if (process.platform !== 'win32') {
+    const mode = lstatSync(tokenFilePath).mode & 0o777;
+    if (mode !== 0o600) {
+      unlinkSync(tokenFilePath);
+      throw new Error('adc-access-token-file must be mode 0600');
+    }
+  }
+  let disposed = false;
+  const dispose = () => {
+    if (disposed) return;
+    disposed = true;
+    try {
+      if (existsSync(tokenFilePath)) {
+        assertNotSymlink(tokenFilePath, 'adc-access-token-file');
+        unlinkSync(tokenFilePath);
+      }
+    } catch {
+      // Best-effort cleanup; never surface token/path contents.
+    }
+  };
+  return {
+    token,
+    tokenFilePath,
+    runner: withAdcAccessTokenFile(runner, tokenFilePath),
+    dispose
+  };
+}
+
+async function withAdcAccessTokenBridge({ runner, root = repoRoot }, fn) {
+  const bridge = await createAdcAccessTokenBridge({ runner, root });
+  try {
+    return await fn(bridge);
+  } finally {
+    bridge.dispose();
+  }
 }
 
 export function resolveConfinedPath(rootPath, targetPath, fieldName = 'path') {
@@ -1489,7 +1591,7 @@ export function defaultRunner(command, args, options = {}) {
 }
 
 function gcloud(runner, args) { return runner('gcloud', args); }
-function accessToken(runner) { return String(gcloud(runner, ['auth', 'print-access-token'])).trim(); }
+
 function rest(runner, token, method, url, body) {
   const args = ['-fsS', '-X', method, '-H', `Authorization: Bearer ${token}`, '-H', 'Content-Type: application/json'];
   if (body !== undefined) args.push('--data-binary', typeof body === 'string' ? body : JSON.stringify(body));
@@ -1630,54 +1732,58 @@ async function seedAmbiguity(workspace) {
   await cp(path.join(repoRoot, 'validation/fixtures/gcp/openapi.yaml'), path.join(workspace, 'infra/bravo-doc.yaml'));
 }
 
-export async function provision({ runner, token, env, manifest, onCheckpoint } = {}) {
-  ensureManifestResources(manifest);
-  const checkpoint = async () => {
-    if (typeof onCheckpoint === 'function') await onCheckpoint(manifest);
-  };
-  gcloud(runner, ['services', 'enable', ...LIVE_REQUIRED_SERVICES, '--project', env.projectId]);
-  const spec = path.join(repoRoot, 'validation/fixtures/gcp/openapi.yaml');
-  const managed = await mkdtemp(path.join(os.tmpdir(), 'gcp-managed-'));
-  let endpointsConfigId;
-  try {
-    const gatewaySpecPath = path.join(managed, 'gateway.yaml');
-    await writeFile(gatewaySpecPath, swagger2Document({ title: manifest.gatewayName, backend: true }));
-    // Gateway API/config set: mark attempted before create; created once the API exists.
-    markResourceAttempted(manifest, 'gateway');
-    await checkpoint();
-    gcloud(runner, ['api-gateway', 'apis', 'create', manifest.gatewayName, '--project', env.projectId, '--labels', `postman-run-marker=${manifest.runMarker}`]);
-    markResourceCreated(manifest, 'gateway');
-    await checkpoint();
-    gcloud(runner, ['api-gateway', 'api-configs', 'create', manifest.gatewayConfigName, '--api', manifest.gatewayName, '--openapi-spec', gatewaySpecPath, '--project', env.projectId, '--labels', `postman-run-marker=${manifest.runMarker},postman-project-name=${manifest.gatewayName},postman-repo=${manifest.repoLabel}`]);
-    gcloud(runner, ['api-gateway', 'api-configs', 'create', `${manifest.gatewayConfigName}-b`, '--api', manifest.gatewayName, '--openapi-spec', gatewaySpecPath, '--project', env.projectId, '--labels', `postman-run-marker=${manifest.runMarker},postman-project-name=${manifest.gatewayName}-alt,postman-repo=${manifest.conflictLabel}`]);
-    gcloud(runner, ['api-gateway', 'api-configs', 'create', `${manifest.gatewayConfigName}-c`, '--api', manifest.gatewayName, '--openapi-spec', gatewaySpecPath, '--project', env.projectId, '--labels', `postman-run-marker=${manifest.runMarker},postman-project-name=${manifest.gatewayName}-alt,postman-repo=${manifest.conflictLabel}`]);
-
-    const endpointsPath = path.join(managed, 'endpoints.yaml');
-    await writeFile(endpointsPath, swagger2Document({ title: manifest.endpointsService, host: manifest.endpointsService }));
-    markResourceAttempted(manifest, 'endpoints');
-    await checkpoint();
-    gcloud(runner, ['endpoints', 'services', 'deploy', endpointsPath, '--project', env.projectId]);
-    markResourceCreated(manifest, 'endpoints');
-    await checkpoint();
-    endpointsConfigId = String(gcloud(runner, ['endpoints', 'configs', 'list', '--service', manifest.endpointsService, '--project', env.projectId, '--format', 'value(id)', '--limit', '1'])).trim().split('\n')[0] ?? '';
-
-    const proxyZip = await mkdtemp(path.join(os.tmpdir(), 'gcp-apigee-'));
-    await mkdir(path.join(proxyZip, 'apiproxy/resources/oas'), { recursive: true });
-    await mkdir(path.join(proxyZip, 'apiproxy/proxies'), { recursive: true });
-    await writeFile(path.join(proxyZip, 'apiproxy', `${manifest.proxyName}.xml`), `<APIProxy name="${manifest.proxyName}"><Description>postman-run-marker=${manifest.runMarker}</Description></APIProxy>`);
-    await writeFile(path.join(proxyZip, 'apiproxy/proxies/default.xml'), '<ProxyEndpoint name="default"><HTTPProxyConnection><BasePath>/live</BasePath></HTTPProxyConnection><RouteRule name="none"/></ProxyEndpoint>');
-    await writeFile(path.join(proxyZip, 'apiproxy/resources/oas/openapi.yaml'), await readFile(spec));
-    const zip = path.join(proxyZip, 'proxy.zip');
-    runner('zip', ['-qr', zip, 'apiproxy'], { cwd: proxyZip });
+export async function provision({ runner, token: providedToken, env, manifest, onCheckpoint, root = repoRoot } = {}) {
+  return withAdcAccessTokenBridge({ runner, root }, async (bridge) => {
+    const adcRunner = bridge.runner;
+    const token = providedToken ?? bridge.token;
+    ensureManifestResources(manifest);
+    const checkpoint = async () => {
+      if (typeof onCheckpoint === 'function') await onCheckpoint(manifest);
+    };
+    gcloud(adcRunner, ['services', 'enable', ...LIVE_REQUIRED_SERVICES, '--project', env.projectId]);
+    const spec = path.join(repoRoot, 'validation/fixtures/gcp/openapi.yaml');
+    const managed = await mkdtemp(path.join(os.tmpdir(), 'gcp-managed-'));
+    let endpointsConfigId;
     try {
-      markResourceAttempted(manifest, 'apigee');
+      const gatewaySpecPath = path.join(managed, 'gateway.yaml');
+      await writeFile(gatewaySpecPath, swagger2Document({ title: manifest.gatewayName, backend: true }));
+      // Gateway API/config set: mark attempted before create; created once the API exists.
+      markResourceAttempted(manifest, 'gateway');
       await checkpoint();
-      restUploadZip(runner, token, `https://apigee.googleapis.com/v1/organizations/${env.apigeeOrg}/apis?action=import&name=${manifest.proxyName}`, zip);
-      markResourceCreated(manifest, 'apigee');
+      gcloud(adcRunner, ['api-gateway', 'apis', 'create', manifest.gatewayName, '--project', env.projectId, '--labels', `postman-run-marker=${manifest.runMarker}`]);
+      markResourceCreated(manifest, 'gateway');
       await checkpoint();
-    } finally { await rm(proxyZip, { recursive: true, force: true }); }
-  } finally { await rm(managed, { recursive: true, force: true }); }
-  return { endpointsConfigId };
+      gcloud(adcRunner, ['api-gateway', 'api-configs', 'create', manifest.gatewayConfigName, '--api', manifest.gatewayName, '--openapi-spec', gatewaySpecPath, '--project', env.projectId, '--labels', `postman-run-marker=${manifest.runMarker},postman-project-name=${manifest.gatewayName},postman-repo=${manifest.repoLabel}`]);
+      gcloud(adcRunner, ['api-gateway', 'api-configs', 'create', `${manifest.gatewayConfigName}-b`, '--api', manifest.gatewayName, '--openapi-spec', gatewaySpecPath, '--project', env.projectId, '--labels', `postman-run-marker=${manifest.runMarker},postman-project-name=${manifest.gatewayName}-alt,postman-repo=${manifest.conflictLabel}`]);
+      gcloud(adcRunner, ['api-gateway', 'api-configs', 'create', `${manifest.gatewayConfigName}-c`, '--api', manifest.gatewayName, '--openapi-spec', gatewaySpecPath, '--project', env.projectId, '--labels', `postman-run-marker=${manifest.runMarker},postman-project-name=${manifest.gatewayName}-alt,postman-repo=${manifest.conflictLabel}`]);
+
+      const endpointsPath = path.join(managed, 'endpoints.yaml');
+      await writeFile(endpointsPath, swagger2Document({ title: manifest.endpointsService, host: manifest.endpointsService }));
+      markResourceAttempted(manifest, 'endpoints');
+      await checkpoint();
+      gcloud(adcRunner, ['endpoints', 'services', 'deploy', endpointsPath, '--project', env.projectId]);
+      markResourceCreated(manifest, 'endpoints');
+      await checkpoint();
+      endpointsConfigId = String(gcloud(adcRunner, ['endpoints', 'configs', 'list', '--service', manifest.endpointsService, '--project', env.projectId, '--format', 'value(id)', '--limit', '1'])).trim().split('\n')[0] ?? '';
+
+      const proxyZip = await mkdtemp(path.join(os.tmpdir(), 'gcp-apigee-'));
+      await mkdir(path.join(proxyZip, 'apiproxy/resources/oas'), { recursive: true });
+      await mkdir(path.join(proxyZip, 'apiproxy/proxies'), { recursive: true });
+      await writeFile(path.join(proxyZip, 'apiproxy', `${manifest.proxyName}.xml`), `<APIProxy name="${manifest.proxyName}"><Description>postman-run-marker=${manifest.runMarker}</Description></APIProxy>`);
+      await writeFile(path.join(proxyZip, 'apiproxy/proxies/default.xml'), '<ProxyEndpoint name="default"><HTTPProxyConnection><BasePath>/live</BasePath></HTTPProxyConnection><RouteRule name="none"/></ProxyEndpoint>');
+      await writeFile(path.join(proxyZip, 'apiproxy/resources/oas/openapi.yaml'), await readFile(spec));
+      const zip = path.join(proxyZip, 'proxy.zip');
+      adcRunner('zip', ['-qr', zip, 'apiproxy'], { cwd: proxyZip });
+      try {
+        markResourceAttempted(manifest, 'apigee');
+        await checkpoint();
+        restUploadZip(adcRunner, token, `https://apigee.googleapis.com/v1/organizations/${env.apigeeOrg}/apis?action=import&name=${manifest.proxyName}`, zip);
+        markResourceCreated(manifest, 'apigee');
+        await checkpoint();
+      } finally { await rm(proxyZip, { recursive: true, force: true }); }
+    } finally { await rm(managed, { recursive: true, force: true }); }
+    return { endpointsConfigId };
+  });
 }
 
 /**
@@ -1751,96 +1857,99 @@ export async function probeProviderSurface({ runner, token, env, providerType, p
   return { probeStatus, reasonCode, probeMessage: probeMessage ? '[redacted]' : '' };
 }
 
-export async function teardown({ runner, env, manifest, log }) {
-  const token = accessToken(runner);
-  ensureManifestResources(manifest);
-  const gateway = getResourceState(manifest, 'gateway');
-  const endpoints = getResourceState(manifest, 'endpoints');
-  const apigee = getResourceState(manifest, 'apigee');
+export async function teardown({ runner, env, manifest, log, root = repoRoot } = {}) {
+  return withAdcAccessTokenBridge({ runner, root }, async (bridge) => {
+    const adcRunner = bridge.runner;
+    const token = bridge.token;
+    ensureManifestResources(manifest);
+    const gateway = getResourceState(manifest, 'gateway');
+    const endpoints = getResourceState(manifest, 'endpoints');
+    const apigee = getResourceState(manifest, 'apigee');
 
-  // Unattempted surfaces are never probed or deleted — unavailable Apigee must
-  // not poison a Gateway-only permission failure that never reached Apigee.
-  if (gateway.created) {
-    let gatewayExists = true;
-    try {
-      const described = JSON.parse(gcloud(runner, ['api-gateway', 'apis', 'describe', manifest.gatewayName, '--project', env.projectId, '--format', 'json']));
-      verifyRemoteGatewayOwnership(manifest, described);
-    } catch (error) {
-      if (isResourceNotFoundError(error)) gatewayExists = false;
-      else throw error;
+    // Unattempted surfaces are never probed or deleted — unavailable Apigee must
+    // not poison a Gateway-only permission failure that never reached Apigee.
+    if (gateway.created) {
+      let gatewayExists = true;
+      try {
+        const described = JSON.parse(gcloud(adcRunner, ['api-gateway', 'apis', 'describe', manifest.gatewayName, '--project', env.projectId, '--format', 'json']));
+        verifyRemoteGatewayOwnership(manifest, described);
+      } catch (error) {
+        if (isResourceNotFoundError(error)) gatewayExists = false;
+        else throw error;
+      }
+      if (gatewayExists) {
+        try { gcloud(adcRunner, ['api-gateway', 'api-configs', 'delete', `${manifest.gatewayConfigName}-c`, '--api', manifest.gatewayName, '--project', env.projectId, '--quiet']); } catch (error) { if (!isResourceNotFoundError(error)) throw error; }
+        try { gcloud(adcRunner, ['api-gateway', 'api-configs', 'delete', `${manifest.gatewayConfigName}-b`, '--api', manifest.gatewayName, '--project', env.projectId, '--quiet']); } catch (error) { if (!isResourceNotFoundError(error)) throw error; }
+        try { gcloud(adcRunner, ['api-gateway', 'api-configs', 'delete', manifest.gatewayConfigName, '--api', manifest.gatewayName, '--project', env.projectId, '--quiet']); } catch (error) { if (!isResourceNotFoundError(error)) throw error; }
+        try { gcloud(adcRunner, ['api-gateway', 'apis', 'delete', manifest.gatewayName, '--project', env.projectId, '--quiet']); } catch (error) { if (!isResourceNotFoundError(error)) throw error; }
+      }
+    } else if (gateway.attempted) {
+      proveExactNameAbsent(() => {
+        gcloud(adcRunner, ['api-gateway', 'apis', 'describe', manifest.gatewayName, '--project', env.projectId, '--format', 'json']);
+      });
     }
-    if (gatewayExists) {
-      try { gcloud(runner, ['api-gateway', 'api-configs', 'delete', `${manifest.gatewayConfigName}-c`, '--api', manifest.gatewayName, '--project', env.projectId, '--quiet']); } catch (error) { if (!isResourceNotFoundError(error)) throw error; }
-      try { gcloud(runner, ['api-gateway', 'api-configs', 'delete', `${manifest.gatewayConfigName}-b`, '--api', manifest.gatewayName, '--project', env.projectId, '--quiet']); } catch (error) { if (!isResourceNotFoundError(error)) throw error; }
-      try { gcloud(runner, ['api-gateway', 'api-configs', 'delete', manifest.gatewayConfigName, '--api', manifest.gatewayName, '--project', env.projectId, '--quiet']); } catch (error) { if (!isResourceNotFoundError(error)) throw error; }
-      try { gcloud(runner, ['api-gateway', 'apis', 'delete', manifest.gatewayName, '--project', env.projectId, '--quiet']); } catch (error) { if (!isResourceNotFoundError(error)) throw error; }
-    }
-  } else if (gateway.attempted) {
-    proveExactNameAbsent(() => {
-      gcloud(runner, ['api-gateway', 'apis', 'describe', manifest.gatewayName, '--project', env.projectId, '--format', 'json']);
-    });
-  }
 
-  if (endpoints.created) {
-    verifyRemoteEndpointsOwnership(manifest, manifest.endpointsService);
-    try { gcloud(runner, ['endpoints', 'services', 'delete', manifest.endpointsService, '--project', env.projectId, '--quiet']); } catch (error) { if (!isResourceNotFoundError(error)) throw error; }
-  } else if (endpoints.attempted) {
-    proveExactNameAbsent(() => {
-      gcloud(runner, ['endpoints', 'services', 'describe', manifest.endpointsService, '--project', env.projectId, '--format', 'json']);
-    });
-  }
+    if (endpoints.created) {
+      verifyRemoteEndpointsOwnership(manifest, manifest.endpointsService);
+      try { gcloud(adcRunner, ['endpoints', 'services', 'delete', manifest.endpointsService, '--project', env.projectId, '--quiet']); } catch (error) { if (!isResourceNotFoundError(error)) throw error; }
+    } else if (endpoints.attempted) {
+      proveExactNameAbsent(() => {
+        gcloud(adcRunner, ['endpoints', 'services', 'describe', manifest.endpointsService, '--project', env.projectId, '--format', 'json']);
+      });
+    }
 
-  if (apigee.created) {
-    let apigeeExists = true;
-    try {
-      const described = JSON.parse(rest(runner, token, 'GET', `https://apigee.googleapis.com/v1/organizations/${env.apigeeOrg}/apis/${manifest.proxyName}`));
-      verifyRemoteApigeeOwnership(manifest, described);
-    } catch (error) {
-      if (isResourceNotFoundError(error)) apigeeExists = false;
-      else throw error;
+    if (apigee.created) {
+      let apigeeExists = true;
+      try {
+        const described = JSON.parse(rest(adcRunner, token, 'GET', `https://apigee.googleapis.com/v1/organizations/${env.apigeeOrg}/apis/${manifest.proxyName}`));
+        verifyRemoteApigeeOwnership(manifest, described);
+      } catch (error) {
+        if (isResourceNotFoundError(error)) apigeeExists = false;
+        else throw error;
+      }
+      if (apigeeExists) {
+        try { rest(adcRunner, token, 'DELETE', `https://apigee.googleapis.com/v1/organizations/${env.apigeeOrg}/apis/${manifest.proxyName}`); } catch (error) { if (!isResourceNotFoundError(error)) throw error; }
+      }
+    } else if (apigee.attempted) {
+      proveExactNameAbsent(() => {
+        rest(adcRunner, token, 'GET', `https://apigee.googleapis.com/v1/organizations/${env.apigeeOrg}/apis/${manifest.proxyName}`);
+      });
     }
-    if (apigeeExists) {
-      try { rest(runner, token, 'DELETE', `https://apigee.googleapis.com/v1/organizations/${env.apigeeOrg}/apis/${manifest.proxyName}`); } catch (error) { if (!isResourceNotFoundError(error)) throw error; }
-    }
-  } else if (apigee.attempted) {
-    proveExactNameAbsent(() => {
-      rest(runner, token, 'GET', `https://apigee.googleapis.com/v1/organizations/${env.apigeeOrg}/apis/${manifest.proxyName}`);
-    });
-  }
 
-  // Post-delete absence proof only for confirmed-created resources.
-  const residue = [];
-  if (gateway.created) {
-    try {
-      gcloud(runner, ['api-gateway', 'apis', 'describe', manifest.gatewayName, '--project', env.projectId, '--format', 'json']);
-      residue.push('gateway');
-    } catch (error) {
-      if (!isResourceNotFoundError(error)) throw error;
+    // Post-delete absence proof only for confirmed-created resources.
+    const residue = [];
+    if (gateway.created) {
+      try {
+        gcloud(adcRunner, ['api-gateway', 'apis', 'describe', manifest.gatewayName, '--project', env.projectId, '--format', 'json']);
+        residue.push('gateway');
+      } catch (error) {
+        if (!isResourceNotFoundError(error)) throw error;
+      }
     }
-  }
-  if (endpoints.created) {
-    try {
-      gcloud(runner, ['endpoints', 'services', 'describe', manifest.endpointsService, '--project', env.projectId, '--format', 'json']);
-      residue.push('endpoints');
-    } catch (error) {
-      if (!isResourceNotFoundError(error)) throw error;
+    if (endpoints.created) {
+      try {
+        gcloud(adcRunner, ['endpoints', 'services', 'describe', manifest.endpointsService, '--project', env.projectId, '--format', 'json']);
+        residue.push('endpoints');
+      } catch (error) {
+        if (!isResourceNotFoundError(error)) throw error;
+      }
     }
-  }
-  if (apigee.created) {
-    try {
-      rest(runner, token, 'GET', `https://apigee.googleapis.com/v1/organizations/${env.apigeeOrg}/apis/${manifest.proxyName}`);
-      residue.push('apigee');
-    } catch (error) {
-      if (!isResourceNotFoundError(error)) throw error;
+    if (apigee.created) {
+      try {
+        rest(adcRunner, token, 'GET', `https://apigee.googleapis.com/v1/organizations/${env.apigeeOrg}/apis/${manifest.proxyName}`);
+        residue.push('apigee');
+      } catch (error) {
+        if (!isResourceNotFoundError(error)) throw error;
+      }
     }
-  }
-  if (residue.length) {
-    const error = new Error('residue-detected');
-    error.reasonCode = 'residue-detected';
-    throw error;
-  }
-  log('Deleted only current-run Gateway, Endpoints, and Apigee resources; residue check passed');
-  return { status: 'pass' };
+    if (residue.length) {
+      const error = new Error('residue-detected');
+      error.reasonCode = 'residue-detected';
+      throw error;
+    }
+    log('Deleted only current-run Gateway, Endpoints, and Apigee resources; residue check passed');
+    return { status: 'pass' };
+  });
 }
 
 async function runProvisionedCases({ runner, cliPath, env, manifest, endpointsConfigId, log, failFast = false, onlyNames = null }) {
@@ -2210,34 +2319,38 @@ function assertPhaseCanRun(state, phase, { allowCompleted = false } = {}) {
   }
 }
 
-export async function runPhasePreflight({ runner, env, binding, statePath, receiptPath, deadline, log }) {
+export async function runPhasePreflight({ runner, env, binding, statePath, receiptPath, deadline, log, root = repoRoot }) {
   deadline.assertNotExpired();
-  // Exact project/env/auth/binding checks only — no resource creation and no ambient project use.
-  gcloud(runner, ['projects', 'describe', env.projectId, '--format', 'value(projectId)']);
-  if (!env.location || !env.apigeeOrg || !env.apigeeEnv) {
-    throw new Error('preflight: location/apigeeOrg/apigeeEnv required');
-  }
-  const token = String(gcloud(runner, ['auth', 'print-access-token'])).trim();
-  if (!token) throw new Error('preflight: ADC/access token unavailable');
-  if (!binding?.gitCommit || !binding?.distCliSha256 || !binding?.distIndexSha256) {
-    throw new Error('preflight: dist binding incomplete');
-  }
-  const manifest = createRunManifest(env);
-  const state = createEmptyLiveState({ binding, env, manifest });
-  state.phaseStatus.preflight = 'pass';
-  await saveLiveState(statePath, state);
-  const receipt = await writePhaseReceipt(receiptPath, {
-    phase: 'preflight',
-    group: 'gcp-live',
-    elapsedMs: deadline.elapsedMs(),
-    binding,
-    status: 'pass'
+  return withAdcAccessTokenBridge({ runner, root }, async (bridge) => {
+    const adcRunner = bridge.runner;
+    const token = bridge.token;
+    // Exact project/env/auth/binding checks only — no resource creation and no ambient project use.
+    // Resource commands use ADC via --access-token-file; ordinary gcloud CLI auth is ignored.
+    gcloud(adcRunner, ['projects', 'describe', env.projectId, '--format', 'value(projectId)']);
+    if (!env.location || !env.apigeeOrg || !env.apigeeEnv) {
+      throw new Error('preflight: location/apigeeOrg/apigeeEnv required');
+    }
+    if (!token) throw new Error('preflight: ADC/access token unavailable');
+    if (!binding?.gitCommit || !binding?.distCliSha256 || !binding?.distIndexSha256) {
+      throw new Error('preflight: dist binding incomplete');
+    }
+    const manifest = createRunManifest(env);
+    const state = createEmptyLiveState({ binding, env, manifest });
+    state.phaseStatus.preflight = 'pass';
+    await saveLiveState(statePath, state);
+    const receipt = await writePhaseReceipt(receiptPath, {
+      phase: 'preflight',
+      group: 'gcp-live',
+      elapsedMs: deadline.elapsedMs(),
+      binding,
+      status: 'pass'
+    });
+    log('preflight: project/env/auth/binding checks passed; state initialized');
+    return { state, receipt, token };
   });
-  log('preflight: project/env/auth/binding checks passed; state initialized');
-  return { state, receipt, token };
 }
 
-export async function runPhaseProvision({ runner, token, env, state, statePath, receiptPath, deadline, deps, log }) {
+export async function runPhaseProvision({ runner, token, env, state, statePath, receiptPath, deadline, deps = {}, log, root = repoRoot }) {
   deadline.assertNotExpired();
   assertPhaseCanRun(state, 'provision');
   const manifest = state.manifest;
@@ -2251,7 +2364,8 @@ export async function runPhaseProvision({ runner, token, env, state, statePath, 
     token,
     env,
     manifest,
-    onCheckpoint
+    onCheckpoint,
+    root: deps.root ?? root
   });
   const next = await persistStateTransition(statePath, state, {
     manifest,
@@ -2418,7 +2532,7 @@ export async function runPhaseValidate({
   return { state: next, receipt, results: merged };
 }
 
-export async function runPhaseTeardown({ runner, env, state, statePath, receiptPath, deadline, deps, log }) {
+export async function runPhaseTeardown({ runner, env, state, statePath, receiptPath, deadline, deps = {}, log, root = repoRoot }) {
   deadline.assertNotExpired();
   assertPhaseCanRun(state, 'teardown', { allowCompleted: true });
   let teardownResult;
@@ -2427,7 +2541,8 @@ export async function runPhaseTeardown({ runner, env, state, statePath, receiptP
       runner,
       env,
       manifest: state.manifest,
-      log
+      log,
+      root: deps.root ?? root
     });
   } catch (error) {
     teardownResult = { status: 'fail', reasonCode: error?.reasonCode ?? 'teardown-failed' };
@@ -2530,7 +2645,7 @@ export async function runLiveValidation({ argv = process.argv.slice(2), env: raw
     try {
       deadline.assertNotExpired();
       const result = await runPhasePreflight({
-        runner, env, binding, statePath, receiptPath, deadline, log
+        runner, env, binding, statePath, receiptPath, deadline, log, root
       });
       return { phase, state: result.state, receipt: result.receipt };
     } catch (error) {
@@ -2544,9 +2659,10 @@ export async function runLiveValidation({ argv = process.argv.slice(2), env: raw
     try {
       const state = await loadLiveState(statePath);
       assertStateBinding(state, binding);
-      const token = deps.token ?? accessToken(runner);
+      // Prefer injected token; otherwise provision mints ADC and bridges gcloud via --access-token-file.
+      const token = deps.token ?? undefined;
       const result = await runPhaseProvision({
-        runner, token, env, state, statePath, receiptPath, deadline, deps, log
+        runner, token, env, state, statePath, receiptPath, deadline, deps, log, root
       });
       return { phase, state: result.state, receipt: result.receipt };
     } catch (error) {
@@ -2560,22 +2676,24 @@ export async function runLiveValidation({ argv = process.argv.slice(2), env: raw
     try {
       const state = await loadLiveState(statePath);
       assertStateBinding(state, binding);
-      const token = deps.token ?? accessToken(runner);
-      const result = await runPhaseValidate({
-        runner,
-        token,
-        cliPath: binding.cliPath,
-        env,
-        state,
-        statePath,
-        receiptPath,
-        slots: flags.slots,
-        fixtures,
-        deadline,
-        deps,
-        log
+      return await withAdcAccessTokenBridge({ runner, root }, async (bridge) => {
+        const token = deps.token ?? bridge.token;
+        const result = await runPhaseValidate({
+          runner: bridge.runner,
+          token,
+          cliPath: binding.cliPath,
+          env,
+          state,
+          statePath,
+          receiptPath,
+          slots: flags.slots,
+          fixtures,
+          deadline,
+          deps,
+          log
+        });
+        return { phase, state: result.state, receipt: result.receipt, results: result.results };
       });
-      return { phase, state: result.state, receipt: result.receipt, results: result.results };
     } catch (error) {
       if (!error?.receipt) {
         await writeFailedPhaseReceipt(receiptPath, { phase: 'validate', binding, deadline, error });
@@ -2590,7 +2708,7 @@ export async function runLiveValidation({ argv = process.argv.slice(2), env: raw
       const state = await loadLiveState(statePath);
       assertStateBinding(state, binding);
       const result = await runPhaseTeardown({
-        runner, env, state, statePath, receiptPath, deadline, deps, log
+        runner, env, state, statePath, receiptPath, deadline, deps, log, root
       });
       if (result.teardownResult.status !== 'pass') {
         const error = new Error('teardown-failed');
@@ -2651,12 +2769,13 @@ export async function runLiveValidation({ argv = process.argv.slice(2), env: raw
   try {
     deadline.assertNotExpired();
     const preflight = await runPhasePreflight({
-      runner, env, binding, statePath, receiptPath: paths.preflight, deadline, log
+      runner, env, binding, statePath, receiptPath: paths.preflight, deadline, log, root
     });
     state = preflight.state;
-    const token = deps.token ?? preflight.token ?? accessToken(runner);
+    // Each phase creates/removes its own ADC bridge; carry only the in-memory token for REST.
+    const token = deps.token ?? preflight.token;
     const provisioned = await runPhaseProvision({
-      runner, token, env, state, statePath, receiptPath: paths.provision, deadline, deps, log
+      runner, token, env, state, statePath, receiptPath: paths.provision, deadline, deps, log, root
     });
     state = provisioned.state;
     const validated = await runPhaseValidate({
@@ -2684,7 +2803,7 @@ export async function runLiveValidation({ argv = process.argv.slice(2), env: raw
       }
       if (state) {
         const torn = await runPhaseTeardown({
-          runner, env, state, statePath, receiptPath: paths.teardown, deadline, deps, log
+          runner, env, state, statePath, receiptPath: paths.teardown, deadline, deps, log, root
         });
         teardownResult = torn.teardownResult;
         state = torn.state;

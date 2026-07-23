@@ -54,3 +54,26 @@ node validation/scripts/validate-live-gcp-surfaces.mjs --phase assemble \
 Do not use an ambient `gcloud` project; pass `GCP_PROJECT_ID` explicitly. Bounded timeouts: `--command-timeout-ms` (default 180000) and `--phase-timeout-ms` (default 1200000). Guidance ceilings: preflight 2m, provision 15m, validate 20m, teardown 10m, assemble 1m.
 
 Private durable state under `validation/.live-runs/` holds the run manifest, exact attempted/created resource state, binding, completed slots, and sanitized phase status. Tracked evidence is written only by successful assemble/promotion.
+
+## Live GCS onboarding receipt (schema v1)
+
+Operator-triggered workflow: `.github/workflows/live-gcs-onboarding.yml` (`workflow_dispatch` only; not a pull-request gate).
+
+Contract (required before treating any receipt as authoritative):
+
+1. **Workflow** checks out this repo, authenticates to GCP with Workload Identity Federation, pins discovery to immutable `postman-cs/postman-gcp-spec-discovery-action@v1.1.6`, resolves exactly one peeled 40-hex `v1.1.6^{}` commit at runtime and passes that observed SHA into the verifier/receipt (no hardcoded commit or synthetic default), asserts `resolution-status=resolved`, `provider-type=connectors-custom`, `source-type=connectors-custom-spec`, then runs `postman-cs/postman-api-onboarding-action@v2` with `repo-write-mode: none` and run-scoped `project-name: live-gcs-onboarding-<run_id>-<run_attempt>`.
+2. **Verifier** `validation/scripts/verify-live-gcs-onboarding.mjs` reads only env inputs (run id/attempt/url, release tag/commit, discovery status/provider/source/spec path, expected workspace name, onboarding outcome, Postman API key, resources path, receipt path, optional composite `WORKSPACE_UID`). It asserts `.postman/resources.yaml` is a mapping with workspace UID, spec UID, baseline/smoke/contract collection UIDs, and a local/cloud spec mapping tied to the discovered spec path; verifies the Postman workspace name equals the run-scoped expected name before DELETE; deletes only that workspace; proves 404 absence with a bounded retry; and always attempts guarded cleanup in `finally` when a workspace UID is available. Optional composite workspace output and staged resources parsing (extract workspace UID first, then mapping assertions) enable guarded cleanup on partial failures; composite vs resources UID mismatch fails closed with no delete candidate.
+3. **Artifact** upload path is exactly `validation/.live-runs/gcs-onboarding-receipt.json` (gitignored), artifact name `gcs-onboarding-receipt-<run_id>-<run_attempt>`. Verify/upload/enforce steps use `if: always()`.
+4. **Receipt** is schema-v1 JSON, mode `0600`, fields only: `schemaVersion`, `capturedAt`, `releaseTag`, `releaseCommit`, `runId`, `runAttempt`, `runUrl`, `ciProvider` (`github-actions`), `runnerKind` (`github-hosted`), `gcpCredentialClass` (`workload-identity-federation`), `postmanCredentialClass` (`sandbox-service-account-pmak`), `discoveryProvider`, `discoverySource`, `artifactAssertions` (booleans), `onboardingStatus`, `teardownStatus`, and optional sanitized `failureClass`. Never project IDs, resource IDs/names, secrets, non-public URLs, spec bodies, or raw remote errors.
+
+### Required repository configuration
+
+| Kind | Name | Purpose |
+| --- | --- | --- |
+| Variable | `GCP_WORKLOAD_IDENTITY_PROVIDER` | WIF provider resource name for `google-github-actions/auth` |
+| Variable | `GCP_SERVICE_ACCOUNT` | GCP service account email for WIF |
+| Variable | `GCP_PROJECT_ID` | Project passed to discovery |
+| Variable | `GCP_LIVE_CONNECTOR_RESOURCE_IDS_JSON` | Bounded custom-connector fixture id list for `expected-api-ids-json` |
+| Secret | `POSTMAN_E2E_API_KEY_NON_ORG_MODE` | Sandbox service-account PMAK for onboarding + teardown |
+
+This section documents the contract only. It does not claim that a live GCS onboarding run has been executed or that a durable success receipt exists.

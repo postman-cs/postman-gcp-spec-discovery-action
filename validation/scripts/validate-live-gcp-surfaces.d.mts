@@ -7,6 +7,7 @@ export const LIVE_REQUIRED_SERVICES: readonly string[];
 export const LIVE_RECEIPT_SCHEMA_VERSION: 1;
 export const DEFAULT_LIVE_RUNS_DIR: 'validation/.live-runs';
 export const DEFAULT_STATE_FILENAME: 'state.json';
+export const ADC_ACCESS_TOKEN_FILENAME: 'adc-access-token';
 export const DEFAULT_COMMAND_TIMEOUT_MS: number;
 export const DEFAULT_PHASE_TIMEOUT_MS: number;
 export const MIN_COMMAND_TIMEOUT_MS: number;
@@ -183,6 +184,21 @@ export function createTimedRunner(
 ): (command: string, args: string[], options?: Record<string, unknown>) => unknown;
 export function defaultRunner(command: string, args: string[], options?: Record<string, unknown>): unknown;
 export function defaultLiveRunsRoot(root?: string): string;
+export function resolveAdcAccessTokenFilePath(options?: { root?: string }): string;
+export function isAdcAccessTokenMintArgs(args: unknown): boolean;
+export function withAdcAccessTokenFile(
+  baseRunner: (command: string, args: string[], options?: Record<string, unknown>) => unknown,
+  tokenFilePath: string
+): (command: string, args: string[], options?: Record<string, unknown>) => unknown;
+export function createAdcAccessTokenBridge(options: {
+  runner: (command: string, args: string[], options?: Record<string, unknown>) => unknown;
+  root?: string;
+}): Promise<{
+  token: string;
+  tokenFilePath: string;
+  runner: (command: string, args: string[], options?: Record<string, unknown>) => unknown;
+  dispose: () => void;
+}>;
 export function resolveStatePath(options?: { root?: string; statePath?: string | null }): string;
 export function resolveReceiptPath(options?: { root?: string; phase?: string; receiptPath?: string | null }): string;
 export function writeAtomicJson(filePath: string, value: unknown, options?: { mode?: number }): Promise<string>;
@@ -231,10 +247,11 @@ export function isResourceNotFoundError(error: unknown): boolean;
 export function proveExactNameAbsent(probe: () => unknown): true;
 export function provision(options: {
   runner: (command: string, args: string[], options?: Record<string, unknown>) => unknown;
-  token: string;
+  token?: string;
   env: LiveEnv;
   manifest: LiveManifest;
   onCheckpoint?: (manifest: LiveManifest) => unknown | Promise<unknown>;
+  root?: string;
 }): Promise<{ endpointsConfigId: string }>;
 export function assertProviderMatrixAligned(matrix?: readonly LiveCoverageSlot[], retained?: readonly string[]): boolean;
 export function confinePathWithinRoot(rootPath: string, targetPath: string, fieldName?: string): string;
@@ -316,6 +333,7 @@ export function teardown(options: {
   env: LiveEnv;
   manifest: LiveManifest;
   log: (message: string) => void;
+  root?: string;
 }): Promise<TeardownResult>;
 export function runPhasePreflight(options: {
   runner: (command: string, args: string[], options?: Record<string, unknown>) => unknown;
@@ -325,10 +343,11 @@ export function runPhasePreflight(options: {
   receiptPath: string;
   deadline: PhaseDeadline;
   log: (message: string) => void;
+  root?: string;
 }): Promise<{ state: LiveState; receipt: PhaseReceipt; token: string }>;
 export function runPhaseProvision(options: {
   runner: (command: string, args: string[], options?: Record<string, unknown>) => unknown;
-  token: string;
+  token?: string;
   env: LiveEnv;
   state: LiveState;
   statePath: string;
@@ -336,6 +355,7 @@ export function runPhaseProvision(options: {
   deadline: PhaseDeadline;
   deps?: Record<string, unknown>;
   log: (message: string) => void;
+  root?: string;
 }): Promise<{ state: LiveState; receipt: PhaseReceipt; endpointsConfigId: string }>;
 export function runPhaseValidate(options: {
   runner: (command: string, args: string[], options?: Record<string, unknown>) => unknown;
@@ -360,6 +380,7 @@ export function runPhaseTeardown(options: {
   deadline: PhaseDeadline;
   deps?: Record<string, unknown>;
   log: (message: string) => void;
+  root?: string;
 }): Promise<{ state: LiveState; receipt: PhaseReceipt; teardownResult: TeardownResult }>;
 export function runPhaseAssemble(options: {
   binding: Pick<DistBinding, 'actionVersion' | 'gitCommit' | 'distCliSha256' | 'distIndexSha256'>;

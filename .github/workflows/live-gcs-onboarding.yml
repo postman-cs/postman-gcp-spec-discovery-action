@@ -1,0 +1,131 @@
+name: Live GCS onboarding
+
+# Operator-triggered live monitor: released GCS custom-connector discovery
+# feeds postman-api-onboarding-action and asserts .postman/resources.yaml.
+# Not a pull-request gate. Consumes a preconfigured bounded connector fixture
+# (read-only GCP discovery); no fixture creation or bucket crawling.
+
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  live-gcs-onboarding:
+    name: live GCS discovery → onboarding
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Node 24
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+
+      - name: Assert immutable discovery release identity
+        id: release_identity
+        run: |
+          set -euo pipefail
+          peeled="$(
+            git ls-remote --exit-code \
+              https://github.com/postman-cs/postman-gcp-spec-discovery-action.git \
+              'refs/tags/v1.1.6^{}' \
+              | awk 'NF { print $1; c++ } END { if (c != 1) exit 1 }'
+          )"
+          if ! [[ "$peeled" =~ ^[0-9a-f]{40}$ ]]; then
+            echo '::error::Peeled commit for v1.1.6 is not a 40-hex SHA'
+            exit 1
+          fi
+          echo "release_commit=${peeled}" >> "$GITHUB_OUTPUT"
+
+      - name: Discover custom connector spec (released pin)
+        id: discover
+        uses: postman-cs/postman-gcp-spec-discovery-action@v1.1.6
+        with:
+          project-id: ${{ vars.GCP_PROJECT_ID }}
+          expected-api-ids-json: ${{ vars.GCP_LIVE_CONNECTOR_RESOURCE_IDS_JSON }}
+
+      - name: Assert discovery handoff
+        env:
+          RESOLUTION_STATUS: ${{ steps.discover.outputs.resolution-status }}
+          PROVIDER_TYPE: ${{ steps.discover.outputs.provider-type }}
+          SOURCE_TYPE: ${{ steps.discover.outputs.source-type }}
+        run: |
+          set -euo pipefail
+          if [ "$RESOLUTION_STATUS" != 'resolved' ]; then
+            echo '::error::Discovery resolution-status is not resolved'
+            exit 1
+          fi
+          if [ "$PROVIDER_TYPE" != 'connectors-custom' ]; then
+            echo '::error::Discovery provider-type is not connectors-custom'
+            exit 1
+          fi
+          if [ "$SOURCE_TYPE" != 'connectors-custom-spec' ]; then
+            echo '::error::Discovery source-type is not connectors-custom-spec'
+            exit 1
+          fi
+          echo 'Discovery handoff assertions passed.'
+
+      - name: Onboard discovered spec (no repo write)
+        id: onboard
+        uses: postman-cs/postman-api-onboarding-action@v2
+        with:
+          project-name: live-gcs-onboarding-${{ github.run_id }}-${{ github.run_attempt }}
+          spec-path: ${{ steps.discover.outputs.spec-path }}
+          repo-write-mode: none
+          postman-api-key: ${{ secrets.POSTMAN_E2E_API_KEY_NON_ORG_MODE }}
+          github-token: ${{ github.token }}
+
+      - name: Verify resource state and cleanup
+        id: verify
+        if: always()
+        env:
+          RESOLUTION_STATUS: ${{ steps.discover.outputs.resolution-status }}
+          PROVIDER_TYPE: ${{ steps.discover.outputs.provider-type }}
+          SOURCE_TYPE: ${{ steps.discover.outputs.source-type }}
+          SPEC_PATH: ${{ steps.discover.outputs.spec-path }}
+          PROJECT_NAME: live-gcs-onboarding-${{ github.run_id }}-${{ github.run_attempt }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
+          GITHUB_RUN_ATTEMPT: ${{ github.run_attempt }}
+          ONBOARD_OUTCOME: ${{ steps.onboard.outcome }}
+          RELEASE_TAG: v1.1.6
+          RELEASE_COMMIT: ${{ steps.release_identity.outputs.release_commit }}
+          WORKSPACE_UID: ${{ steps.onboard.outputs.workspace-id }}
+          POSTMAN_API_KEY: ${{ secrets.POSTMAN_E2E_API_KEY_NON_ORG_MODE }}
+        run: |
+          set +e
+          node validation/scripts/verify-live-gcs-onboarding.mjs
+          status=$?
+          echo "exit_code=${status}" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Upload GCS onboarding receipt
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: gcs-onboarding-receipt-${{ github.run_id }}-${{ github.run_attempt }}
+          path: validation/.live-runs/gcs-onboarding-receipt.json
+          if-no-files-found: warn
+
+      - name: Enforce verifier exit
+        if: always()
+        env:
+          VERIFY_EXIT: ${{ steps.verify.outputs.exit_code }}
+        run: |
+          set -euo pipefail
+          exit "${VERIFY_EXIT:-1}"
