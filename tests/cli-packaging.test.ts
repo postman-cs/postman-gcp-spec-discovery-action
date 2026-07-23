@@ -6,12 +6,24 @@ import { promisify } from 'node:util';
 
 import { describe, expect, it } from 'vitest';
 
+import { selectNpmCommand } from './helpers/npm-command.js';
+
 const execFileAsync = promisify(execFile);
-const npmCommand = process.platform === 'win32' ? process.execPath : 'npm';
-const npmCliArgs = process.platform === 'win32' ? [process.env.npm_execpath || ''] : [];
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 describe('CLI packaging contract', () => {
+  it('selects npm deterministically for supplied, missing, and non-Windows environments', () => {
+    expect(selectNpmCommand('win32', 'C:\\node\\node.exe', 'C:\\npm\\npm-cli.js')).toEqual({
+      command: 'C:\\node\\node.exe',
+      args: ['C:\\npm\\npm-cli.js'],
+    });
+    expect(selectNpmCommand('win32', 'C:\\node\\node.exe')).toEqual({
+      command: 'C:\\node\\node.exe',
+      args: ['C:\\node\\node_modules\\npm\\bin\\npm-cli.js'],
+    });
+    expect(selectNpmCommand('darwin', '/usr/local/bin/node')).toEqual({ command: 'npm', args: [] });
+  });
+
   it('GCP-PACK-001: dist/cli.cjs has a Node shebang, is executable, and answers --help/--version directly', async () => {
     const cliPath = path.join(repoRoot, 'dist', 'cli.cjs');
     const contents = await readFile(cliPath, 'utf8');
@@ -31,7 +43,8 @@ describe('CLI packaging contract', () => {
   });
 
   it('GCP-PACK-001: npm pack includes action.yml, docs, and both bundles', async () => {
-    const packOutput = await execFileAsync(npmCommand, [...npmCliArgs, 'pack', '--dry-run', '--json'], {
+    const npm = selectNpmCommand(process.platform, process.execPath, process.env.npm_execpath);
+    const packOutput = await execFileAsync(npm.command, [...npm.args, 'pack', '--dry-run', '--json'], {
       cwd: repoRoot,
       encoding: 'utf8',
       maxBuffer: 16 * 1024 * 1024

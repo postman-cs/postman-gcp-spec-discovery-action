@@ -24,6 +24,7 @@ import {
   verifyReleaseArtifacts,
   // @ts-expect-error JavaScript release verifier is intentionally packaged verbatim.
 } from '../scripts/verify-release-artifacts.mjs';
+import { selectNpmCommand } from './helpers/npm-command.js';
 
 const sha256hex = (value: string | Buffer) => createHash('sha256').update(value).digest('hex');
 /** Bounded wait for tar / Node verifier / npm pack under full-suite parallel load. */
@@ -36,7 +37,6 @@ const packageJson = JSON.parse(readFileSync(join(process.cwd(), 'package.json'),
   version: string;
   files: string[];
 };
-const npmCliPath = process.env.npm_execpath;
 const ACTIONLINT_PIN = '393031adb9afb225ee52ae2ccd7a5af5525e03e8';
 
 const expected = {
@@ -314,8 +314,8 @@ describe('release artifact contract', () => {
       const stageDir = mkdtempSync(join(tmpdir(), 'gcp-packed-stage-'));
       const extractDir = mkdtempSync(join(tmpdir(), 'gcp-extracted-verifier-'));
       try {
-        if (!npmCliPath) throw new Error('npm_execpath is required for the npm-packed verifier contract');
-        execFileSync(process.execPath, [npmCliPath, 'pack', '--ignore-scripts', '--pack-destination', packDir], {
+        const npm = selectNpmCommand(process.platform, process.execPath, process.env.npm_execpath);
+        execFileSync(npm.command, [...npm.args, 'pack', '--ignore-scripts', '--pack-destination', packDir], {
           cwd: process.cwd(),
           encoding: 'utf8',
           stdio: ['ignore', 'pipe', 'pipe'],
