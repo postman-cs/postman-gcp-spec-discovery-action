@@ -1,11 +1,11 @@
 {
   "schemaVersion": 2,
   "evidenceKind": "current",
-  "capturedAt": "2026-07-20T14:19:00.916Z",
-  "actionVersion": "1.0.0",
-  "gitCommit": "e44a35df0e2252b14a4b3f9f6a21f078c887959d",
-  "distCliSha256": "48d89b97f3af4b726239e652df49cb8feac2009e64692aad6aecca9815d1684b",
-  "distIndexSha256": "ccbefdffe5bbf0136ca0faccb2a041d5c92ac730cf5e59b796b2ac0ccf34572b",
+  "capturedAt": "2026-07-23T14:52:20.539Z",
+  "actionVersion": "1.1.6",
+  "gitCommit": "629232aed91133372a6b49aa01bf76cb9f6649fa",
+  "distCliSha256": "e9906ac97123ba1e79e0b60db9853b49815ecfc3090c4a432dd3cec8478e51a5",
+  "distIndexSha256": "ee20478a1e3cc424926f50e97733e0797a61bafcf9318e0ffb3827d57f696dcd",
   "projectScope": "live-validation-project",
   "totals": {
     "cases": 24,

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-/* global console, process, URL */
+/* global console, process, setTimeout, URL */
 /**
  * POS-387 live GCP validation runner (operator-triggered; never PR CI).
  *
@@ -93,6 +93,9 @@ export const MIN_COMMAND_TIMEOUT_MS = 5_000;
 export const MAX_COMMAND_TIMEOUT_MS = 600_000;
 export const MIN_PHASE_TIMEOUT_MS = 30_000;
 export const MAX_PHASE_TIMEOUT_MS = 3_600_000;
+/** Bounded retries when API config create races parent API readiness. */
+export const API_CONFIG_READY_MAX_ATTEMPTS = 15;
+export const API_CONFIG_READY_DELAY_MS = 30_000;
 export const PHASE_DURATION_GUIDANCE_MS = Object.freeze({
   preflight: 120_000,
   provision: 900_000,
@@ -1716,6 +1719,51 @@ export function assertManualDerivedBlocked(cliResult) {
   return true;
 }
 
+/**
+ * True only for the two observed API-config readiness races after API create:
+ * ABORTED parent-not-ready, and API Gateway Management Service Agent
+ * FAILED_PRECONDITION while the managed service is still materializing.
+ */
+export function isApiConfigReadinessError(error) {
+  const text = error instanceof Error ? error.message : String(error ?? '');
+  if (/ABORTED:\s*parent resource not in ready state/i.test(text)) return true;
+  if (
+    /FAILED_PRECONDITION/i.test(text)
+    && /API Gateway Management Service Agent/i.test(text)
+  ) {
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Fixed-bound retry around one API-config create. Retries only readiness-class
+ * messages; unrelated errors throw immediately; exhaustion rethrows the last
+ * readiness error. Sleep is injectable for deterministic tests.
+ */
+export async function createApiConfigWithReadyRetry(operation, options = {}) {
+  const maxAttempts = Math.max(1, Number(options.maxAttempts ?? API_CONFIG_READY_MAX_ATTEMPTS));
+  const delayMs = Math.max(0, Number(options.delayMs ?? API_CONFIG_READY_DELAY_MS));
+  const sleep = typeof options.sleep === 'function'
+    ? options.sleep
+    : (ms) => new Promise((resolve) => {
+      setTimeout(resolve, ms);
+    });
+
+  let lastError;
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      return await operation();
+    } catch (error) {
+      lastError = error;
+      const canRetry = attempt < maxAttempts && isApiConfigReadinessError(error);
+      if (!canRetry) throw error;
+      if (delayMs > 0) await sleep(delayMs);
+    }
+  }
+  throw lastError;
+}
+
 async function seedIac(workspace) {
   await mkdir(path.join(workspace, 'infra'), { recursive: true });
   const source = await readFile(path.join(repoRoot, 'validation/fixtures/gcp/iac-single/main.tf'), 'utf8');
@@ -1753,9 +1801,9 @@ export async function provision({ runner, token: providedToken, env, manifest, o
       gcloud(adcRunner, ['api-gateway', 'apis', 'create', manifest.gatewayName, '--project', env.projectId, '--labels', `postman-run-marker=${manifest.runMarker}`]);
       markResourceCreated(manifest, 'gateway');
       await checkpoint();
-      gcloud(adcRunner, ['api-gateway', 'api-configs', 'create', manifest.gatewayConfigName, '--api', manifest.gatewayName, '--openapi-spec', gatewaySpecPath, '--project', env.projectId, '--labels', `postman-run-marker=${manifest.runMarker},postman-project-name=${manifest.gatewayName},postman-repo=${manifest.repoLabel}`]);
-      gcloud(adcRunner, ['api-gateway', 'api-configs', 'create', `${manifest.gatewayConfigName}-b`, '--api', manifest.gatewayName, '--openapi-spec', gatewaySpecPath, '--project', env.projectId, '--labels', `postman-run-marker=${manifest.runMarker},postman-project-name=${manifest.gatewayName}-alt,postman-repo=${manifest.conflictLabel}`]);
-      gcloud(adcRunner, ['api-gateway', 'api-configs', 'create', `${manifest.gatewayConfigName}-c`, '--api', manifest.gatewayName, '--openapi-spec', gatewaySpecPath, '--project', env.projectId, '--labels', `postman-run-marker=${manifest.runMarker},postman-project-name=${manifest.gatewayName}-alt,postman-repo=${manifest.conflictLabel}`]);
+      await createApiConfigWithReadyRetry(() => gcloud(adcRunner, ['api-gateway', 'api-configs', 'create', manifest.gatewayConfigName, '--api', manifest.gatewayName, '--openapi-spec', gatewaySpecPath, '--project', env.projectId, '--labels', `postman-run-marker=${manifest.runMarker},postman-project-name=${manifest.gatewayName},postman-repo=${manifest.repoLabel}`]));
+      await createApiConfigWithReadyRetry(() => gcloud(adcRunner, ['api-gateway', 'api-configs', 'create', `${manifest.gatewayConfigName}-b`, '--api', manifest.gatewayName, '--openapi-spec', gatewaySpecPath, '--project', env.projectId, '--labels', `postman-run-marker=${manifest.runMarker},postman-project-name=${manifest.gatewayName}-alt,postman-repo=${manifest.conflictLabel}`]));
+      await createApiConfigWithReadyRetry(() => gcloud(adcRunner, ['api-gateway', 'api-configs', 'create', `${manifest.gatewayConfigName}-c`, '--api', manifest.gatewayName, '--openapi-spec', gatewaySpecPath, '--project', env.projectId, '--labels', `postman-run-marker=${manifest.runMarker},postman-project-name=${manifest.gatewayName}-alt,postman-repo=${manifest.conflictLabel}`]));
 
       const endpointsPath = path.join(managed, 'endpoints.yaml');
       await writeFile(endpointsPath, swagger2Document({ title: manifest.endpointsService, host: manifest.endpointsService }));
