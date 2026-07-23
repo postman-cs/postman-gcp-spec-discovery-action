@@ -109,33 +109,42 @@ jobs:
       - name: Run gates
         shell: pwsh
         run: |
-          $ErrorActionPreference = 'Continue'
-          $MAX_PARALLEL_GATES=2
-          $gates = @{
-            lint = 'npm run lint'
-            test = 'npm test'
-            typecheck = 'npm run typecheck'
-            dist = 'npm run verify:dist:assert'
-          }
-          $running = @{}
+          $ErrorActionPreference = 'Stop'
+          $MAX_PARALLEL_GATES = 2
+          $gates = @(
+            @{ Name = 'lint'; Args = @('run', 'lint') },
+            @{ Name = 'test'; Args = @('test') },
+            @{ Name = 'typecheck'; Args = @('run', 'typecheck') },
+            @{ Name = 'dist'; Args = @('run', 'verify:dist:assert') }
+          )
+          $running = @()
           $results = @{}
-          foreach ($name in $gates.Keys) {
+          foreach ($gate in $gates) {
             while ($running.Count -ge $MAX_PARALLEL_GATES) {
-              $job = Wait-Job -Job $running.Values -Any
-              $results[$job.Name] = $job.State -eq 'Completed' -and $job.ChildJobs[0].JobStateInfo.Reason -eq $null
-              Receive-Job $job
-              Remove-Job $job
-              $running.Remove($job.Name)
+              $completed = Wait-Job -Job $running -Any
+              Write-Output "::group::$($completed.Name)"
+              Receive-Job -Job $completed -ErrorAction Continue 2>&1 | Write-Output
+              Write-Output '::endgroup::'
+              $results[$completed.Name] = if ($completed.State -eq 'Completed') { 0 } else { 1 }
+              Remove-Job -Job $completed
+              $running = @($running | Where-Object Id -ne $completed.Id)
             }
-            $running[$name] = Start-Job -Name $name -ScriptBlock { param($command); Invoke-Expression $command; if ($LASTEXITCODE -ne 0) { throw "gate exited $LASTEXITCODE" } } -ArgumentList $gates[$name]
+            $running += Start-Job -Name $gate.Name -ScriptBlock {
+              param($npmArgs)
+              & npm @npmArgs
+              if ($LASTEXITCODE -ne 0) { throw "gate failed with exit code $LASTEXITCODE" }
+            } -ArgumentList (,$gate.Args)
           }
-          while ($running.Count -gt 0) {
-            $job = Wait-Job -Job $running.Values -Any
-            $results[$job.Name] = $job.State -eq 'Completed' -and $job.ChildJobs[0].JobStateInfo.Reason -eq $null
-            Receive-Job $job
-            Remove-Job $job
-            $running.Remove($job.Name)
+          foreach ($job in $running) {
+            Wait-Job -Job $job | Out-Null
+            Write-Output "::group::$($job.Name)"
+            Receive-Job -Job $job -ErrorAction Continue 2>&1 | Write-Output
+            Write-Output '::endgroup::'
+            $results[$job.Name] = if ($job.State -eq 'Completed') { 0 } else { 1 }
+            Remove-Job -Job $job
           }
           $failed = $false
-          foreach ($name in $gates.Keys) { if ($results[$name]) { Write-Output "gate:$name=pass" } else { Write-Output "gate:$name=fail"; $failed = $true } }
+          foreach ($gate in $gates) {
+            if ($results[$gate.Name] -eq 0) { Write-Output "gate:$($gate.Name)=pass" } else { Write-Output "gate:$($gate.Name)=fail"; $failed = $true }
+          }
           if ($failed) { exit 1 }

@@ -136,7 +136,7 @@ describe('CI workflow contract', () => {
     expect(ciWorkflow).not.toMatch(/\bgo install\b/);
   });
 
-  it('GCP-CI-004: Windows one bundle before at-most-two Start-Job queue with exact read-only gates', () => {
+  it('GCP-CI-004: Windows one bundle before at-most-two argument-safe jobs with grouped diagnostics', () => {
     expect(windows).toContain('runs-on: windows-latest');
     expect(windows).not.toMatch(/^\s*fetch-depth:\s*/m);
     expect(windows.match(/^\s*- run: npm run bundle\s*$/gm) ?? []).toHaveLength(1);
@@ -145,14 +145,21 @@ describe('CI workflow contract', () => {
     const runGates = namedStep(windows, 'Run gates');
     expect(runGates.length).toBeGreaterThan(0);
     expect(runGates).toContain('shell: pwsh');
-    expect(runGates).toContain('$MAX_PARALLEL_GATES=2');
+    expect(runGates).toContain('$MAX_PARALLEL_GATES = 2');
     expect(runGates).toContain('while ($running.Count -ge $MAX_PARALLEL_GATES)');
     expect(runGates).toContain('Start-Job');
+    expect(runGates).toContain("@{ Name = 'lint'; Args = @('run', 'lint') }");
+    expect(runGates).toContain("@{ Name = 'test'; Args = @('test') }");
+    expect(runGates).toContain("@{ Name = 'typecheck'; Args = @('run', 'typecheck') }");
+    expect(runGates).toContain("@{ Name = 'dist'; Args = @('run', 'verify:dist:assert') }");
+    expect(runGates).toContain('& npm @npmArgs');
+    expect(runGates).not.toContain('Invoke-Expression');
 
-    expect(runGates).toContain("lint = 'npm run lint'");
-    expect(runGates).toContain("test = 'npm test'");
-    expect(runGates).toContain("typecheck = 'npm run typecheck'");
-    expect(runGates).toContain("dist = 'npm run verify:dist:assert'");
+    expect(runGates).toContain('Receive-Job -Job $completed -ErrorAction Continue 2>&1');
+    expect(runGates).toContain('Receive-Job -Job $job -ErrorAction Continue 2>&1');
+    expect(runGates).toContain('::group::');
+    expect(runGates).toContain('::endgroup::');
+    expect(runGates).toContain('Where-Object Id -ne $completed.Id');
     expect(runGates).toContain('$LASTEXITCODE');
     expect(runGates).toContain('throw');
 
