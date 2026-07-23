@@ -63,7 +63,6 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: '24'
-          cache: npm
           registry-url: 'https://registry.npmjs.org'
       - run: npm ci
       - name: Install actionlint
@@ -118,17 +117,25 @@ jobs:
           registry-url: 'https://registry.npmjs.org'
       - name: Verify staged artifact identity
         run: |
-          node --input-type=module -e 'import { createHash } from "node:crypto"; import { readFileSync } from "node:fs"; const manifest=JSON.parse(readFileSync("release-manifest.json")); if (manifest.repository!==process.env.GITHUB_REPOSITORY || manifest.commit_sha!==process.env.GITHUB_SHA || manifest.tag!==process.env.GITHUB_REF_NAME || manifest.artifacts?.length!==1 || manifest.artifacts[0]?.path!=="release.tgz" || manifest.artifacts[0]?.sha256!==createHash("sha256").update(readFileSync("release.tgz")).digest("hex")) throw new Error("staged manifest identity mismatch");'
-          mkdir package && tar -xzf release.tgz -C package --strip-components=1
-          PACKAGE_NAME=$(node -p "require('./release-manifest.json').package_name") PACKAGE_VERSION=$(node -p "require('./release-manifest.json').package_version") node package/scripts/verify-release-artifacts.mjs .
+          set -euo pipefail
+          EXPECTED_SHA256='3b51d011c324a2855b6d72488d776e4db3db38297f65e66a65dbaff705253e83'
+          VERIFIER="$RUNNER_TEMP/verify-release-artifacts.mjs"
+          tar -xOf release.tgz package/scripts/verify-release-artifacts.mjs > "$VERIFIER"
+          ACTUAL_SHA256="$(sha256sum "$VERIFIER" | awk '{print $1}')"
+          test "$ACTUAL_SHA256" = "$EXPECTED_SHA256"
+          PACKAGE_NAME='@postman-cse/onboarding-gcp-spec-discovery'
+          PACKAGE_VERSION="${GITHUB_REF_NAME#v}"
+          PACKAGE_NAME="$PACKAGE_NAME" PACKAGE_VERSION="$PACKAGE_VERSION" node "$VERIFIER" .
       - name: Publish or verify npm package identity
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
-          PACKAGE_NAME=$(node -p "require('./release-manifest.json').package_name"); PACKAGE_VERSION=$(node -p "require('./release-manifest.json').package_version")
+          set -euo pipefail
+          PACKAGE_NAME='@postman-cse/onboarding-gcp-spec-discovery'
+          PACKAGE_VERSION="${GITHUB_REF_NAME#v}"
+          VERIFIER="$RUNNER_TEMP/verify-release-artifacts.mjs"
           if npm view "$PACKAGE_NAME@$PACKAGE_VERSION" dist.integrity >/tmp/npm-integrity 2>/dev/null; then
-            EXPECTED=$(node -e "const {createHash}=require('node:crypto'),{readFileSync}=require('node:fs');console.log('sha512-'+createHash('sha512').update(readFileSync('release.tgz')).digest('base64'))")
-            [ "$(tr -d '\n' </tmp/npm-integrity)" = "$EXPECTED" ] || { echo '::error::Published npm integrity differs from staged tarball'; exit 1; }
+            node "$VERIFIER" --check-npm-sri release.tgz "$(tr -d '\n' </tmp/npm-integrity)"
           else
             npm publish ./release.tgz --provenance --access public
           fi
@@ -150,18 +157,30 @@ jobs:
           fetch-depth: 1
       - name: Advance non-regressing rolling aliases
         run: |
+          set -euo pipefail
           VERSION="${GITHUB_REF_NAME#v}"; IFS='.' read -r MAJOR_NUMBER MINOR_NUMBER _ <<< "$VERSION"; MAJOR="v$MAJOR_NUMBER"; MINOR="v$MAJOR_NUMBER.$MINOR_NUMBER"; COMMIT="$GITHUB_SHA"
-          # R10: fetch only the rolling alias refs needed for monotonic comparison (no blanket --tags).
-          git fetch --depth=1 origin "refs/tags/$MAJOR:refs/tags/$MAJOR" "refs/tags/$MINOR:refs/tags/$MINOR" 2>/dev/null || true
           git config user.name 'github-actions[bot]'; git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           for ALIAS in "$MAJOR" "$MINOR"; do
-            # Resolve the exact version the alias currently points at (package.json at its commit),
-            # not every descendant tag, so a later major cannot block a valid vN.M advance (R6).
-            CURRENT_VERSION=""
-            if git rev-parse -q --verify "refs/tags/$ALIAS^{commit}" >/dev/null 2>&1; then
-              CURRENT_VERSION=$(git show "$ALIAS^{commit}:package.json" 2>/dev/null | node -e "let s='';process.stdin.on('data',d=>s+=d);process.stdin.on('end',()=>console.log(JSON.parse(s).version))" 2>/dev/null || true)
+            if [ "$ALIAS" = "v0" ]; then
+              echo "::notice::v0 major alias stays frozen; not moving"
+              continue
             fi
-            if [ -n "$CURRENT_VERSION" ] && [ "$(printf 'v%s\nv%s\n' "$CURRENT_VERSION" "$VERSION" | sort -V | tail -1)" != "v$VERSION" ]; then echo "::notice::$ALIAS currently at v$CURRENT_VERSION; candidate v$VERSION is older than current alias target; not moving alias"; continue; fi
+            set +e
+            git ls-remote --exit-code --tags origin "refs/tags/$ALIAS" >/dev/null
+            status=$?
+            set -e
+            if [ "$status" -eq 0 ]; then
+              git fetch --depth=1 --no-tags origin "refs/tags/$ALIAS:refs/tags/$ALIAS"
+              CURRENT_VERSION=$(git show "$ALIAS^{commit}:package.json" | node -p "JSON.parse(require('fs').readFileSync(0, 'utf8')).version")
+              DECISION=$(node ./scripts/verify-release-artifacts.mjs --alias-decision "$CURRENT_VERSION" "$VERSION")
+              if [ "$DECISION" = "skip" ]; then
+                echo "::notice::$ALIAS currently at v$CURRENT_VERSION; candidate v$VERSION is older than current alias target; not moving alias"
+                continue
+              fi
+            elif [ "$status" -ne 2 ]; then
+              echo "::error::failed to probe rolling alias $ALIAS (git ls-remote exit $status)"
+              exit 1
+            fi
             git tag -fa "$ALIAS" -m "Rolling $ALIAS alias -> $GITHUB_REF_NAME" "$COMMIT"
             git push origin "$ALIAS" --force
           done
