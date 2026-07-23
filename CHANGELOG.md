@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.1.4
+
+Corrective release from protected `main` after repository-history sanitization changed
+historical commit identities. Immutable historical tags remain untouched; current
+rolling aliases advance only through the release workflow.
+
 ## v1.1.0
 
 Multi-protocol and multi-file definition handoff for Postman onboarding.
