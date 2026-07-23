@@ -121,13 +121,17 @@ describe('release workflow publishing contract', () => {
     expect(gateBlock).not.toContain('npm run build');
     expect(gateBlock).not.toContain('npm publish');
     expect(gateBlock).not.toContain('npm ci');
+    expect(verify).toContain(
+      'https://raw.githubusercontent.com/rhysd/actionlint/393031adb9afb225ee52ae2ccd7a5af5525e03e8/scripts/download-actionlint.bash',
+    );
     expect(verify).toContain('download-actionlint.bash) 1.7.11 "$RUNNER_TEMP"');
     expect(verify).toContain('ACTIONLINT_BIN=$RUNNER_TEMP/actionlint');
+    expect(releaseWorkflow).not.toContain('/main/scripts/download-actionlint.bash');
     expect(releaseWorkflow).not.toContain('actions/setup-go');
     expect(releaseWorkflow).not.toContain('go install github.com/rhysd/actionlint');
   });
 
-  it('GCP-RELEASE-004: upload path block is exactly two paths; publish downloads only run_id+run_attempt artifact', () => {
+  it('GCP-RELEASE-004: upload path block is exactly two paths; publish downloads into isolated runner.temp stage', () => {
     const verifyJob = parsed.jobs['verify-package'];
     const upload = verifyJob?.steps?.find((step) => step.uses?.startsWith('actions/upload-artifact@'));
     expect(upload?.with?.name).toBe('release-${{ github.run_id }}-${{ github.run_attempt }}');
@@ -143,40 +147,50 @@ describe('release workflow publishing contract', () => {
     const download = publishJob?.steps?.find((step) => step.uses?.startsWith('actions/download-artifact@'));
     expect(download?.with?.name).toBe('release-${{ github.run_id }}-${{ github.run_attempt }}');
     expect(download?.with?.name).toBe(upload?.with?.name);
-    expect(download?.with?.path).toBe('.');
+    expect(download?.with?.path).toBe('${{ runner.temp }}/release-stage');
   });
 
-  it('GCP-RELEASE-005: publish is artifact-only with checksum-pinned temp verifier and trusted identity', () => {
+  it('GCP-RELEASE-005: publish checks out tag commit, verifies isolated stage, repacks, and directory-publishes', () => {
     const publish = job('publish');
-    expect(publish).not.toContain('actions/checkout');
+    expect(publish).toContain('actions/checkout@');
+    expect(publish).toContain('ref: ${{ github.sha }}');
     expect(publish).not.toContain('npm ci');
     expect(publish).not.toContain('npm run bundle');
     expect(publish).not.toContain('npm test');
     expect(publish).not.toContain('npm run build');
-    expect(publish).not.toMatch(/\bnpm pack\b/);
     expect(publish).not.toMatch(/\n\s+cache:/);
     expect(publish).not.toContain('mkdir package');
     expect(publish).not.toContain('node package/scripts/verify-release-artifacts.mjs');
     expect(publish).toMatch(/EXPECTED_SHA256='[a-f0-9]{64}'/);
-    expect(publish).toContain('tar -xOf release.tgz package/scripts/verify-release-artifacts.mjs > "$VERIFIER"');
+    expect(publish).toContain('STAGE_DIR="$RUNNER_TEMP/release-stage"');
+    expect(publish).toContain('tar -xOf "$STAGE_DIR/release.tgz" package/scripts/verify-release-artifacts.mjs > "$VERIFIER"');
     expect(publish).toContain('test "$ACTUAL_SHA256" = "$EXPECTED_SHA256"');
     expect(publish).toContain("PACKAGE_NAME='@postman-cse/onboarding-gcp-spec-discovery'");
     expect(publish).toContain('PACKAGE_VERSION="${GITHUB_REF_NAME#v}"');
-    expect(publish).toContain('node "$VERIFIER" .');
-    assertOrder('EXPECTED_SHA256=', 'node "$VERIFIER" .', publish);
-    assertOrder('tar -xOf release.tgz package/scripts/verify-release-artifacts.mjs', 'node "$VERIFIER" .', publish);
-    assertOrder('node "$VERIFIER" .', 'Publish or verify npm package identity', publish);
+    expect(publish).toContain('node "$VERIFIER" "$STAGE_DIR"');
+    expect(publish).toContain('npm pack --ignore-scripts --pack-destination');
+    expect(publish).toContain('cmp -s');
+    assertOrder('EXPECTED_SHA256=', 'node "$VERIFIER" "$STAGE_DIR"', publish);
+    assertOrder(
+      'tar -xOf "$STAGE_DIR/release.tgz" package/scripts/verify-release-artifacts.mjs',
+      'node "$VERIFIER" "$STAGE_DIR"',
+      publish,
+    );
+    assertOrder('node "$VERIFIER" "$STAGE_DIR"', 'Publish or verify npm package identity', publish);
+    assertOrder('npm pack --ignore-scripts', 'npm publish --ignore-scripts', publish);
   });
 
-  it('GCP-RELEASE-006: npm/SRI before GitHub Release before aliases; non-cancelling concurrency', () => {
+  it('GCP-RELEASE-006: npm identity (SRI+gitHead) before GitHub Release before aliases; non-cancelling concurrency', () => {
     const publish = job('publish');
-    expect(publish).toContain('npm view "$PACKAGE_NAME@$PACKAGE_VERSION" dist.integrity');
-    expect(publish).toContain('node "$VERIFIER" --check-npm-sri release.tgz');
-    expect(publish).toContain('npm publish ./release.tgz --provenance --access public');
+    expect(publish).toContain('npm view "${PACKAGE_NAME}@${PACKAGE_VERSION}" --json');
+    expect(publish).toContain('node "$VERIFIER" --check-npm-release-identity');
+    expect(publish).toContain('npm publish --ignore-scripts --provenance --access public');
+    expect(publish).not.toContain('npm publish ./release.tgz');
+    expect(publish).toContain('for attempt in 1 2 3 4 5 6 7 8 9 10');
     expect(publish).toContain('uses: softprops/action-gh-release@');
-    expect(publish).toContain('files: release.tgz');
+    expect(publish).toContain('files: ${{ runner.temp }}/release-stage/release.tgz');
     assertOrder('Publish or verify npm package identity', 'Publish GitHub release', publish);
-    assertOrder('npm publish ./release.tgz --provenance --access public', 'softprops/action-gh-release', publish);
+    assertOrder('npm publish --ignore-scripts --provenance --access public', 'softprops/action-gh-release', publish);
     assertOrder('\n  publish:', '\n  advance-rolling-aliases:');
     expect(releaseWorkflow).toContain('group: release-${{ github.repository }}');
     expect(releaseWorkflow).toContain('cancel-in-progress: false');

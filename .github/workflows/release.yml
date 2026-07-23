@@ -67,7 +67,7 @@ jobs:
       - run: npm ci
       - name: Install actionlint
         run: |
-          bash <(curl -sSfL https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash) 1.7.11 "$RUNNER_TEMP"
+          bash <(curl -sSfL https://raw.githubusercontent.com/rhysd/actionlint/393031adb9afb225ee52ae2ccd7a5af5525e03e8/scripts/download-actionlint.bash) 1.7.11 "$RUNNER_TEMP"
           echo "ACTIONLINT_BIN=$RUNNER_TEMP/actionlint" >> "$GITHUB_ENV"
       - run: npm run bundle
       - name: Run gates
@@ -88,7 +88,7 @@ jobs:
         env:
           PACKAGE_NAME: ${{ github.event.repository.name }}
         run: |
-          npm pack --pack-destination .
+          npm pack --ignore-scripts --pack-destination .
           mv ./*.tgz release.tgz
           PACKAGE_NAME=$(node -p "require('./package.json').name") PACKAGE_VERSION=$(node -p "require('./package.json').version") node --input-type=module -e 'import { createHash } from "node:crypto"; import { readFileSync, writeFileSync } from "node:fs"; const sha256 = createHash("sha256").update(readFileSync("release.tgz")).digest("hex"); writeFileSync("release-manifest.json", JSON.stringify({schema_version:1,repository:process.env.GITHUB_REPOSITORY,commit_sha:process.env.GITHUB_SHA,tag:process.env.GITHUB_REF_NAME,package_name:process.env.PACKAGE_NAME,package_version:process.env.PACKAGE_VERSION,artifacts:[{path:"release.tgz",sha256}]}, null, 2));'
       - uses: actions/upload-artifact@v7
@@ -107,10 +107,14 @@ jobs:
       contents: write
       id-token: write
     steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
       - uses: actions/download-artifact@v7
         with:
           name: release-${{ github.run_id }}-${{ github.run_attempt }}
-          path: .
+          path: ${{ runner.temp }}/release-stage
       - uses: actions/setup-node@v7
         with:
           node-version: '24'
@@ -118,14 +122,15 @@ jobs:
       - name: Verify staged artifact identity
         run: |
           set -euo pipefail
-          EXPECTED_SHA256='3b51d011c324a2855b6d72488d776e4db3db38297f65e66a65dbaff705253e83'
+          EXPECTED_SHA256='d6a4361aa0a884179cfffb0bdbd2ba741ff32fde208616ae3d659150cff5dbcf'
           VERIFIER="$RUNNER_TEMP/verify-release-artifacts.mjs"
-          tar -xOf release.tgz package/scripts/verify-release-artifacts.mjs > "$VERIFIER"
+          STAGE_DIR="$RUNNER_TEMP/release-stage"
+          tar -xOf "$STAGE_DIR/release.tgz" package/scripts/verify-release-artifacts.mjs > "$VERIFIER"
           ACTUAL_SHA256="$(sha256sum "$VERIFIER" | awk '{print $1}')"
           test "$ACTUAL_SHA256" = "$EXPECTED_SHA256"
           PACKAGE_NAME='@postman-cse/onboarding-gcp-spec-discovery'
           PACKAGE_VERSION="${GITHUB_REF_NAME#v}"
-          PACKAGE_NAME="$PACKAGE_NAME" PACKAGE_VERSION="$PACKAGE_VERSION" node "$VERIFIER" .
+          PACKAGE_NAME="$PACKAGE_NAME" PACKAGE_VERSION="$PACKAGE_VERSION" node "$VERIFIER" "$STAGE_DIR"
       - name: Publish or verify npm package identity
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
@@ -134,16 +139,47 @@ jobs:
           PACKAGE_NAME='@postman-cse/onboarding-gcp-spec-discovery'
           PACKAGE_VERSION="${GITHUB_REF_NAME#v}"
           VERIFIER="$RUNNER_TEMP/verify-release-artifacts.mjs"
-          if npm view "$PACKAGE_NAME@$PACKAGE_VERSION" dist.integrity >/tmp/npm-integrity 2>/dev/null; then
-            node "$VERIFIER" --check-npm-sri release.tgz "$(tr -d '\n' </tmp/npm-integrity)"
+          STAGE_DIR="$RUNNER_TEMP/release-stage"
+          STAGED_TGZ="$STAGE_DIR/release.tgz"
+
+          REPACK_DIR="$RUNNER_TEMP/repack"
+          mkdir -p "$REPACK_DIR"
+          npm pack --ignore-scripts --pack-destination "$REPACK_DIR"
+          REPACKED="$(ls "$REPACK_DIR"/*.tgz)"
+          cmp -s "$REPACKED" "$STAGED_TGZ" || {
+            echo "::error::repacked checkout tarball bytes differ from staged release.tgz"
+            exit 1
+          }
+
+          if npm view "${PACKAGE_NAME}@${PACKAGE_VERSION}" version >/dev/null 2>&1; then
+            echo "::notice::${PACKAGE_NAME}@${PACKAGE_VERSION} already published; verifying registry identity"
           else
-            npm publish ./release.tgz --provenance --access public
+            npm publish --ignore-scripts --provenance --access public
           fi
+
+          REGISTRY_SRI=""
+          REGISTRY_GITHEAD=""
+          for attempt in 1 2 3 4 5 6 7 8 9 10; do
+            echo "registry identity probe attempt ${attempt}"
+            set +e
+            VIEW_JSON="$(npm view "${PACKAGE_NAME}@${PACKAGE_VERSION}" --json 2>/dev/null)"
+            VIEW_STATUS=$?
+            set -e
+            if [ "${VIEW_STATUS}" -eq 0 ] && [ -n "${VIEW_JSON}" ]; then
+              REGISTRY_SRI="$(printf '%s' "${VIEW_JSON}" | node -e 'let d="";process.stdin.on("data",c=>d+=c);process.stdin.on("end",()=>{try{const j=JSON.parse(d);process.stdout.write(String(j?.dist?.integrity||""))}catch{process.stdout.write("")}})')"
+              REGISTRY_GITHEAD="$(printf '%s' "${VIEW_JSON}" | node -e 'let d="";process.stdin.on("data",c=>d+=c);process.stdin.on("end",()=>{try{const j=JSON.parse(d);process.stdout.write(String(j?.gitHead||""))}catch{process.stdout.write("")}})')"
+              if [ -n "${REGISTRY_SRI}" ] && [ -n "${REGISTRY_GITHEAD}" ]; then
+                break
+              fi
+            fi
+            sleep 3
+          done
+          node "$VERIFIER" --check-npm-release-identity "$STAGED_TGZ" "$REGISTRY_SRI" "$REGISTRY_GITHEAD" "$GITHUB_SHA"
       - name: Publish GitHub release
         uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3.0.2
         with:
           generate_release_notes: true
-          files: release.tgz
+          files: ${{ runner.temp }}/release-stage/release.tgz
 
   advance-rolling-aliases:
     needs: [classify, publish]

@@ -34,6 +34,31 @@ export function assertNpmSriMatch(expected, actual) {
 }
 
 /**
+ * Assert registry release identity: SRI equals staged release.tgz and gitHead equals the
+ * immutable tag commit (GITHUB_SHA). Missing gitHead is a hard failure.
+ */
+export function assertNpmReleaseIdentity({
+  registrySri,
+  stagedTarball,
+  registryGitHead,
+  expectedGitHead,
+}) {
+  const stagedSri = computeNpmSri(stagedTarball);
+  assertNpmSriMatch(registrySri, stagedSri);
+  const gitHead = String(registryGitHead ?? '').trim();
+  const expected = String(expectedGitHead ?? '').trim();
+  if (!gitHead) {
+    throw new Error('registry gitHead is missing');
+  }
+  if (!expected) {
+    throw new Error('expected gitHead is missing');
+  }
+  if (gitHead !== expected) {
+    throw new Error(`registry gitHead ${gitHead} does not match expected commit ${expected}`);
+  }
+}
+
+/**
  * Decide whether a rolling alias should move.
  * Equal or older current permits advance; newer current skips.
  * Versions must be strict numeric MAJOR.MINOR.PATCH.
@@ -96,6 +121,21 @@ function runCli(argv) {
       throw new Error('usage: node scripts/verify-release-artifacts.mjs --check-npm-sri <tarball> <expectedSri>');
     }
     assertNpmSriMatch(expectedSri, computeNpmSri(tarball));
+    return;
+  }
+  if (argv[0] === '--check-npm-release-identity') {
+    const [, tarball, registrySri, registryGitHead, expectedGitHead] = argv;
+    if (!tarball || registrySri === undefined || registryGitHead === undefined || expectedGitHead === undefined) {
+      throw new Error(
+        'usage: node scripts/verify-release-artifacts.mjs --check-npm-release-identity <tarball> <registrySri> <registryGitHead> <expectedGitHead>',
+      );
+    }
+    assertNpmReleaseIdentity({
+      registrySri,
+      stagedTarball: tarball,
+      registryGitHead,
+      expectedGitHead,
+    });
     return;
   }
   if (argv[0] === '--alias-decision') {

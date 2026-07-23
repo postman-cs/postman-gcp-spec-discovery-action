@@ -27,7 +27,7 @@ describe('CLI packaging contract', () => {
     expect(help.stdout.startsWith('Usage: postman-gcp-spec-discovery [options]')).toBe(true);
 
     const version = await execFileAsync(process.execPath, [cliPath, '--version'], { encoding: 'utf8' });
-    expect(version.stdout).toBe('1.1.4\n');
+    expect(version.stdout).toBe('1.1.5\n');
   });
 
   it('GCP-PACK-001: npm pack includes action.yml, docs, and both bundles', async () => {
