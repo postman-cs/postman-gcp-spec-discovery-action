@@ -23,10 +23,11 @@ jobs:
 
       - name: Validate live GCS configuration
         env:
-          GCP_WORKLOAD_IDENTITY_PROVIDER: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
-          GCP_SERVICE_ACCOUNT: ${{ vars.GCP_SERVICE_ACCOUNT }}
-          GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
-          GCP_LIVE_CONNECTOR_RESOURCE_IDS_JSON: ${{ vars.GCP_LIVE_CONNECTOR_RESOURCE_IDS_JSON }}
+          GCP_WORKLOAD_IDENTITY_PROVIDER: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          GCP_SERVICE_ACCOUNT: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+          GCP_LIVE_CONNECTOR_RESOURCE_ID: ${{ secrets.GCP_LIVE_CONNECTOR_RESOURCE_ID }}
+          GCP_LIVE_CONNECTOR_RESOURCE_IDS_JSON: ${{ secrets.GCP_LIVE_CONNECTOR_RESOURCE_IDS_JSON }}
           POSTMAN_E2E_API_KEY_NON_ORG_MODE: ${{ secrets.POSTMAN_E2E_API_KEY_NON_ORG_MODE }}
         run: |
           set -euo pipefail
@@ -35,6 +36,7 @@ jobs:
             GCP_WORKLOAD_IDENTITY_PROVIDER \
             GCP_SERVICE_ACCOUNT \
             GCP_PROJECT_ID \
+            GCP_LIVE_CONNECTOR_RESOURCE_ID \
             GCP_LIVE_CONNECTOR_RESOURCE_IDS_JSON \
             POSTMAN_E2E_API_KEY_NON_ORG_MODE
           do
@@ -60,9 +62,9 @@ jobs:
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v3
         with:
-          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
-          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
-          project_id: ${{ vars.GCP_PROJECT_ID }}
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
 
       - name: Assert immutable discovery release identity
         id: release_identity
@@ -84,8 +86,9 @@ jobs:
         id: discover
         uses: postman-cs/postman-gcp-spec-discovery-action@v1.1.6
         with:
-          project-id: ${{ vars.GCP_PROJECT_ID }}
-          expected-api-ids-json: ${{ vars.GCP_LIVE_CONNECTOR_RESOURCE_IDS_JSON }}
+          project-id: ${{ secrets.GCP_PROJECT_ID }}
+          api-id: ${{ secrets.GCP_LIVE_CONNECTOR_RESOURCE_ID }}
+          expected-api-ids-json: ${{ secrets.GCP_LIVE_CONNECTOR_RESOURCE_IDS_JSON }}
 
       - name: Assert discovery handoff
         env:

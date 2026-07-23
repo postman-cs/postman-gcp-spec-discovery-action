@@ -783,7 +783,10 @@ export async function verifyLiveGcsOnboarding(options = {}) {
 }
 
 export async function runCli(options = {}) {
-  const result = await verifyLiveGcsOnboarding(options);
+  const result = await verifyLiveGcsOnboarding({
+    receiptPathFallback: DEFAULT_RECEIPT_RELATIVE,
+    ...options
+  });
   if (!result.ok) {
     process.exitCode = result.exitCode || 1;
   }
