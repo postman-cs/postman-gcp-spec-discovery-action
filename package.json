@@ -15,6 +15,7 @@
     "action.yml",
     "dist",
     "README.md",
+    "scripts/verify-release-artifacts.mjs",
     "docs",
     "SECURITY.md",
     "SUPPORT.md",

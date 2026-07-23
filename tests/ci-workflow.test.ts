@@ -16,6 +16,8 @@ describe('CI workflow contract', () => {
     expect(ciWorkflow.match(/npm run bundle/g)).toHaveLength(2);
     expect(ciWorkflow).toContain('runs-on: windows-latest');
     expect(ciWorkflow).toContain('MAX_PARALLEL_GATES=2');
+    expect(ciWorkflow).toContain('group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}');
+    expect(ciWorkflow).toContain('cancel-in-progress: ${{ github.event_name == \'pull_request\' }}');
     expect(ciWorkflow).toContain('run dist       npm run verify:dist:assert');
     expect(ciWorkflow).not.toContain('npm run verify:dist\n');
 
@@ -29,5 +31,14 @@ describe('CI workflow contract', () => {
     expect(ciWorkflow).not.toContain('GCP_SUBSCRIPTION_ID');
     expect(ciWorkflow).not.toContain('gcp/login');
     expect(ciWorkflow).not.toContain('GCP_CREDENTIALS');
+
+    const windows = ciWorkflow.slice(ciWorkflow.indexOf('\n  windows:\n'));
+    expect(windows).toContain('MAX_PARALLEL_GATES=2');
+    expect(windows.indexOf('npm run bundle')).toBeLessThan(windows.indexOf('Run gates'));
+    expect(windows).toContain('Start-Job');
+    expect(windows).toContain('npm run verify:dist:assert');
+    // A failed native gate must fail the job: propagate $LASTEXITCODE, not just PowerShell job state.
+    expect(windows).toContain('$LASTEXITCODE');
+    expect(windows).toContain('throw');
   });
 });

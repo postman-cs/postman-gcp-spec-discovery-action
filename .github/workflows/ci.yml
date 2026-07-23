@@ -11,6 +11,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   gate:
     runs-on: ubuntu-latest
@@ -105,8 +109,37 @@ jobs:
       - run: npm ci
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-      - run: npm run lint
-      - run: npm test
-      - run: npm run typecheck
       - run: npm run bundle
-      - run: npm run verify:dist:assert
+      - name: Run gates
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Continue'
+          $MAX_PARALLEL_GATES=2
+          $gates = @{
+            lint = 'npm run lint'
+            test = 'npm test'
+            typecheck = 'npm run typecheck'
+            dist = 'npm run verify:dist:assert'
+          }
+          $running = @{}
+          $results = @{}
+          foreach ($name in $gates.Keys) {
+            while ($running.Count -ge $MAX_PARALLEL_GATES) {
+              $job = Wait-Job -Job $running.Values -Any
+              $results[$job.Name] = $job.State -eq 'Completed' -and $job.ChildJobs[0].JobStateInfo.Reason -eq $null
+              Receive-Job $job
+              Remove-Job $job
+              $running.Remove($job.Name)
+            }
+            $running[$name] = Start-Job -Name $name -ScriptBlock { param($command); Invoke-Expression $command; if ($LASTEXITCODE -ne 0) { throw "gate exited $LASTEXITCODE" } } -ArgumentList $gates[$name]
+          }
+          while ($running.Count -gt 0) {
+            $job = Wait-Job -Job $running.Values -Any
+            $results[$job.Name] = $job.State -eq 'Completed' -and $job.ChildJobs[0].JobStateInfo.Reason -eq $null
+            Receive-Job $job
+            Remove-Job $job
+            $running.Remove($job.Name)
+          }
+          $failed = $false
+          foreach ($name in $gates.Keys) { if ($results[$name]) { Write-Output "gate:$name=pass" } else { Write-Output "gate:$name=fail"; $failed = $true } }
+          if ($failed) { exit 1 }
