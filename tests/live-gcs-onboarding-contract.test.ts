@@ -609,6 +609,41 @@ describe('live GCS onboarding verifier', () => {
 describe('live GCS onboarding workflow contract', () => {
   const workflow = readFileSync(join(root, '.github/workflows/live-gcs-onboarding.yml'), 'utf8');
 
+  it('fails before keyless auth when required live configuration is missing', () => {
+    const preflightStart = workflow.indexOf('- name: Validate live GCS configuration');
+    const authStart = workflow.indexOf('- name: Authenticate to Google Cloud');
+    expect(preflightStart).toBeGreaterThan(0);
+    expect(authStart).toBeGreaterThan(preflightStart);
+
+    const preflight = workflow.slice(preflightStart, authStart);
+    for (const name of [
+      'GCP_WORKLOAD_IDENTITY_PROVIDER',
+      'GCP_SERVICE_ACCOUNT',
+      'GCP_PROJECT_ID',
+      'GCP_LIVE_CONNECTOR_RESOURCE_IDS_JSON',
+      'POSTMAN_E2E_API_KEY_NON_ORG_MODE'
+    ]) {
+      expect(preflight).toContain(`${name}: \${{`);
+      expect(preflight).toContain(name);
+    }
+    expect(preflight).toContain('if [ -z "${!name:-}" ]');
+    expect(preflight).toContain('missing+=("$name")');
+    expect(preflight).toContain('Missing required live configuration:');
+    expect(preflight).not.toContain('${!name}');
+  });
+
+  it('authenticates only through WIF with an explicit project ID', () => {
+    const authStart = workflow.indexOf('- name: Authenticate to Google Cloud');
+    const authEnd = workflow.indexOf('\n      - name:', authStart + 1);
+    const authStep = workflow.slice(authStart, authEnd);
+
+    expect(authStep).toContain('uses: google-github-actions/auth@v3');
+    expect(authStep).toContain('workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}');
+    expect(authStep).toContain('service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}');
+    expect(authStep).toContain('project_id: ${{ vars.GCP_PROJECT_ID }}');
+    expect(workflow).not.toContain('credentials_json:');
+  });
+
   it('pins immutable discovery release, env-safe shell binding, always cleanup, artifact path, and required vars/secret', () => {
     expect(workflow).toContain('uses: postman-cs/postman-gcp-spec-discovery-action@v1.1.6');
     expect(workflow).toContain("refs/tags/v1.1.6^{}");
