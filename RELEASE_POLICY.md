@@ -33,7 +33,7 @@ Pre-release validation must stay read-only after the single bundle: do not rebui
 
 ## CI
 
-CI preserves required Linux (`gate`) and Windows (`windows`) jobs. Each job installs dependencies once, bundles once (`npm run bundle`), then runs an at-most-two read-only gate queue. Linux also runs `actionlint`, docs (`node scripts/render-action-tables.mjs --check`), and PR-only `commitlint`. Dist verification is `npm run verify:dist:assert` against the one pre-queue bundle.
+CI preserves required Linux (`gate`) and Windows (`windows`) jobs. Linux installs dependencies and bundles once (`npm run bundle`), then runs an at-most-two read-only queue containing lint, typecheck, test, dist verification, `actionlint`, docs (`node scripts/render-action-tables.mjs --check`), and PR-only `commitlint`; dist verification is `npm run verify:dist:assert` against the one pre-queue bundle. Windows installs dependencies only on an exact-cache miss, then runs direct, unfiltered `npm test` without bundling or a gate queue.
 
 ## Release order and boundary
 
