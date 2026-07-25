@@ -50,13 +50,6 @@ jobs:
           fi
           TAG_VERSION="${GITHUB_REF_NAME#v}"
           PKG_VERSION=$(node -p "require('./package.json').version")
-          git fetch origin main --no-tags
-          TAG_COMMIT=$(git rev-parse 'HEAD^{commit}')
-          MAIN_COMMIT=$(git rev-parse 'origin/main^{commit}')
-          if [ "$TAG_COMMIT" != "$MAIN_COMMIT" ]; then
-            echo "::error::Release tag commit $TAG_COMMIT differs from protected origin/main $MAIN_COMMIT"
-            exit 1
-          fi
           IFS='.' read -r MAJOR MINOR _ <<< "$PKG_VERSION"
           # npm publishes ONLY from the exact immutable package-version tag.
           if [ "$TAG_VERSION" = "$PKG_VERSION" ]; then

@@ -21,10 +21,9 @@ describe('release workflow publishing contract', () => {
     // GitHub release + tarball for the pushed tag.
     expect(releaseWorkflow).toContain('uses: softprops/action-gh-release@');
     expect(releaseWorkflow).toContain('files: release.tgz');
-    // Every release tag must point at protected origin/main.
-    expect(releaseWorkflow).toContain("git fetch origin main --no-tags");
-    expect(releaseWorkflow).toContain("git rev-parse 'origin/main^{commit}'");
-    expect(releaseWorkflow).toContain('if [ "$TAG_COMMIT" != "$MAIN_COMMIT" ]; then');
+    // Auto-release tags carry the version bump on the tagged commit only; main
+    // advances through pull requests and is not required to equal the tag tip.
+    expect(releaseWorkflow).not.toContain('if [ "$TAG_COMMIT" != "$MAIN_COMMIT" ]; then');
     // Only the alias job force-moves anything, and only the major/minor aliases.
     const forceMoves = releaseWorkflow.match(/git push origin .* --force/g) ?? [];
     expect(forceMoves).toEqual(['git push origin "$ALIAS" --force']);
