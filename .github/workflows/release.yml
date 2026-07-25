@@ -50,6 +50,16 @@ jobs:
           fi
           TAG_VERSION="${GITHUB_REF_NAME#v}"
           PKG_VERSION=$(node -p "require('./package.json').version")
+          # The release commit is cut by auto-release.yml and lives only on the
+          # tag: it carries the version bump and rebuilt dist, and main requires
+          # pull requests. Its PARENT is the reviewed main commit it was cut
+          # from, so ancestry is what proves these bytes came from main.
+          git fetch --no-tags origin main
+          TAG_COMMIT=$(git rev-parse 'HEAD^{commit}')
+          if ! git merge-base --is-ancestor "${TAG_COMMIT}^" origin/main; then
+            echo "::error::Release tag commit $TAG_COMMIT was not cut from protected origin/main"
+            exit 1
+          fi
           IFS='.' read -r MAJOR MINOR _ <<< "$PKG_VERSION"
           # npm publishes ONLY from the exact immutable package-version tag.
           if [ "$TAG_VERSION" = "$PKG_VERSION" ]; then

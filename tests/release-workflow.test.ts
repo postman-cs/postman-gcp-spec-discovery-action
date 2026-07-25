@@ -24,6 +24,11 @@ describe('release workflow publishing contract', () => {
     // Auto-release tags carry the version bump on the tagged commit only; main
     // advances through pull requests and is not required to equal the tag tip.
     expect(releaseWorkflow).not.toContain('if [ "$TAG_COMMIT" != "$MAIN_COMMIT" ]; then');
+    // Ancestry of the release commit's parent is what proves the released bytes
+    // came from protected main.
+    expect(releaseWorkflow).toContain(
+      'if ! git merge-base --is-ancestor "${TAG_COMMIT}^" origin/main; then'
+    );
     // Only the alias job force-moves anything, and only the major/minor aliases.
     const forceMoves = releaseWorkflow.match(/git push origin .* --force/g) ?? [];
     expect(forceMoves).toEqual(['git push origin "$ALIAS" --force']);
