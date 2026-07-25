@@ -49,8 +49,8 @@
   },
   "dependencies": {
     "@actions/core": "3.0.1",
-    "@postman-cse/automation-telemetry-core": "0.2.0",
-    "google-auth-library": "10.9.0",
+    "@postman-cse/automation-telemetry-core": "0.3.0",
+    "google-auth-library": "10.9.1",
     "yaml": "2.9.0"
   },
   "overrides": {
