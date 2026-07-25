@@ -9,13 +9,31 @@ Git tags and GitHub releases are the public release identifiers for this action.
 - Immutable releases use `vMAJOR.MINOR.PATCH` tags.
 - The rolling major and minor aliases (`vMAJOR` and `vMAJOR.MINOR`, i.e. `v1` and `v1.0`) are force-moved by the release workflow's `advance-rolling-aliases` job after a successful immutable publish.
 - Existing immutable release tags are never force-pushed, rewritten, deleted, or recreated.
-- Every release tag commit must equal protected `origin/main`; the release workflow verifies this before publication.
+- Immutable release tags are cut automatically from `main` by `.github/workflows/auto-release.yml`; the tagged commit carries the version bump and rebuilt `dist/`, and is not pushed onto `main`.
+- Every release tag commit must descend from protected `origin/main`; the release workflow verifies by ancestry before publication.
 - `v0` tags stay frozen at the last `v0` release. The `v0` major remains frozen.
 - Every immutable release tag has a GitHub release with generated notes.
 
 ## Release checks
 
-Run the package validators from this directory before pushing an immutable tag:
+Releases are cut automatically. Merging to `main` runs `.github/workflows/auto-release.yml`,
+which derives the next version from the conventional-commit history, then runs
+`scripts/release-cut.mjs`: bump, rebuild `dist/`, run the gate set, commit, and tag.
+
+The tag is created only after the exact bytes of the release commit pass every
+gate, so a failed cut leaves no tag and burns no version number. The next merge
+retries on a fresh version, skipping any already-tagged one.
+
+Do not push `vX.Y.Z` tags by hand. The pre-push hook refuses them, because a
+hand-pushed tag becomes a public identifier before any gate has run against it.
+
+To see what the next merge would cut:
+
+```sh
+node scripts/release-cut.mjs --plan
+```
+
+The same read-only validators run locally before any push:
 
 1. Confirm the working tree is clean.
 2. Install dependencies once (`npm ci`).

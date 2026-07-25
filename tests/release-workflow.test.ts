@@ -47,9 +47,14 @@ describe('release workflow publishing contract', () => {
     assertOrder('Classify release tag', 'npm ci');
 
     const classify = job('classify');
-    expect(classify.match(/git fetch --depth=1 origin main --no-tags/g) ?? []).toHaveLength(1);
-    expect(classify).toContain("git rev-parse 'origin/main^{commit}'");
-    expect(classify).toContain('if [ "$TAG_COMMIT" != "$MAIN_COMMIT" ]; then');
+    // Ancestry needs real history on origin/main, so the fetch is not shallow.
+    expect(classify.match(/git fetch --no-tags origin main/g) ?? []).toHaveLength(1);
+    expect(classify).not.toContain('git fetch --depth=1 origin main --no-tags');
+    // Auto-release tags carry the version bump on the tagged commit only; main
+    // advances through pull requests and is not required to equal the tag tip.
+    // Ancestry of the release commit's parent proves the bytes came from main.
+    expect(classify).not.toContain('if [ "$TAG_COMMIT" != "$MAIN_COMMIT" ]; then');
+    expect(classify).toContain('if ! git merge-base --is-ancestor "${TAG_COMMIT}^" origin/main; then');
     expect(classify).not.toContain('git fetch --tags');
     expect(classify).not.toContain('fetch-depth: 0');
 
