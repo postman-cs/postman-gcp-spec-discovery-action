@@ -56,6 +56,7 @@ describe('release workflow publishing contract', () => {
     expect(classify).not.toContain('if [ "$TAG_COMMIT" != "$MAIN_COMMIT" ]; then');
     expect(classify).toContain('if ! git merge-base --is-ancestor "${TAG_COMMIT}^" origin/main; then');
     expect(classify).not.toContain('git fetch --tags');
+    expect(classify).toContain('fetch-depth: 2');
     expect(classify).not.toContain('fetch-depth: 0');
 
     const verify = job('verify-package');

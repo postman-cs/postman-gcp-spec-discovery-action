@@ -20,6 +20,8 @@ jobs:
       release_kind: ${{ steps.release_tag.outputs.release_kind }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 2
       - uses: actions/setup-node@v7
         with:
           node-version: '24'
