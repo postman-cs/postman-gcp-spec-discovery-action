@@ -3,7 +3,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { resolvePathWithinRoot } from './lib/utils/resolve-path-within-root.js';
 
-import { createTelemetryContext } from '@postman-cse/automation-telemetry-core';
+import { createTelemetryContext } from '@postman-cse/automation-core';
 
 import { resolveActionVersion } from './action-version.js';
 import {

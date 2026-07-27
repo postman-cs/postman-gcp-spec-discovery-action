@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-import { createTelemetryContext } from '@postman-cse/automation-telemetry-core';
+import { createTelemetryContext } from '@postman-cse/automation-core';
 
 import { runAction, type CoreLike, type GitHubActionDependencies } from '../src/index.js';
 import type { GcpDiscoveryClient } from '../src/lib/gcp/clients.js';
