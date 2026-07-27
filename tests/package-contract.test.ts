@@ -21,7 +21,7 @@ const lock = JSON.parse(readFileSync(resolve(repoRoot, 'package-lock.json'), 'ut
 
 const GCP_PINS: Record<string, string> = {
   '@actions/core': '3.0.1',
-  '@postman-cse/automation-core': '0.2.0',
+  '@postman-cse/automation-core': '1.1.0',
   'google-auth-library': '10.9.0',
   yaml: '2.9.0'
 };
