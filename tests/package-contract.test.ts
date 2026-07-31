@@ -21,7 +21,6 @@ const lock = JSON.parse(readFileSync(resolve(repoRoot, 'package-lock.json'), 'ut
 
 const GCP_PINS: Record<string, string> = {
   '@actions/core': '3.0.1',
-  '@postman-cse/automation-core': '1.1.0',
   'google-auth-library': '10.9.0',
   yaml: '2.9.0'
 };
@@ -38,6 +37,8 @@ describe('package contract', () => {
       expect(pkg.dependencies[name], `${name} must be pinned exactly`).toBe(version);
       expect(lock.packages[`node_modules/${name}`]?.version, `${name} lockfile pin`).toBe(version);
     }
+    expect(pkg.dependencies['@postman-cse/automation-core']).toBe('^1.3.0');
+    expect(lock.packages['node_modules/@postman-cse/automation-core']?.version).toBe('1.3.0');
 
     for (const entry of ['action.yml', 'dist', 'README.md', 'docs', 'SECURITY.md', 'SUPPORT.md', 'RELEASE_POLICY.md']) {
       expect(pkg.files, `files must include ${entry}`).toContain(entry);

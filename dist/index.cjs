@@ -12234,7 +12234,7 @@ var require_response = __commonJS({
     var assert = require("node:assert");
     var { types: types3 } = require("node:util");
     var textEncoder = new TextEncoder("utf-8");
-    var Response2 = class _Response {
+    var Response3 = class _Response {
       // Creates network error Response.
       static error() {
         const responseObject = fromInnerResponse(makeNetworkError(), "immutable");
@@ -12377,8 +12377,8 @@ var require_response = __commonJS({
         return `Response ${nodeUtil.formatWithOptions(options, properties)}`;
       }
     };
-    mixinBody(Response2);
-    Object.defineProperties(Response2.prototype, {
+    mixinBody(Response3);
+    Object.defineProperties(Response3.prototype, {
       type: kEnumerableProperty,
       url: kEnumerableProperty,
       status: kEnumerableProperty,
@@ -12394,7 +12394,7 @@ var require_response = __commonJS({
         configurable: true
       }
     });
-    Object.defineProperties(Response2, {
+    Object.defineProperties(Response3, {
       json: kEnumerableProperty,
       redirect: kEnumerableProperty,
       error: kEnumerableProperty
@@ -12527,7 +12527,7 @@ var require_response = __commonJS({
       }
     }
     function fromInnerResponse(innerResponse, guard) {
-      const response = new Response2(kConstruct);
+      const response = new Response3(kConstruct);
       response[kState] = innerResponse;
       response[kHeaders] = new Headers4(kConstruct);
       setHeadersList(response[kHeaders], innerResponse.headersList);
@@ -12595,7 +12595,7 @@ var require_response = __commonJS({
       makeResponse,
       makeAppropriateNetworkError,
       filterResponse,
-      Response: Response2,
+      Response: Response3,
       cloneResponse,
       fromInnerResponse
     };
@@ -15267,7 +15267,7 @@ var require_cache = __commonJS({
     var { urlEquals, getFieldValues } = require_util5();
     var { kEnumerableProperty, isDisturbed } = require_util();
     var { webidl } = require_webidl();
-    var { Response: Response2, cloneResponse, fromInnerResponse } = require_response();
+    var { Response: Response3, cloneResponse, fromInnerResponse } = require_response();
     var { Request: Request2, fromInnerRequest } = require_request2();
     var { kState } = require_symbols2();
     var { fetching } = require_fetch();
@@ -15794,7 +15794,7 @@ var require_cache = __commonJS({
         converter: webidl.converters.DOMString
       }
     ]);
-    webidl.converters.Response = webidl.interfaceConverter(Response2);
+    webidl.converters.Response = webidl.interfaceConverter(Response3);
     webidl.converters["sequence<RequestInfo>"] = webidl.sequenceConverter(
       webidl.converters.RequestInfo
     );
@@ -26129,14 +26129,14 @@ var init_is_redirect = __esm({
 });
 
 // node_modules/gaxios/node_modules/node-fetch/src/response.js
-var INTERNALS2, Response;
+var INTERNALS2, Response2;
 var init_response = __esm({
   "node_modules/gaxios/node_modules/node-fetch/src/response.js"() {
     init_headers();
     init_body();
     init_is_redirect();
     INTERNALS2 = /* @__PURE__ */ Symbol("Response internals");
-    Response = class _Response extends Body {
+    Response2 = class _Response extends Body {
       constructor(body = null, options = {}) {
         super(body, options);
         const status = options.status != null ? options.status : 200;
@@ -26241,7 +26241,7 @@ var init_response = __esm({
         return "Response";
       }
     };
-    Object.defineProperties(Response.prototype, {
+    Object.defineProperties(Response2.prototype, {
       type: { enumerable: true },
       url: { enumerable: true },
       status: { enumerable: true },
@@ -26642,7 +26642,7 @@ __export(src_exports, {
   FormData: () => FormData2,
   Headers: () => Headers3,
   Request: () => Request,
-  Response: () => Response,
+  Response: () => Response2,
   blobFrom: () => blobFrom,
   blobFromSync: () => blobFromSync,
   default: () => fetch2,
@@ -26659,7 +26659,7 @@ async function fetch2(url, options_) {
     }
     if (parsedURL.protocol === "data:") {
       const data = dist_default(request.url);
-      const response2 = new Response(data, { headers: { "Content-Type": data.typeFull } });
+      const response2 = new Response2(data, { headers: { "Content-Type": data.typeFull } });
       resolve2(response2);
       return;
     }
@@ -26814,7 +26814,7 @@ async function fetch2(url, options_) {
       };
       const codings = headers.get("Content-Encoding");
       if (!request.compress || request.method === "HEAD" || codings === null || response_.statusCode === 204 || response_.statusCode === 304) {
-        response = new Response(body, responseOptions);
+        response = new Response2(body, responseOptions);
         resolve2(response);
         return;
       }
@@ -26828,7 +26828,7 @@ async function fetch2(url, options_) {
             reject(error2);
           }
         });
-        response = new Response(body, responseOptions);
+        response = new Response2(body, responseOptions);
         resolve2(response);
         return;
       }
@@ -26852,12 +26852,12 @@ async function fetch2(url, options_) {
               }
             });
           }
-          response = new Response(body, responseOptions);
+          response = new Response2(body, responseOptions);
           resolve2(response);
         });
         raw.once("end", () => {
           if (!response) {
-            response = new Response(body, responseOptions);
+            response = new Response2(body, responseOptions);
             resolve2(response);
           }
         });
@@ -26869,11 +26869,11 @@ async function fetch2(url, options_) {
             reject(error2);
           }
         });
-        response = new Response(body, responseOptions);
+        response = new Response2(body, responseOptions);
         resolve2(response);
         return;
       }
-      response = new Response(body, responseOptions);
+      response = new Response2(body, responseOptions);
       resolve2(response);
     });
     writeToStream(request_, request).catch(reject);
@@ -47349,6 +47349,49 @@ function createLogger(options) {
   return root;
 }
 
+// node_modules/@postman-cse/automation-core/dist/http/retry.js
+function sleep(delayMs) {
+  return new Promise((resolve2) => {
+    setTimeout(resolve2, delayMs);
+  });
+}
+function normalizeRetryOptions(options) {
+  return {
+    maxAttempts: Math.max(1, options.maxAttempts ?? 3),
+    delayMs: Math.max(0, options.delayMs ?? 2e3),
+    backoffMultiplier: Math.max(1, options.backoffMultiplier ?? 1),
+    maxDelayMs: options.maxDelayMs === void 0 ? Number.POSITIVE_INFINITY : Math.max(0, options.maxDelayMs),
+    onRetry: options.onRetry ?? (async () => void 0),
+    shouldRetry: options.shouldRetry ?? (() => true),
+    sleep: options.sleep ?? sleep
+  };
+}
+async function retry(operation, options = {}) {
+  const normalized = normalizeRetryOptions(options);
+  let nextDelayMs = normalized.delayMs;
+  for (let attempt = 1; attempt <= normalized.maxAttempts; attempt += 1) {
+    try {
+      return await operation();
+    } catch (error2) {
+      const shouldRetry = attempt < normalized.maxAttempts && normalized.shouldRetry(error2, {
+        attempt,
+        maxAttempts: normalized.maxAttempts
+      });
+      if (!shouldRetry)
+        throw error2;
+      await normalized.onRetry({
+        attempt,
+        maxAttempts: normalized.maxAttempts,
+        delayMs: nextDelayMs,
+        error: error2
+      });
+      await normalized.sleep(nextDelayMs);
+      nextDelayMs = Math.min(normalized.maxDelayMs, Math.round(nextDelayMs * normalized.backoffMultiplier));
+    }
+  }
+  throw new Error("Retry exhausted without returning or throwing");
+}
+
 // src/contracts.ts
 var RETAINED_PROVIDER_ORDER = [
   "api-gateway",
@@ -49197,7 +49240,7 @@ function defaultSessionSleep(ms) {
 function defaultRandom() {
   return Math.random();
 }
-function parseRetryAfterMs(value) {
+function parseRetryAfterMs2(value) {
   const trimmed = value?.trim();
   if (!trimmed) {
     return void 0;
@@ -49225,7 +49268,7 @@ function parseRateLimitResetMs(value) {
 }
 function computeSessionRetryDelayMs(response, attempt, random) {
   const headers = response?.headers;
-  const signal = parseRetryAfterMs(headers?.get("retry-after") ?? null) ?? parseRateLimitResetMs(
+  const signal = parseRetryAfterMs2(headers?.get("retry-after") ?? null) ?? parseRateLimitResetMs(
     headers?.get("ratelimit-reset") ?? headers?.get("x-ratelimit-reset") ?? null
   );
   if (signal !== void 0) {
@@ -49359,53 +49402,6 @@ async function probeSessionIdentity(baseUrl, accessToken, fetchImpl, maxAttempts
   }
   memoizedSessionFailure = failure;
   return void 0;
-}
-
-// src/lib/retry.ts
-function sleep(delayMs) {
-  return new Promise((resolve2) => {
-    setTimeout(resolve2, delayMs);
-  });
-}
-function normalizeRetryOptions(options) {
-  return {
-    maxAttempts: Math.max(1, options.maxAttempts ?? 3),
-    delayMs: Math.max(0, options.delayMs ?? 2e3),
-    backoffMultiplier: Math.max(1, options.backoffMultiplier ?? 1),
-    maxDelayMs: options.maxDelayMs === void 0 ? Number.POSITIVE_INFINITY : Math.max(0, options.maxDelayMs),
-    onRetry: options.onRetry ?? (async () => void 0),
-    shouldRetry: options.shouldRetry ?? (() => true),
-    sleep: options.sleep ?? sleep
-  };
-}
-async function retry(operation, options = {}) {
-  const normalized = normalizeRetryOptions(options);
-  let nextDelayMs = normalized.delayMs;
-  for (let attempt = 1; attempt <= normalized.maxAttempts; attempt += 1) {
-    try {
-      return await operation();
-    } catch (error2) {
-      const shouldRetry = attempt < normalized.maxAttempts && normalized.shouldRetry(error2, {
-        attempt,
-        maxAttempts: normalized.maxAttempts
-      });
-      if (!shouldRetry) {
-        throw error2;
-      }
-      await normalized.onRetry({
-        attempt,
-        maxAttempts: normalized.maxAttempts,
-        delayMs: nextDelayMs,
-        error: error2
-      });
-      await normalized.sleep(nextDelayMs);
-      nextDelayMs = Math.min(
-        normalized.maxDelayMs,
-        Math.round(nextDelayMs * normalized.backoffMultiplier)
-      );
-    }
-  }
-  throw new Error("Retry exhausted without returning or throwing");
 }
 
 // src/lib/postman/base-urls.ts
