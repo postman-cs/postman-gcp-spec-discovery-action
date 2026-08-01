@@ -87,6 +87,24 @@ jobs:
             echo "::group::$n"; cat "$n.log"; echo "::endgroup::"
           done
           exit $fail
+      - name: GCP emulator transport lane
+        # Budgeted hermetic lane (cap 27s wall-clock): proves the shipped
+        # dist/cli.cjs speaks the real googleapis wire protocol -- ADC service
+        # account auth, control-plane preflight, Apigee bundle export, the
+        # trusted-GCS signed-URL leg, untrusted-host enforcement -- against an
+        # in-process TLS fixture. Transport rides the runtime's own env
+        # contracts (HTTPS_PROXY, NODE_USE_ENV_PROXY, NODE_EXTRA_CA_CERTS,
+        # GOOGLE_APPLICATION_CREDENTIALS); no container, no product seam.
+        run: |
+          set -euo pipefail
+          start=$SECONDS
+          npm run test:emulator:gcp
+          elapsed=$((SECONDS - start))
+          echo "emulator lane wall-clock: ${elapsed}s (cap 27s)"
+          if [ "$elapsed" -gt 27 ]; then
+            echo "::error::GCP emulator lane exceeded its 27s budget (${elapsed}s)"
+            exit 1
+          fi
       - name: Upload expected dist on mismatch
         if: failure()
         uses: actions/upload-artifact@v7

@@ -31,6 +31,7 @@
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "test": "vitest run",
+    "test:emulator:gcp": "vitest run --config vitest.emulator.config.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "keywords": [

@@ -10,6 +10,6 @@ export default defineConfig({
     // default when the full suite runs under shared-host contention.
     testTimeout: 20_000,
     include: ['tests/**/*.test.ts'],
-    exclude: [...configDefaults.exclude, 'tests/live/**']
+    exclude: [...configDefaults.exclude, 'tests/live/**', 'tests/emulator/**']
   }
 });

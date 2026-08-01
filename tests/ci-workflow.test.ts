@@ -227,4 +227,17 @@ describe('CI workflow contract', () => {
     },
     35_000,
   );
+
+  it('runs the budgeted GCP emulator transport lane after the gate fan-out, Linux only', () => {
+    const lane = namedStep(linux, 'GCP emulator transport lane');
+    // Hermetic in-process fixture -- no container, no GHA services: block.
+    expect(lane).toContain('npm run test:emulator:gcp');
+    expect(lane).not.toContain('docker');
+    expect(ciWorkflow).not.toMatch(/^\s*services:/m);
+    // Wall-clock budget enforced in the step itself.
+    expect(lane).toContain('if [ "$elapsed" -gt 27 ]; then');
+    // The lane stays out of Windows and out of the default npm test surface.
+    expect(windows).not.toContain('emulator');
+    expect(linux.indexOf('- name: Run gates')).toBeLessThan(linux.indexOf('- name: GCP emulator transport lane'));
+  });
 });
