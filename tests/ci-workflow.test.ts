@@ -55,13 +55,20 @@ function runLockfileCommitlint(message: string) {
 }
 
 const linux = jobText(ciWorkflow, 'gate');
+const distParity = jobText(ciWorkflow, 'dist-parity');
+const ready = jobText(ciWorkflow, 'ready');
 const windows = jobText(ciWorkflow, 'windows');
 
 describe('CI workflow contract', () => {
-  it('GCP-CI-001: exact two jobs, Node 24, no NPM auth secret, no live GCP step', () => {
+  it('GCP-CI-001: exact four jobs, Node 24, no NPM auth secret, no live GCP step', () => {
     const jobsSection = ciWorkflow.slice(ciWorkflow.indexOf('\njobs:\n'));
     const jobMatches = jobsSection.match(/^ {2}[a-zA-Z0-9_-]+:$/gm) ?? [];
-    expect(jobMatches).toEqual(['  gate:', '  windows:']);
+    expect(jobMatches).toEqual(['  gate:', '  dist-parity:', '  windows:', '  ready:']);
+    expect(linux).not.toMatch(/^\s*needs:/m);
+    expect(windows).not.toMatch(/^\s*needs:/m);
+    expect(distParity).toMatch(/^\s*needs:\s*gate\s*$/m);
+    expect(ready).toContain('needs: [gate, dist-parity, windows]');
+    expect(ready).toContain('if: always()');
 
     expect(ciWorkflow).toContain("node-version: '24'");
     expect(linux.match(/^\s*- run: npm ci\s*$/gm) ?? []).toHaveLength(1);
@@ -100,7 +107,7 @@ describe('CI workflow contract', () => {
       'lint',
       'typecheck',
       'test',
-      'dist',
+      'dist-shape',
       'actionlint',
       'docs',
       'commitlint',
@@ -108,7 +115,7 @@ describe('CI workflow contract', () => {
     expect(runGates).toContain('run lint       npm run lint');
     expect(runGates).toContain('run typecheck  npm run typecheck');
     expect(runGates).toContain('run test       npm test');
-    expect(runGates).toContain('run dist       npm run verify:dist:assert');
+    expect(runGates).toContain('run dist-shape npm run verify:dist:shape');
     expect(runGates).toContain('run actionlint "$ACTIONLINT_BIN"');
     expect(runGates).toContain('run docs       node scripts/render-action-tables.mjs --check');
     expect(runGates).toContain('if [ "${{ github.event_name }}" = "pull_request" ]; then');
@@ -119,6 +126,8 @@ describe('CI workflow contract', () => {
 
     expect(runGates).not.toContain('npm run build');
     expect(runGates).not.toContain('npm run bundle');
+    expect(runGates).not.toContain('verify:dist:assert');
+    expect(runGates).not.toContain('verify:dist:parity');
     expect(runGates).not.toMatch(/npm run verify:dist(?:\s|$|"|')/);
     expect(runGates).toContain('gate:$n=pass');
     expect(runGates).toContain('gate:$n=fail');
@@ -135,7 +144,8 @@ describe('CI workflow contract', () => {
     expect(install).toMatch(/393031adb9afb225ee52ae2ccd7a5af5525e03e8/);
     expect(install.match(/393031adb9afb225ee52ae2ccd7a5af5525e03e8/)?.[0]).toHaveLength(40);
     expect(install).toContain('download-actionlint.bash) 1.7.11 "$RUNNER_TEMP"');
-    expect(install).toContain('ACTIONLINT_BIN=$RUNNER_TEMP/actionlint');
+    expect(install).toContain('ACTIONLINT_BIN="$RUNNER_TEMP/actionlint"');
+    expect(install).toContain('echo "ACTIONLINT_BIN=$ACTIONLINT_BIN" >> "$GITHUB_ENV"');
     expect(ciWorkflow).not.toContain('/main/scripts/download-actionlint.bash');
 
     expect(ciWorkflow).not.toContain('actions/setup-go');
@@ -152,9 +162,14 @@ describe('CI workflow contract', () => {
     expect(windows).not.toMatch(/^\s*cache:\s*npm\s*$/m);
 
     expect(windows).toContain('id: windows-node-modules');
-    expect(windows).toContain(
-      'uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0',
-    );
+    // Semantic pin: any 40-char hex SHA, consistent across file, with semver comment
+    {
+      const cachePins = [...ciWorkflow.matchAll(/actions\/cache@([0-9a-f]{40})/g)].map((m) => m[1]!);
+      expect(cachePins.length).toBeGreaterThanOrEqual(1);
+      for (const sha of cachePins) expect(sha).toMatch(/^[0-9a-f]{40}$/);
+      expect(new Set(cachePins).size).toBe(1);
+      expect(windows).toMatch(/uses:\s*actions\/cache@[0-9a-f]{40}\s+#\s*v\d+\.\d+\.\d+/);
+    }
     expect(windows).toContain('path: node_modules');
     expect(windows).toContain(
       "key: Windows/node-24/exact-${{ hashFiles('package-lock.json') }}",
@@ -187,17 +202,28 @@ describe('CI workflow contract', () => {
     expect(windows).not.toContain('commitlint');
   });
 
-  it('GCP-CI-006: Linux and Windows jobs stay independent with no needs edges', () => {
-    expect(linux).not.toMatch(/^\s*needs:/m);
-    expect(windows).not.toMatch(/^\s*needs:/m);
-    expect(ciWorkflow).not.toMatch(/^\s*needs:/m);
+  it('GCP-CI-006: uploads candidate dist from gate and expected-dist from dist-parity on mismatch', () => {
+    const candidate = namedStep(linux, 'Upload candidate dist');
+    expect(candidate.length).toBeGreaterThan(0);
+    expect(candidate).toContain('uses: actions/upload-artifact@v7');
+    expect(candidate).toContain('name: candidate-dist');
+    expect(candidate).toContain('dist/');
+    expect(candidate).toContain('dist-manifest.json');
+    expect(namedStep(linux, 'Write dist manifest')).toContain('lock_hash');
+    expect(namedStep(linux, 'Ensure clean tracked tree outside dist')).toContain('git status --porcelain');
+    expect(linux).not.toContain('name: expected-dist');
 
-    const upload = namedStep(linux, 'Upload expected dist on mismatch');
+    const upload = namedStep(distParity, 'Upload expected dist on mismatch');
     expect(upload.length).toBeGreaterThan(0);
     expect(upload).toContain('if: failure()');
     expect(upload).toContain('uses: actions/upload-artifact@v7');
     expect(upload).toContain('name: expected-dist');
     expect(upload).toContain('path: dist/');
+    expect(distParity).toContain('npm run verify:dist:parity');
+    expect(distParity).not.toContain('verify:dist:shape');
+    expect(distParity).not.toContain('verify:dist:assert');
+    expect(distParity).toContain('fetch-depth: 0');
+    expect(distParity).toContain('npm run bundle');
   });
 
   it(
@@ -227,4 +253,27 @@ describe('CI workflow contract', () => {
     },
     35_000,
   );
+
+  it('runs the budgeted GCP emulator transport lane after the gate fan-out, Linux only', () => {
+    const lane = namedStep(linux, 'GCP emulator transport lane');
+    // Hermetic in-process fixture -- no container, no GHA services: block.
+    expect(lane).toContain('npm run test:emulator:gcp');
+    expect(lane).not.toContain('docker');
+    expect(ciWorkflow).not.toMatch(/^\s*services:/m);
+    // Wall-clock budget enforced in the step itself.
+    expect(lane).toContain('if [ "$elapsed" -gt 27 ]; then');
+    // The lane stays out of Windows and out of the default npm test surface.
+    expect(windows).not.toContain('emulator');
+    expect(linux.indexOf('- name: Run gates')).toBeLessThan(linux.indexOf('- name: GCP emulator transport lane'));
+    expect(linux.indexOf('- name: GCP emulator transport lane')).toBeLessThan(linux.indexOf('- name: Ensure clean tracked tree outside dist'));
+  });
+
+  it('GCP-CI-007: aggregates gate, dist-parity, and windows in a required ready job', () => {
+    expect(ready).toContain('if: always()');
+    expect(ready).toContain('needs.gate.result');
+    expect(ready).toContain('needs.dist-parity.result');
+    expect(ready).toContain('needs.windows.result');
+    expect(ready).toContain('exit 1');
+    expect(ready).toContain('CI ready');
+  });
 });

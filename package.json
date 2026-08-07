@@ -1,6 +1,6 @@
 {
   "name": "@postman-cse/onboarding-gcp-spec-discovery",
-  "version": "1.1.8",
+  "version": "1.2.1",
   "repository": {
     "type": "git",
     "url": "https://github.com/postman-cs/postman-gcp-spec-discovery-action"
@@ -25,12 +25,15 @@
     "prepare": "git config core.hooksPath .githooks",
     "bundle": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\" && esbuild src/index.ts --bundle --platform=node --target=node24 --format=cjs --outfile=dist/index.cjs && esbuild src/cli.ts --bundle --platform=node --target=node24 --format=cjs --banner:js=\"#!/usr/bin/env node\" --outfile=dist/cli.cjs && node -e \"if(process.platform!=='win32')require('node:fs').chmodSync('dist/cli.cjs',0o755)\"",
     "build": "npm run typecheck && npm run bundle",
-    "verify:dist:assert": "git diff --ignore-space-at-eol --text --exit-code -- dist && node scripts/verify-dist-artifact.mjs",
+    "verify:dist:shape": "node scripts/verify-dist-artifact.mjs",
+    "verify:dist:parity": "git diff --ignore-space-at-eol --text --exit-code -- dist",
+    "verify:dist:assert": "npm run verify:dist:shape && npm run verify:dist:parity",
     "verify:dist": "npm run build && npm run verify:dist:assert",
     "docs:tables": "node scripts/render-action-tables.mjs",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "test": "vitest run",
+    "test:emulator:gcp": "vitest run --config vitest.emulator.config.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "keywords": [
