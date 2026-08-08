@@ -85,7 +85,7 @@ jobs:
 
       - name: Discover custom connector spec (released pin)
         id: discover
-        uses: postman-cs/postman-gcp-spec-discovery-action@v1.2.0
+        uses: postman-cs/postman-gcp-spec-discovery-action@v1.2.1
         env:
           # v1.1.10 normalizes input names to underscores internally.
           INPUT_EXPECTED_API_IDS_JSON: ${{ secrets.GCP_LIVE_CONNECTOR_RESOURCE_IDS_JSON }}
@@ -116,7 +116,7 @@ jobs:
 
       - name: Onboard discovered spec (no repo write)
         id: onboard
-        uses: postman-cs/postman-api-onboarding-action@v3.0.6
+        uses: postman-cs/postman-api-onboarding-action@v3.2.12
         with:
           project-name: live-gcs-onboarding-${{ github.run_id }}-${{ github.run_attempt }}
           spec-path: ${{ steps.discover.outputs.spec-path }}
