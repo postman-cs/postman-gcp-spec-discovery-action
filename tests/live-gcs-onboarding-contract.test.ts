@@ -679,14 +679,14 @@ describe('live GCS onboarding workflow contract', () => {
   });
 
   it('pins immutable discovery release, env-safe shell binding, always cleanup, artifact path, and required vars/secret', () => {
-    expect(workflow).toContain('uses: postman-cs/postman-gcp-spec-discovery-action@v1.1.10');
-    expect(workflow).toContain("refs/tags/v1.1.10^{}");
+    expect(workflow).toContain('uses: postman-cs/postman-gcp-spec-discovery-action@v1.2.0');
+    expect(workflow).toContain("refs/tags/v1.2.0^{}");
     // Runtime-observed peeled SHA only — no hardcoded expected commit in workflow.
     expect(workflow).not.toMatch(/EXPECTED_PEELED_SHA:\s*[0-9a-f]{40}/);
     expect(workflow).toContain('id: release_identity');
     expect(workflow).toContain('echo "release_commit=${peeled}" >> "$GITHUB_OUTPUT"');
 
-    expect(workflow).toContain('uses: postman-cs/postman-api-onboarding-action@v2');
+    expect(workflow).toContain('uses: postman-cs/postman-api-onboarding-action@v3.0.6');
     expect(workflow).toContain('repo-write-mode: none');
     expect(workflow).toContain('project-name: live-gcs-onboarding-${{ github.run_id }}-${{ github.run_attempt }}');
 
@@ -696,7 +696,7 @@ describe('live GCS onboarding workflow contract', () => {
     expect(verifyStep).toMatch(/PROVIDER_TYPE:\s*\$\{\{\s*steps\.discover\.outputs\.provider-type\s*\}\}/);
     expect(verifyStep).toMatch(/SOURCE_TYPE:\s*\$\{\{\s*steps\.discover\.outputs\.source-type\s*\}\}/);
     expect(verifyStep).toMatch(/SPEC_PATH:\s*\$\{\{\s*steps\.discover\.outputs\.spec-path\s*\}\}/);
-    expect(verifyStep).toMatch(/RELEASE_TAG:\s*v1\.1\.10/);
+    expect(verifyStep).toMatch(/RELEASE_TAG:\s*v1\.2\.0/);
     expect(verifyStep).toMatch(
       /RELEASE_COMMIT:\s*\$\{\{\s*steps\.release_identity\.outputs\.release_commit\s*\}\}/
     );

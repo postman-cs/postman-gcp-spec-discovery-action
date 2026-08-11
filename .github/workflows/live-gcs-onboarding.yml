@@ -71,11 +71,11 @@ jobs:
           peeled="$(
             git ls-remote --exit-code \
               https://github.com/postman-cs/postman-gcp-spec-discovery-action.git \
-              'refs/tags/v1.1.10^{}' \
+              'refs/tags/v1.2.0^{}' \
               | awk 'NF { print $1; c++ } END { if (c != 1) exit 1 }'
           )"
           if ! [[ "$peeled" =~ ^[0-9a-f]{40}$ ]]; then
-            echo '::error::Peeled commit for v1.1.10 is not a 40-hex SHA'
+            echo '::error::Peeled commit for v1.2.0 is not a 40-hex SHA'
             exit 1
           fi
           echo "release_commit=${peeled}" >> "$GITHUB_OUTPUT"
@@ -87,7 +87,7 @@ jobs:
         id: discover
         uses: postman-cs/postman-gcp-spec-discovery-action@v1.2.0
         env:
-          # v1.1.10 normalizes input names to underscores internally.
+          # v1.2.0 normalizes input names to underscores internally.
           INPUT_EXPECTED_API_IDS_JSON: ${{ secrets.GCP_LIVE_CONNECTOR_RESOURCE_IDS_JSON }}
         with:
           project-id: ${{ secrets.GCP_PROJECT_ID }}
@@ -136,7 +136,7 @@ jobs:
           GITHUB_RUN_ID: ${{ github.run_id }}
           GITHUB_RUN_ATTEMPT: ${{ github.run_attempt }}
           ONBOARD_OUTCOME: ${{ steps.onboard.outcome }}
-          RELEASE_TAG: v1.1.10
+          RELEASE_TAG: v1.2.0
           RELEASE_COMMIT: ${{ steps.release_identity.outputs.release_commit }}
           WORKSPACE_UID: ${{ steps.onboard.outputs.workspace-id }}
           POSTMAN_API_KEY: ${{ secrets.POSTMAN_E2E_API_KEY_NON_ORG_MODE }}
