@@ -43,7 +43,7 @@ const expected = {
   repository: 'postman-cs/postman-gcp-spec-discovery-action',
   commitSha: 'a'.repeat(40),
   tag: `v${packageJson.version}`,
-  packageName: '@postman-cse/onboarding-gcp-spec-discovery',
+  packageName: '@postman/onboarding-gcp-spec-discovery',
   packageVersion: packageJson.version,
 };
 
@@ -90,7 +90,7 @@ describe('release artifact contract', () => {
     const publishJob = job('publish');
     expect(publishJob).toContain(`EXPECTED_SHA256='${verifierDigest}'`);
     expect(publishJob).toContain('test "$ACTUAL_SHA256" = "$EXPECTED_SHA256"');
-    expect(publishJob).toContain("PACKAGE_NAME='@postman-cse/onboarding-gcp-spec-discovery'");
+    expect(publishJob).toContain("PACKAGE_NAME='@postman/onboarding-gcp-spec-discovery'");
     expect(publishJob).toContain('PACKAGE_VERSION="${GITHUB_REF_NAME#v}"');
     expect(packageJson.files).toContain('scripts/verify-release-artifacts.mjs');
 
