@@ -171,7 +171,7 @@ describe('release workflow publishing contract', () => {
     expect(publish).toContain('STAGE_DIR="$RUNNER_TEMP/release-stage"');
     expect(publish).toContain('tar -xOf "$STAGE_DIR/release.tgz" package/scripts/verify-release-artifacts.mjs > "$VERIFIER"');
     expect(publish).toContain('test "$ACTUAL_SHA256" = "$EXPECTED_SHA256"');
-    expect(publish).toContain("PACKAGE_NAME='@postman-cse/onboarding-gcp-spec-discovery'");
+    expect(publish).toContain("PACKAGE_NAME='@postman/onboarding-gcp-spec-discovery'");
     expect(publish).toContain('PACKAGE_VERSION="${GITHUB_REF_NAME#v}"');
     expect(publish).toContain('node "$VERIFIER" "$STAGE_DIR"');
     expect(publish).toContain('npm pack --ignore-scripts --pack-destination');
@@ -182,12 +182,20 @@ describe('release workflow publishing contract', () => {
       'node "$VERIFIER" "$STAGE_DIR"',
       publish,
     );
-    assertOrder('node "$VERIFIER" "$STAGE_DIR"', 'Publish or verify npm package identity', publish);
-    assertOrder('npm pack --ignore-scripts', 'npm publish --ignore-scripts', publish);
+    assertOrder('node "$VERIFIER" "$STAGE_DIR"', 'Publish GitHub release', publish);
+    assertOrder('npm pack --ignore-scripts', 'Publish GitHub release', publish);
   });
 
-  it('GCP-RELEASE-006: npm identity (SRI+gitHead) before GitHub Release before aliases; non-cancelling concurrency', () => {
+  it('GCP-RELEASE-006: GitHub Release precedes soft npm attempt, hard conditional identity verification, and aliases', () => {
     const publish = job('publish');
+    expect(publish).toContain('outputs:\n      published: ${{ steps.npm-publish.outputs.published }}');
+    expect(publish).toContain('id: npm-publish');
+    expect(publish).toContain('continue-on-error: true');
+    expect(publish).toContain('echo "published=false" >> "$GITHUB_OUTPUT"');
+    expect(publish).toContain('echo "published=true" >> "$GITHUB_OUTPUT"');
+    expect(publish).toContain("if: steps.npm-publish.outputs.published == 'true'");
+    expect(publish).toContain("if: steps.npm-publish.outputs.published != 'true'");
+    expect(publish).toContain("sed -i '/_authToken/d' \"${NPM_CONFIG_USERCONFIG:-$HOME/.npmrc}\"");
     expect(publish).toContain('npm view "${PACKAGE_NAME}@${PACKAGE_VERSION}" --json');
     expect(publish).toContain('node "$VERIFIER" --check-npm-release-identity');
     expect(publish).toContain('npm publish --ignore-scripts --provenance --access public');
@@ -195,8 +203,10 @@ describe('release workflow publishing contract', () => {
     expect(publish).toContain('for attempt in 1 2 3 4 5 6 7 8 9 10');
     expect(publish).toContain('uses: softprops/action-gh-release@');
     expect(publish).toContain('files: ${{ runner.temp }}/release-stage/release.tgz');
-    assertOrder('Publish or verify npm package identity', 'Publish GitHub release', publish);
-    assertOrder('npm publish --ignore-scripts --provenance --access public', 'softprops/action-gh-release', publish);
+    assertOrder('Publish GitHub release', 'Attempt npm publish', publish);
+    assertOrder('softprops/action-gh-release', 'npm publish --ignore-scripts --provenance --access public', publish);
+    assertOrder('Attempt npm publish', 'Verify npm registry identity', publish);
+    assertOrder('Verify npm registry identity', 'Report npm publish skipped', publish);
     assertOrder('\n  publish:', '\n  advance-rolling-aliases:');
     expect(releaseWorkflow).toContain('group: release-${{ github.repository }}');
     expect(releaseWorkflow).toContain('cancel-in-progress: false');

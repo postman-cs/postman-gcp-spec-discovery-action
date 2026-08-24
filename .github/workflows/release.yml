@@ -108,6 +108,8 @@ jobs:
     needs: [classify, verify-package]
     if: ${{ needs.classify.outputs.release_kind == 'immutable' }}
     runs-on: ubuntu-latest
+    outputs:
+      published: ${{ steps.npm-publish.outputs.published }}
     permissions:
       contents: write
       id-token: write
@@ -130,22 +132,13 @@ jobs:
           EXPECTED_SHA256='d6a4361aa0a884179cfffb0bdbd2ba741ff32fde208616ae3d659150cff5dbcf'
           VERIFIER="$RUNNER_TEMP/verify-release-artifacts.mjs"
           STAGE_DIR="$RUNNER_TEMP/release-stage"
+          STAGED_TGZ="$STAGE_DIR/release.tgz"
           tar -xOf "$STAGE_DIR/release.tgz" package/scripts/verify-release-artifacts.mjs > "$VERIFIER"
           ACTUAL_SHA256="$(sha256sum "$VERIFIER" | awk '{print $1}')"
           test "$ACTUAL_SHA256" = "$EXPECTED_SHA256"
-          PACKAGE_NAME='@postman-cse/onboarding-gcp-spec-discovery'
+          PACKAGE_NAME='@postman/onboarding-gcp-spec-discovery'
           PACKAGE_VERSION="${GITHUB_REF_NAME#v}"
           PACKAGE_NAME="$PACKAGE_NAME" PACKAGE_VERSION="$PACKAGE_VERSION" node "$VERIFIER" "$STAGE_DIR"
-      - name: Publish or verify npm package identity
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: |
-          set -euo pipefail
-          PACKAGE_NAME='@postman-cse/onboarding-gcp-spec-discovery'
-          PACKAGE_VERSION="${GITHUB_REF_NAME#v}"
-          VERIFIER="$RUNNER_TEMP/verify-release-artifacts.mjs"
-          STAGE_DIR="$RUNNER_TEMP/release-stage"
-          STAGED_TGZ="$STAGE_DIR/release.tgz"
 
           REPACK_DIR="$RUNNER_TEMP/repack"
           mkdir -p "$REPACK_DIR"
@@ -155,13 +148,37 @@ jobs:
             echo "::error::repacked checkout tarball bytes differ from staged release.tgz"
             exit 1
           }
-
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3.0.2
+        with:
+          generate_release_notes: true
+          files: ${{ runner.temp }}/release-stage/release.tgz
+      - name: Attempt npm publish
+        id: npm-publish
+        continue-on-error: true
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "${NODE_AUTH_TOKEN:-}" ]; then sed -i '/_authToken/d' "${NPM_CONFIG_USERCONFIG:-$HOME/.npmrc}"; fi
+          echo "published=false" >> "$GITHUB_OUTPUT"
+          PACKAGE_NAME='@postman/onboarding-gcp-spec-discovery'
+          PACKAGE_VERSION="${GITHUB_REF_NAME#v}"
           if npm view "${PACKAGE_NAME}@${PACKAGE_VERSION}" version >/dev/null 2>&1; then
             echo "::notice::${PACKAGE_NAME}@${PACKAGE_VERSION} already published; verifying registry identity"
           else
             npm publish --ignore-scripts --provenance --access public
           fi
-
+          echo "published=true" >> "$GITHUB_OUTPUT"
+      - name: Verify npm registry identity
+        if: steps.npm-publish.outputs.published == 'true'
+        run: |
+          set -euo pipefail
+          PACKAGE_NAME='@postman/onboarding-gcp-spec-discovery'
+          PACKAGE_VERSION="${GITHUB_REF_NAME#v}"
+          VERIFIER="$RUNNER_TEMP/verify-release-artifacts.mjs"
+          STAGE_DIR="$RUNNER_TEMP/release-stage"
+          STAGED_TGZ="$STAGE_DIR/release.tgz"
           REGISTRY_SRI=""
           REGISTRY_GITHEAD=""
           for attempt in 1 2 3 4 5 6 7 8 9 10; do
@@ -180,11 +197,12 @@ jobs:
             sleep 3
           done
           node "$VERIFIER" --check-npm-release-identity "$STAGED_TGZ" "$REGISTRY_SRI" "$REGISTRY_GITHEAD" "$GITHUB_SHA"
-      - name: Publish GitHub release
-        uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3.0.2
-        with:
-          generate_release_notes: true
-          files: ${{ runner.temp }}/release-stage/release.tgz
+      - name: Report npm publish skipped
+        if: steps.npm-publish.outputs.published != 'true'
+        run: |
+          MESSAGE="npm publish for @postman/onboarding-gcp-spec-discovery@${GITHUB_REF_NAME#v} did not complete (missing/invalid NPM_TOKEN or registry error); GitHub Release remains authoritative; recover via backfill-npm.yml once publish access exists"
+          echo "::warning::$MESSAGE"
+          echo "$MESSAGE" >> "$GITHUB_STEP_SUMMARY"
 
   advance-rolling-aliases:
     needs: [classify, publish]
