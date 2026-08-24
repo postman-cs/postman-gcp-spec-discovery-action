@@ -1,6 +1,6 @@
 # Postman Onboarding: GCP Spec Discovery
 
-[![CI](https://github.com/postman-cs/postman-gcp-spec-discovery-action/actions/workflows/ci.yml/badge.svg)](https://github.com/postman-cs/postman-gcp-spec-discovery-action/actions/workflows/ci.yml) [![Release](https://img.shields.io/github/v/release/postman-cs/postman-gcp-spec-discovery-action?sort=semver)](https://github.com/postman-cs/postman-gcp-spec-discovery-action/releases) [![npm](https://img.shields.io/npm/v/%40postman-cse%2Fonboarding-gcp-spec-discovery)](https://www.npmjs.com/package/@postman-cse/onboarding-gcp-spec-discovery) [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![CI](https://github.com/postman-cs/postman-gcp-spec-discovery-action/actions/workflows/ci.yml/badge.svg)](https://github.com/postman-cs/postman-gcp-spec-discovery-action/actions/workflows/ci.yml) [![Release](https://img.shields.io/github/v/release/postman-cs/postman-gcp-spec-discovery-action?sort=semver)](https://github.com/postman-cs/postman-gcp-spec-discovery-action/releases) [![npm](https://img.shields.io/npm/v/%40postman%2Fonboarding-gcp-spec-discovery)](https://www.npmjs.com/package/@postman/onboarding-gcp-spec-discovery) [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 Discover and export OpenAPI specifications from GCP services for Postman onboarding. The action uses repository context and Google Cloud credentials to select an existing specification or export one from a supported GCP provider.
 
@@ -79,7 +79,7 @@ A ready-to-distribute per-service-repo workflow using this pattern (adapted from
 ### Portable CLI
 
 ```sh
-npx @postman-cse/onboarding-gcp-spec-discovery \
+npx @postman/onboarding-gcp-spec-discovery \
   --project-id "$GCP_PROJECT_ID" \
   --result-json postman-gcp-spec-discovery-result.json \
   --dotenv-path gcp-spec.env
