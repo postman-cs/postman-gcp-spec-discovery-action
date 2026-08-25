@@ -298,7 +298,7 @@ describe('release artifact contract', () => {
     expect(publish).not.toContain('npm publish ./release.tgz');
     expect(publish).toContain('--check-npm-release-identity');
     expect(publish).toContain('"$GITHUB_SHA"');
-    expect(publish).toContain('for attempt in 1 2 3 4 5 6 7 8 9 10');
+    expect(publish).toContain('for attempt in $(seq 1 40)');
     expect(publish).toContain('files: ${{ runner.temp }}/release-stage/release.tgz');
 
     expect(verify).toContain('npm pack --ignore-scripts --pack-destination .');
