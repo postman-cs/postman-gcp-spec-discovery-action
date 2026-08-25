@@ -65,7 +65,7 @@ describe('release workflow publishing contract', () => {
     expect(verify).toContain("if: ${{ needs.classify.outputs.release_kind == 'immutable' }}");
     expect(publish).toContain("if: ${{ needs.classify.outputs.release_kind == 'immutable' }}");
     expect(alias).toContain(
-      "if: ${{ needs.classify.outputs.release_kind == 'immutable' && needs.publish.outputs.published == 'true' }}",
+      "if: ${{ needs.classify.outputs.release_kind == 'immutable' && needs.publish.result == 'success' }}",
     );
 
     // verify-package keeps default shallow checkout (no depth override).

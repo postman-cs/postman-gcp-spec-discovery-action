@@ -172,11 +172,8 @@ jobs:
           echo "published=true" >> "$GITHUB_OUTPUT"
       - name: Verify npm registry identity
         if: steps.npm-publish.outputs.published == 'true'
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           set -euo pipefail
-          if [ -z "${NODE_AUTH_TOKEN:-}" ]; then sed -i '/_authToken/d' "${NPM_CONFIG_USERCONFIG:-$HOME/.npmrc}"; fi
           PACKAGE_NAME='@postman/onboarding-gcp-spec-discovery'
           PACKAGE_VERSION="${GITHUB_REF_NAME#v}"
           VERIFIER="$RUNNER_TEMP/verify-release-artifacts.mjs"
@@ -213,7 +210,7 @@ jobs:
 
   advance-rolling-aliases:
     needs: [classify, publish]
-    if: ${{ needs.classify.outputs.release_kind == 'immutable' && needs.publish.outputs.published == 'true' }}
+    if: ${{ needs.classify.outputs.release_kind == 'immutable' && needs.publish.result == 'success' }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
