@@ -64,7 +64,9 @@ describe('release workflow publishing contract', () => {
     const alias = job('advance-rolling-aliases');
     expect(verify).toContain("if: ${{ needs.classify.outputs.release_kind == 'immutable' }}");
     expect(publish).toContain("if: ${{ needs.classify.outputs.release_kind == 'immutable' }}");
-    expect(alias).toContain("if: ${{ needs.classify.outputs.release_kind == 'immutable' }}");
+    expect(alias).toContain(
+      "if: ${{ needs.classify.outputs.release_kind == 'immutable' && needs.publish.outputs.published == 'true' }}",
+    );
 
     // verify-package keeps default shallow checkout (no depth override).
     const verifyCheckout = parsed.jobs['verify-package']?.steps?.find((step) =>
@@ -200,7 +202,7 @@ describe('release workflow publishing contract', () => {
     expect(publish).toContain('node "$VERIFIER" --check-npm-release-identity');
     expect(publish).toContain('npm publish --ignore-scripts --provenance --access public');
     expect(publish).not.toContain('npm publish ./release.tgz');
-    expect(publish).toContain('for attempt in 1 2 3 4 5 6 7 8 9 10');
+    expect(publish).toContain('for attempt in $(seq 1 40)');
     expect(publish).toContain('uses: softprops/action-gh-release@');
     expect(publish).toContain('files: ${{ runner.temp }}/release-stage/release.tgz');
     assertOrder('Publish GitHub release', 'Attempt npm publish', publish);
