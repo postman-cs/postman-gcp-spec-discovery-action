@@ -175,7 +175,7 @@ v1 does not probe `Cloud Run`, `GKE`, or `Functions` runtime URLs (there is no G
 
 ## Telemetry
 
-The action emits one anonymous `completion` event per run (action name `gcp-spec-discovery`) through `@postman-cse/automation-core`. The payload excludes project identifiers, resource names, labels, specification content, URLs, and credentials. Opt out with `POSTMAN_ACTIONS_TELEMETRY=off` or `DO_NOT_TRACK=1`.
+The action emits one anonymous `completion` event per run (action name `gcp-spec-discovery`) through `@postman-cs/automation-core`. The payload excludes project identifiers, resource names, labels, specification content, URLs, and credentials. Opt out with `POSTMAN_ACTIONS_TELEMETRY=off` or `DO_NOT_TRACK=1`.
 
 ## License
 
