@@ -156,11 +156,9 @@ jobs:
       - name: Attempt npm publish
         id: npm-publish
         continue-on-error: true
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           set -euo pipefail
-          if [ -z "${NODE_AUTH_TOKEN:-}" ]; then sed -i '/_authToken/d' "${NPM_CONFIG_USERCONFIG:-$HOME/.npmrc}"; fi
+          sed -i '/_authToken/d' "${NPM_CONFIG_USERCONFIG:-$HOME/.npmrc}"
           echo "published=false" >> "$GITHUB_OUTPUT"
           PACKAGE_NAME='@postman-cs/onboarding-gcp-spec-discovery'
           PACKAGE_VERSION="${GITHUB_REF_NAME#v}"
@@ -204,7 +202,7 @@ jobs:
       - name: Report npm publish skipped
         if: steps.npm-publish.outputs.published != 'true'
         run: |
-          MESSAGE="npm publish for @postman-cs/onboarding-gcp-spec-discovery@${GITHUB_REF_NAME#v} did not complete (missing/invalid NPM_TOKEN or registry error); GitHub Release remains authoritative; recover via backfill-npm.yml once publish access exists"
+          MESSAGE="npm publish for @postman-cs/onboarding-gcp-spec-discovery@${GITHUB_REF_NAME#v} did not complete (OIDC trusted publisher or registry error); GitHub Release remains authoritative; recover via backfill-npm.yml if needed"
           echo "::warning::$MESSAGE"
           echo "$MESSAGE" >> "$GITHUB_STEP_SUMMARY"
 
