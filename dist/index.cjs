@@ -1683,7 +1683,7 @@ var require_request = __commonJS({
     var { headerNameLowerCasedRecord } = require_constants();
     var invalidPathRegex = /[^\u0021-\u00ff]/;
     var kHandler = /* @__PURE__ */ Symbol("handler");
-    var Request2 = class {
+    var Request3 = class {
       constructor(origin, {
         path: path13,
         method,
@@ -1992,7 +1992,7 @@ var require_request = __commonJS({
         request.headers.push(key, val);
       }
     }
-    module2.exports = Request2;
+    module2.exports = Request3;
   }
 });
 
@@ -7530,7 +7530,7 @@ var require_client = __commonJS({
     var http4 = require("node:http");
     var util = require_util();
     var { channels } = require_diagnostics();
-    var Request2 = require_request();
+    var Request3 = require_request();
     var DispatcherBase = require_dispatcher_base();
     var {
       InvalidArgumentError,
@@ -7772,7 +7772,7 @@ var require_client = __commonJS({
       }
       [kDispatch](opts, handler) {
         const origin = opts.origin || this[kUrl].origin;
-        const request = new Request2(origin, opts, handler);
+        const request = new Request3(origin, opts, handler);
         this[kQueue].push(request);
         if (this[kResuming]) {
         } else if (util.bodyLength(request.body) == null && util.isIterable(request.body)) {
@@ -12749,7 +12749,7 @@ var require_request2 = __commonJS({
       }
     }
     var patchMethodWarning = false;
-    var Request2 = class _Request {
+    var Request3 = class _Request {
       // https://fetch.spec.whatwg.org/#dom-request
       constructor(input, init = {}) {
         webidl.util.markAsUncloneable(this);
@@ -13196,7 +13196,7 @@ var require_request2 = __commonJS({
         return `Request ${nodeUtil.formatWithOptions(options, properties)}`;
       }
     };
-    mixinBody(Request2);
+    mixinBody(Request3);
     function makeRequest(init) {
       return {
         method: init.method ?? "GET",
@@ -13247,7 +13247,7 @@ var require_request2 = __commonJS({
       return newRequest;
     }
     function fromInnerRequest(innerRequest, signal, guard) {
-      const request = new Request2(kConstruct);
+      const request = new Request3(kConstruct);
       request[kState] = innerRequest;
       request[kSignal] = signal;
       request[kHeaders] = new Headers4(kConstruct);
@@ -13255,7 +13255,7 @@ var require_request2 = __commonJS({
       setHeadersGuard(request[kHeaders], guard);
       return request;
     }
-    Object.defineProperties(Request2.prototype, {
+    Object.defineProperties(Request3.prototype, {
       method: kEnumerableProperty,
       url: kEnumerableProperty,
       headers: kEnumerableProperty,
@@ -13282,13 +13282,13 @@ var require_request2 = __commonJS({
       }
     });
     webidl.converters.Request = webidl.interfaceConverter(
-      Request2
+      Request3
     );
     webidl.converters.RequestInfo = function(V, prefix, argument) {
       if (typeof V === "string") {
         return webidl.converters.USVString(V, prefix, argument);
       }
-      if (V instanceof Request2) {
+      if (V instanceof Request3) {
         return webidl.converters.Request(V, prefix, argument);
       }
       return webidl.converters.USVString(V, prefix, argument);
@@ -13379,7 +13379,7 @@ var require_request2 = __commonJS({
         converter: webidl.converters.any
       }
     ]);
-    module2.exports = { Request: Request2, makeRequest, fromInnerRequest, cloneRequest };
+    module2.exports = { Request: Request3, makeRequest, fromInnerRequest, cloneRequest };
   }
 });
 
@@ -13395,7 +13395,7 @@ var require_fetch = __commonJS({
       fromInnerResponse
     } = require_response();
     var { HeadersList } = require_headers();
-    var { Request: Request2, cloneRequest } = require_request2();
+    var { Request: Request3, cloneRequest } = require_request2();
     var zlib2 = require("node:zlib");
     var {
       bytesMatch,
@@ -13490,7 +13490,7 @@ var require_fetch = __commonJS({
       let p = createDeferredPromise();
       let requestObject;
       try {
-        requestObject = new Request2(input, init);
+        requestObject = new Request3(input, init);
       } catch (e2) {
         p.reject(e2);
         return p.promise;
@@ -15312,7 +15312,7 @@ var require_cache = __commonJS({
     var { kEnumerableProperty, isDisturbed } = require_util();
     var { webidl } = require_webidl();
     var { Response: Response3, cloneResponse, fromInnerResponse } = require_response();
-    var { Request: Request2, fromInnerRequest } = require_request2();
+    var { Request: Request3, fromInnerRequest } = require_request2();
     var { kState } = require_symbols2();
     var { fetching } = require_fetch();
     var { urlIsHttpHttpsScheme, createDeferredPromise, readAllBytes } = require_util2();
@@ -15386,7 +15386,7 @@ var require_cache = __commonJS({
         }
         const fetchControllers = [];
         for (const request of requests) {
-          const r2 = new Request2(request)[kState];
+          const r2 = new Request3(request)[kState];
           if (!urlIsHttpHttpsScheme(r2.url)) {
             throw webidl.errors.exception({
               header: prefix,
@@ -15470,10 +15470,10 @@ var require_cache = __commonJS({
         request = webidl.converters.RequestInfo(request, prefix, "request");
         response = webidl.converters.Response(response, prefix, "response");
         let innerRequest = null;
-        if (request instanceof Request2) {
+        if (request instanceof Request3) {
           innerRequest = request[kState];
         } else {
-          innerRequest = new Request2(request)[kState];
+          innerRequest = new Request3(request)[kState];
         }
         if (!urlIsHttpHttpsScheme(innerRequest.url) || innerRequest.method !== "GET") {
           throw webidl.errors.exception({
@@ -15551,14 +15551,14 @@ var require_cache = __commonJS({
         request = webidl.converters.RequestInfo(request, prefix, "request");
         options = webidl.converters.CacheQueryOptions(options, prefix, "options");
         let r2 = null;
-        if (request instanceof Request2) {
+        if (request instanceof Request3) {
           r2 = request[kState];
           if (r2.method !== "GET" && !options.ignoreMethod) {
             return false;
           }
         } else {
           assert(typeof request === "string");
-          r2 = new Request2(request)[kState];
+          r2 = new Request3(request)[kState];
         }
         const operations = [];
         const operation = {
@@ -15597,13 +15597,13 @@ var require_cache = __commonJS({
         options = webidl.converters.CacheQueryOptions(options, prefix, "options");
         let r2 = null;
         if (request !== void 0) {
-          if (request instanceof Request2) {
+          if (request instanceof Request3) {
             r2 = request[kState];
             if (r2.method !== "GET" && !options.ignoreMethod) {
               return [];
             }
           } else if (typeof request === "string") {
-            r2 = new Request2(request)[kState];
+            r2 = new Request3(request)[kState];
           }
         }
         const promise = createDeferredPromise();
@@ -15769,13 +15769,13 @@ var require_cache = __commonJS({
       #internalMatchAll(request, options, maxResponses = Infinity) {
         let r2 = null;
         if (request !== void 0) {
-          if (request instanceof Request2) {
+          if (request instanceof Request3) {
             r2 = request[kState];
             if (r2.method !== "GET" && !options.ignoreMethod) {
               return [];
             }
           } else if (typeof request === "string") {
-            r2 = new Request2(request)[kState];
+            r2 = new Request3(request)[kState];
           }
         }
         const responses = [];
@@ -26497,7 +26497,7 @@ var init_referrer = __esm({
 });
 
 // node_modules/gaxios/node_modules/node-fetch/src/request.js
-var import_node_url, import_node_util3, INTERNALS3, isRequest, doBadDataWarn, Request, getNodeRequestOptions;
+var import_node_url, import_node_util3, INTERNALS3, isRequest, doBadDataWarn, Request2, getNodeRequestOptions;
 var init_request = __esm({
   "node_modules/gaxios/node_modules/node-fetch/src/request.js"() {
     import_node_url = require("node:url");
@@ -26517,7 +26517,7 @@ var init_request = __esm({
       ".data is not a valid RequestInit property, use .body instead",
       "https://github.com/node-fetch/node-fetch/issues/1000 (request)"
     );
-    Request = class _Request extends Body {
+    Request2 = class _Request extends Body {
       constructor(input, init = {}) {
         let parsedURL;
         if (isRequest(input)) {
@@ -26632,7 +26632,7 @@ var init_request = __esm({
         return "Request";
       }
     };
-    Object.defineProperties(Request.prototype, {
+    Object.defineProperties(Request2.prototype, {
       method: { enumerable: true },
       url: { enumerable: true },
       headers: { enumerable: true },
@@ -26723,7 +26723,7 @@ __export(src_exports, {
   File: () => file_default,
   FormData: () => FormData2,
   Headers: () => Headers3,
-  Request: () => Request,
+  Request: () => Request2,
   Response: () => Response2,
   blobFrom: () => blobFrom,
   blobFromSync: () => blobFromSync,
@@ -26734,7 +26734,7 @@ __export(src_exports, {
 });
 async function fetch2(url, options_) {
   return new Promise((resolve2, reject) => {
-    const request = new Request(url, options_);
+    const request = new Request2(url, options_);
     const { parsedURL, options } = getNodeRequestOptions(request);
     if (!supportedSchemas.has(parsedURL.protocol)) {
       throw new TypeError(`node-fetch cannot load ${url}. URL scheme "${parsedURL.protocol.replace(/:$/, "")}" is not supported.`);
@@ -26864,7 +26864,7 @@ async function fetch2(url, options_) {
             if (responseReferrerPolicy) {
               requestOptions.referrerPolicy = responseReferrerPolicy;
             }
-            resolve2(fetch2(new Request(locationURL, requestOptions)));
+            resolve2(fetch2(new Request2(locationURL, requestOptions)));
             finalize();
             return;
           }
@@ -46871,7 +46871,7 @@ function getIDToken(aud) {
   });
 }
 
-// node_modules/@postman-cse/automation-core/dist/ci-context.js
+// node_modules/@postman-cs/automation-core/dist/ci-context.js
 function norm(value) {
   const trimmed = (value ?? "").trim();
   return trimmed.length > 0 ? trimmed : void 0;
@@ -47022,7 +47022,7 @@ function detectCiProviderContext(env = process.env) {
   return { ciProvider: "unknown", runnerKind: "unknown" };
 }
 
-// node_modules/@postman-cse/automation-core/dist/repo-context.js
+// node_modules/@postman-cs/automation-core/dist/repo-context.js
 function normalize(value) {
   const trimmed = (value ?? "").trim();
   return trimmed.length > 0 ? trimmed : void 0;
@@ -47111,7 +47111,7 @@ function detectRepoContext(input, env = process.env) {
   };
 }
 
-// node_modules/@postman-cse/automation-core/dist/telemetry.js
+// node_modules/@postman-cs/automation-core/dist/telemetry.js
 var import_node_crypto = require("node:crypto");
 var import_undici2 = __toESM(require_undici(), 1);
 var SCHEMA_VERSION = 3;
@@ -47251,7 +47251,7 @@ function createTelemetryContext(options) {
   };
 }
 
-// node_modules/@postman-cse/automation-core/dist/logger.js
+// node_modules/@postman-cs/automation-core/dist/logger.js
 var LEVEL_ORDER = {
   debug: 10,
   info: 20,
@@ -47431,7 +47431,7 @@ function createLogger(options) {
   return root;
 }
 
-// node_modules/@postman-cse/automation-core/dist/http/retry.js
+// node_modules/@postman-cs/automation-core/dist/http/retry.js
 function sleep(delayMs) {
   return new Promise((resolve2) => {
     setTimeout(resolve2, delayMs);

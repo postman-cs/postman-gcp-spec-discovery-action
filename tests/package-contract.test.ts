@@ -37,8 +37,8 @@ describe('package contract', () => {
       expect(pkg.dependencies[name], `${name} must be pinned exactly`).toBe(version);
       expect(lock.packages[`node_modules/${name}`]?.version, `${name} lockfile pin`).toBe(version);
     }
-    expect(pkg.dependencies['@postman-cse/automation-core']).toBe('^1.3.0');
-    expect(lock.packages['node_modules/@postman-cse/automation-core']?.version).toBe('1.3.0');
+    expect(pkg.dependencies['@postman-cs/automation-core']).toBe('^1.8.1');
+    expect(lock.packages['node_modules/@postman-cs/automation-core']?.version).toBe('1.8.1');
 
     for (const entry of ['action.yml', 'dist', 'README.md', 'docs', 'SECURITY.md', 'SUPPORT.md', 'RELEASE_POLICY.md']) {
       expect(pkg.files, `files must include ${entry}`).toContain(entry);
