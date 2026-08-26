@@ -136,7 +136,7 @@ jobs:
           tar -xOf "$STAGE_DIR/release.tgz" package/scripts/verify-release-artifacts.mjs > "$VERIFIER"
           ACTUAL_SHA256="$(sha256sum "$VERIFIER" | awk '{print $1}')"
           test "$ACTUAL_SHA256" = "$EXPECTED_SHA256"
-          PACKAGE_NAME='@postman/onboarding-gcp-spec-discovery'
+          PACKAGE_NAME='@postman-cs/onboarding-gcp-spec-discovery'
           PACKAGE_VERSION="${GITHUB_REF_NAME#v}"
           PACKAGE_NAME="$PACKAGE_NAME" PACKAGE_VERSION="$PACKAGE_VERSION" node "$VERIFIER" "$STAGE_DIR"
 
@@ -162,7 +162,7 @@ jobs:
           set -euo pipefail
           if [ -z "${NODE_AUTH_TOKEN:-}" ]; then sed -i '/_authToken/d' "${NPM_CONFIG_USERCONFIG:-$HOME/.npmrc}"; fi
           echo "published=false" >> "$GITHUB_OUTPUT"
-          PACKAGE_NAME='@postman/onboarding-gcp-spec-discovery'
+          PACKAGE_NAME='@postman-cs/onboarding-gcp-spec-discovery'
           PACKAGE_VERSION="${GITHUB_REF_NAME#v}"
           if npm view "${PACKAGE_NAME}@${PACKAGE_VERSION}" version >/dev/null 2>&1; then
             echo "::notice::${PACKAGE_NAME}@${PACKAGE_VERSION} already published; verifying registry identity"
@@ -174,7 +174,7 @@ jobs:
         if: steps.npm-publish.outputs.published == 'true'
         run: |
           set -euo pipefail
-          PACKAGE_NAME='@postman/onboarding-gcp-spec-discovery'
+          PACKAGE_NAME='@postman-cs/onboarding-gcp-spec-discovery'
           PACKAGE_VERSION="${GITHUB_REF_NAME#v}"
           VERIFIER="$RUNNER_TEMP/verify-release-artifacts.mjs"
           STAGE_DIR="$RUNNER_TEMP/release-stage"
@@ -204,7 +204,7 @@ jobs:
       - name: Report npm publish skipped
         if: steps.npm-publish.outputs.published != 'true'
         run: |
-          MESSAGE="npm publish for @postman/onboarding-gcp-spec-discovery@${GITHUB_REF_NAME#v} did not complete (missing/invalid NPM_TOKEN or registry error); GitHub Release remains authoritative; recover via backfill-npm.yml once publish access exists"
+          MESSAGE="npm publish for @postman-cs/onboarding-gcp-spec-discovery@${GITHUB_REF_NAME#v} did not complete (missing/invalid NPM_TOKEN or registry error); GitHub Release remains authoritative; recover via backfill-npm.yml once publish access exists"
           echo "::warning::$MESSAGE"
           echo "$MESSAGE" >> "$GITHUB_STEP_SUMMARY"
 

@@ -173,7 +173,7 @@ describe('release workflow publishing contract', () => {
     expect(publish).toContain('STAGE_DIR="$RUNNER_TEMP/release-stage"');
     expect(publish).toContain('tar -xOf "$STAGE_DIR/release.tgz" package/scripts/verify-release-artifacts.mjs > "$VERIFIER"');
     expect(publish).toContain('test "$ACTUAL_SHA256" = "$EXPECTED_SHA256"');
-    expect(publish).toContain("PACKAGE_NAME='@postman/onboarding-gcp-spec-discovery'");
+    expect(publish).toContain("PACKAGE_NAME='@postman-cs/onboarding-gcp-spec-discovery'");
     expect(publish).toContain('PACKAGE_VERSION="${GITHUB_REF_NAME#v}"');
     expect(publish).toContain('node "$VERIFIER" "$STAGE_DIR"');
     expect(publish).toContain('npm pack --ignore-scripts --pack-destination');

@@ -1,5 +1,5 @@
 {
-  "name": "@postman/onboarding-gcp-spec-discovery",
+  "name": "@postman-cs/onboarding-gcp-spec-discovery",
   "version": "1.2.1",
   "repository": {
     "type": "git",

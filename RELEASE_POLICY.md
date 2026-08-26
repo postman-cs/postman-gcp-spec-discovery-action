@@ -70,7 +70,7 @@ Rolling-alias tag pushes are no-ops: no package, npm publish, GitHub Release, or
 
 ## npm package
 
-The CLI publishes as `@postman/onboarding-gcp-spec-discovery` with versions that match the GitHub release tag. Publication is from the git checkout (not from a prebuilt tarball) so the registry records `gitHead` equal to the immutable tag commit. Staged `release.tgz` remains the byte-identity artifact for GitHub Release assets and SRI comparison. GitHub Releases and tags remain authoritative if npm publication warns; use `backfill-npm.yml` after access is restored. Rolling major/minor aliases update action channels and skip npm publishing.
+The CLI publishes as `@postman-cs/onboarding-gcp-spec-discovery` with versions that match the GitHub release tag. Publication is from the git checkout (not from a prebuilt tarball) so the registry records `gitHead` equal to the immutable tag commit. Staged `release.tgz` remains the byte-identity artifact for GitHub Release assets and SRI comparison. GitHub Releases and tags remain authoritative if npm publication warns; use `backfill-npm.yml` after access is restored. Rolling major/minor aliases update action channels and skip npm publishing.
 
 ## Compatibility
 
