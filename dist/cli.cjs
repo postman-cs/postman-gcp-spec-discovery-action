@@ -19187,7 +19187,7 @@ var require_ms = __commonJS({
       options = options || {};
       var type = typeof val;
       if (type === "string" && val.length > 0) {
-        return parse4(val);
+        return parse2(val);
       } else if (type === "number" && isFinite(val)) {
         return options.long ? fmtLong(val) : fmtShort(val);
       }
@@ -19195,7 +19195,7 @@ var require_ms = __commonJS({
         "val is not a non-empty string or a valid number. val=" + JSON.stringify(val)
       );
     };
-    function parse4(str) {
+    function parse2(str) {
       str = String(str);
       if (str.length > 100) {
         return;
@@ -44199,7 +44199,7 @@ var require_public_api = __commonJS({
       }
       return doc;
     }
-    function parse4(src, reviver, options) {
+    function parse2(src, reviver, options) {
       let _reviver = void 0;
       if (typeof reviver === "function") {
         _reviver = reviver;
@@ -44240,7 +44240,7 @@ var require_public_api = __commonJS({
         return value.toString(options);
       return new Document.Document(value, _replacer, options).toString(options);
     }
-    exports2.parse = parse4;
+    exports2.parse = parse2;
     exports2.parseAllDocuments = parseAllDocuments2;
     exports2.parseDocument = parseDocument2;
     exports2.stringify = stringify;
@@ -44314,15 +44314,36 @@ var import_node_path10 = __toESM(require("node:path"), 1);
 // src/lib/utils/resolve-path-within-root.ts
 var import_node_fs = require("node:fs");
 var import_node_path = __toESM(require("node:path"), 1);
+function isMissingPathError(error) {
+  return error instanceof Error && "code" in error && (error.code === "ENOENT" || error.code === "ENOTDIR");
+}
 function nearestExistingAncestor(candidate) {
   let current = candidate;
   for (; ; ) {
     try {
       return (0, import_node_fs.realpathSync)(current);
-    } catch {
+    } catch (error) {
+      if (!isMissingPathError(error)) throw error;
       const parent = import_node_path.default.dirname(current);
       if (parent === current) return current;
       current = parent;
+    }
+  }
+}
+function assertNoSymlinkComponents(base, resolved, targetPath, fieldName) {
+  const relative = import_node_path.default.relative(base, resolved);
+  let current = base;
+  for (const component of relative.split(import_node_path.default.sep).filter(Boolean)) {
+    current = import_node_path.default.join(current, component);
+    try {
+      if ((0, import_node_fs.lstatSync)(current).isSymbolicLink()) {
+        throw new Error(
+          `${fieldName} must not traverse symbolic links; received ${targetPath}`
+        );
+      }
+    } catch (error) {
+      if (isMissingPathError(error)) return;
+      throw error;
     }
   }
 }
@@ -44333,6 +44354,7 @@ function resolvePathWithinRoot(rootPath, targetPath, fieldName) {
   if (relative.startsWith("..") || import_node_path.default.isAbsolute(relative)) {
     throw new Error(`${fieldName} must stay within repo-root/workspace; received ${targetPath}`);
   }
+  assertNoSymlinkComponents(base, resolved, targetPath, fieldName);
   const realBase = nearestExistingAncestor(base);
   const realResolved = nearestExistingAncestor(resolved);
   const realRelative = import_node_path.default.relative(realBase, realResolved);
@@ -44965,11 +44987,17 @@ var import_google_auth_library = __toESM(require_src5(), 1);
 // src/lib/providers/source-document.ts
 var import_node_util4 = require("node:util");
 
-// src/lib/spec/native-formats.ts
-var import_yaml2 = __toESM(require_dist3(), 1);
+// src/lib/spec/parse-untrusted-yaml.ts
+var import_yaml = __toESM(require_dist3(), 1);
+function parseUntrustedYaml(source) {
+  return (0, import_yaml.parse)(source, {
+    schema: "core",
+    merge: false,
+    maxAliasCount: 50
+  });
+}
 
 // src/lib/spec/validate-openapi.ts
-var import_yaml = __toESM(require_dist3(), 1);
 var HTTP_OPERATIONS = /* @__PURE__ */ new Set(["get", "put", "post", "delete", "options", "head", "patch", "trace"]);
 function parseAndValidateOpenApi(content) {
   const trimmed = content.trim();
@@ -44979,7 +45007,7 @@ function parseAndValidateOpenApi(content) {
   const isJson = trimmed.startsWith("{");
   let parsed;
   try {
-    parsed = isJson ? JSON.parse(trimmed) : (0, import_yaml.parse)(trimmed);
+    parsed = isJson ? JSON.parse(trimmed) : parseUntrustedYaml(trimmed);
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
     throw new Error(`Specification is not parseable JSON or YAML: ${detail}`, { cause: error });
@@ -45073,7 +45101,7 @@ function parseObjectDocument(content) {
   if (!trimmed) return void 0;
   const isJson = looksLikeJson(trimmed);
   try {
-    const parsed = isJson ? JSON.parse(trimmed) : (0, import_yaml2.parse)(trimmed);
+    const parsed = isJson ? JSON.parse(trimmed) : parseUntrustedYaml(trimmed);
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return void 0;
     return { document: parsed, isJson };
   } catch {
@@ -45228,7 +45256,7 @@ function validateAsyncApi(content, expected) {
   const isJson = looksLikeJson(trimmed);
   let parsed;
   try {
-    parsed = isJson ? JSON.parse(trimmed) : (0, import_yaml2.parse)(trimmed);
+    parsed = isJson ? JSON.parse(trimmed) : parseUntrustedYaml(trimmed);
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
     throw new Error(`Specification is not parseable JSON or YAML: ${detail}`, { cause: error });
@@ -45388,7 +45416,7 @@ function parseAndValidateNativeSpec(content, expectedFormat) {
     if (looksLikeJson(trimmed) || /:\s*\S/.test(trimmed)) {
       try {
         if (looksLikeJson(trimmed)) JSON.parse(trimmed);
-        else (0, import_yaml2.parse)(trimmed);
+        else parseUntrustedYaml(trimmed);
       } catch (error) {
         const detail = error instanceof Error ? error.message : String(error);
         throw new Error(`Specification is not parseable JSON or YAML: ${detail}`, { cause: error });
@@ -45614,6 +45642,30 @@ function parseApigeePortalDocumentationBody(body) {
 var CLOUD_PLATFORM_SCOPE = "https://www.googleapis.com/auth/cloud-platform";
 var MAX_LIST_PAGES = 100;
 var MAX_STORAGE_OBJECT_BYTES = 10 * 1024 * 1024;
+var MAX_JSON_RESPONSE_BYTES = 32 * 1024 * 1024;
+var MAX_COLLECTED_LIST_BYTES = 64 * 1024 * 1024;
+function decodeJsonResponse(data, operation) {
+  if (typeof data === "string") {
+    const bytes2 = Buffer.byteLength(data, "utf8");
+    if (bytes2 > MAX_JSON_RESPONSE_BYTES) {
+      throw new Error(`${operation} exceeds ${MAX_JSON_RESPONSE_BYTES} response bytes`);
+    }
+    try {
+      return { data: JSON.parse(data), bytes: bytes2 };
+    } catch (error) {
+      throw new Error(`${operation} returned invalid JSON`, { cause: error });
+    }
+  }
+  const encoded = JSON.stringify(data);
+  if (encoded === void 0) {
+    throw new Error(`${operation} returned invalid JSON`);
+  }
+  const bytes = Buffer.byteLength(encoded, "utf8");
+  if (bytes > MAX_JSON_RESPONSE_BYTES) {
+    throw new Error(`${operation} exceeds ${MAX_JSON_RESPONSE_BYTES} response bytes`);
+  }
+  return { data, bytes };
+}
 var CRC32C_TABLE = (() => {
   const polynomial = 2197175160;
   const table = new Uint32Array(256);
@@ -46379,9 +46431,11 @@ var GcpSdkClient = class {
           method: "POST",
           timeout: this.options.requestTimeoutMs,
           retry: false,
+          responseType: "text",
+          maxContentLength: MAX_JSON_RESPONSE_BYTES,
           data
         });
-        return response.data;
+        return decodeJsonResponse(response.data, operation).data;
       } catch (error) {
         if (!isTransient(error) || attempt === this.options.maxAttempts) {
           const status = errorStatus(error);
@@ -46404,7 +46458,8 @@ var GcpSdkClient = class {
           method: "GET",
           timeout: this.options.requestTimeoutMs,
           retry: false,
-          responseType: "arraybuffer"
+          responseType: "arraybuffer",
+          maxContentLength: MAX_STORAGE_OBJECT_BYTES
         });
         const bytes = Buffer.from(response.data);
         if (bytes.byteLength > MAX_STORAGE_OBJECT_BYTES) {
@@ -46425,11 +46480,17 @@ var GcpSdkClient = class {
     const results = [];
     const seenTokens = /* @__PURE__ */ new Set();
     let pageToken;
+    let collectedBytes = 0;
     for (let page = 1; page <= MAX_LIST_PAGES; page += 1) {
       const url = createUrl();
       url.searchParams.set("pageSize", String(pageSize));
       if (pageToken) url.searchParams.set("pageToken", pageToken);
-      const selected = select(await this.getJson(url, operation));
+      const response = await this.getJsonResponse(url, operation);
+      collectedBytes += response.bytes;
+      if (collectedBytes > MAX_COLLECTED_LIST_BYTES) {
+        throw new Error(`${operation} exceeds ${MAX_COLLECTED_LIST_BYTES} accumulated response bytes`);
+      }
+      const selected = select(response.data);
       results.push(...selected.items);
       const next = selected.nextPageToken?.trim() || void 0;
       if (!next) return results;
@@ -46442,6 +46503,9 @@ var GcpSdkClient = class {
     throw new Error(`${operation} exceeded ${MAX_LIST_PAGES} pages; aborting`);
   }
   async getJson(url, operation) {
+    return (await this.getJsonResponse(url, operation)).data;
+  }
+  async getJsonResponse(url, operation) {
     const requester = await this.requester();
     for (let attempt = 1; attempt <= this.options.maxAttempts; attempt += 1) {
       try {
@@ -46449,9 +46513,11 @@ var GcpSdkClient = class {
           url: url.toString(),
           method: "GET",
           timeout: this.options.requestTimeoutMs,
-          retry: false
+          retry: false,
+          responseType: "text",
+          maxContentLength: MAX_JSON_RESPONSE_BYTES
         });
-        return response.data;
+        return decodeJsonResponse(response.data, operation);
       } catch (error) {
         if (!isTransient(error) || attempt === this.options.maxAttempts) {
           const status = errorStatus(error);
@@ -47517,7 +47583,7 @@ async function collectRepoSignals(input) {
 // src/lib/repo/gcp-iac-scanner.ts
 var import_promises4 = require("node:fs/promises");
 var import_node_path7 = __toESM(require("node:path"), 1);
-var import_yaml3 = __toESM(require_dist3(), 1);
+var import_yaml2 = __toESM(require_dist3(), 1);
 var MAX_SCAN_FILES = 200;
 var MAX_SCAN_DEPTH = 6;
 var MAX_REFERENCED_OPENAPI_BYTES = 10 * 1024 * 1024;
@@ -47834,7 +47900,7 @@ function addInlineDocument(terraformPath, block, content, candidates, fingerprin
 function extractPulumiYamlDocuments(relativePath, content, candidates, fingerprint) {
   let documents;
   try {
-    documents = (0, import_yaml3.parseAllDocuments)(content, { merge: false, prettyErrors: false });
+    documents = (0, import_yaml2.parseAllDocuments)(content, { merge: false, prettyErrors: false });
   } catch {
     return;
   }
@@ -47847,25 +47913,25 @@ function extractPulumiYamlDocuments(relativePath, content, candidates, fingerpri
   const document2 = nonEmpty[0];
   if (document2.errors.length > 0) return;
   const root = document2.contents;
-  if (!(0, import_yaml3.isMap)(root) || mapHasMergeKey(root) || mapHasFnKey(root)) return;
+  if (!(0, import_yaml2.isMap)(root) || mapHasMergeKey(root) || mapHasFnKey(root)) return;
   if (!isYamlRuntime(mapGet(root, "runtime"))) return;
   const resourcesNode = mapGet(root, "resources");
-  if (!(0, import_yaml3.isMap)(resourcesNode) || mapHasMergeKey(resourcesNode) || mapHasFnKey(resourcesNode)) return;
+  if (!(0, import_yaml2.isMap)(resourcesNode) || mapHasMergeKey(resourcesNode) || mapHasFnKey(resourcesNode)) return;
   for (const item of resourcesNode.items) {
-    if (!(0, import_yaml3.isPair)(item)) continue;
+    if (!(0, import_yaml2.isPair)(item)) continue;
     const resourceName = scalarString(item.key);
-    if (!resourceName || !(0, import_yaml3.isMap)(item.value) || mapHasMergeKey(item.value) || mapHasFnKey(item.value)) continue;
+    if (!resourceName || !(0, import_yaml2.isMap)(item.value) || mapHasMergeKey(item.value) || mapHasFnKey(item.value)) continue;
     const resourceType = scalarString(mapGet(item.value, "type"));
     if (!resourceType || !PULUMI_API_CONFIG_TYPES.has(resourceType)) continue;
     const properties = mapGet(item.value, "properties");
-    if (!(0, import_yaml3.isMap)(properties) || mapHasMergeKey(properties) || mapHasFnKey(properties)) continue;
+    if (!(0, import_yaml2.isMap)(properties) || mapHasMergeKey(properties) || mapHasFnKey(properties)) continue;
     const project = literalFingerprintString(mapGet(properties, "project"));
     if (project) fingerprint.projectIds.push(project);
     const api = literalFingerprintString(mapGet(properties, "api")) ?? literalFingerprintString(mapGet(properties, "apiId"));
     if (api) fingerprint.serviceNames.push(api);
     fingerprint.serviceNames.push(resourceName);
     const openapiDocuments = mapGet(properties, "openapiDocuments");
-    if (!(0, import_yaml3.isSeq)(openapiDocuments)) continue;
+    if (!(0, import_yaml2.isSeq)(openapiDocuments)) continue;
     if (seqHasFnOrMerge(openapiDocuments)) continue;
     openapiDocuments.items.forEach((entry, index) => {
       addPulumiOpenApiDocument(
@@ -47881,19 +47947,19 @@ function extractPulumiYamlDocuments(relativePath, content, candidates, fingerpri
   }
 }
 function addPulumiOpenApiDocument(relativePath, resourceType, resourceName, index, entry, candidates, fingerprint) {
-  if (!(0, import_yaml3.isMap)(entry) || mapHasMergeKey(entry) || mapHasFnKey(entry)) return;
+  if (!(0, import_yaml2.isMap)(entry) || mapHasMergeKey(entry) || mapHasFnKey(entry)) return;
   const documentNode = mapGet(entry, "document");
-  if (!(0, import_yaml3.isMap)(documentNode) || mapHasMergeKey(documentNode) || mapHasFnKey(documentNode)) return;
+  if (!(0, import_yaml2.isMap)(documentNode) || mapHasMergeKey(documentNode) || mapHasFnKey(documentNode)) return;
   const pathNode = mapGet(documentNode, "path");
   const contentsNode = mapGet(documentNode, "contents");
   if (contentsNode == null) return;
-  if ((0, import_yaml3.isAlias)(contentsNode) || (0, import_yaml3.isAlias)(pathNode)) {
+  if ((0, import_yaml2.isAlias)(contentsNode) || (0, import_yaml2.isAlias)(pathNode)) {
     fingerprint.evidence.push(
       `Pulumi ${resourceType}.${resourceName} openapiDocuments/${index} uses YAML alias; ignored`
     );
     return;
   }
-  if (!(0, import_yaml3.isScalar)(contentsNode) || typeof contentsNode.value !== "string") {
+  if (!(0, import_yaml2.isScalar)(contentsNode) || typeof contentsNode.value !== "string") {
     fingerprint.evidence.push(
       `Pulumi ${resourceType}.${resourceName} openapiDocuments/${index} contents is not a literal scalar; ignored`
     );
@@ -47940,8 +48006,8 @@ function addPulumiOpenApiDocument(relativePath, resourceType, resourceName, inde
   }
 }
 function isYamlRuntime(node) {
-  if ((0, import_yaml3.isScalar)(node) && node.value === "yaml") return true;
-  if (!(0, import_yaml3.isMap)(node) || mapHasMergeKey(node) || mapHasFnKey(node)) return false;
+  if ((0, import_yaml2.isScalar)(node) && node.value === "yaml") return true;
+  if (!(0, import_yaml2.isMap)(node) || mapHasMergeKey(node) || mapHasFnKey(node)) return false;
   return scalarString(mapGet(node, "name")) === "yaml";
 }
 function literalFingerprintString(node) {
@@ -47950,28 +48016,28 @@ function literalFingerprintString(node) {
   return value;
 }
 function scalarString(node) {
-  if ((0, import_yaml3.isAlias)(node) || !(0, import_yaml3.isScalar)(node) || typeof node.value !== "string") return void 0;
+  if ((0, import_yaml2.isAlias)(node) || !(0, import_yaml2.isScalar)(node) || typeof node.value !== "string") return void 0;
   return node.value;
 }
 function mapGet(map, key) {
   for (const item of map.items) {
-    if (!(0, import_yaml3.isPair)(item)) continue;
+    if (!(0, import_yaml2.isPair)(item)) continue;
     if (scalarString(item.key) === key) return item.value;
   }
   return void 0;
 }
 function mapHasMergeKey(map) {
-  return map.items.some((item) => (0, import_yaml3.isPair)(item) && scalarString(item.key) === "<<");
+  return map.items.some((item) => (0, import_yaml2.isPair)(item) && scalarString(item.key) === "<<");
 }
 function mapHasFnKey(map) {
   return map.items.some((item) => {
-    if (!(0, import_yaml3.isPair)(item)) return false;
+    if (!(0, import_yaml2.isPair)(item)) return false;
     const key = scalarString(item.key);
     return Boolean(key?.startsWith("fn::"));
   });
 }
 function seqHasFnOrMerge(seq) {
-  return seq.items.some((item) => (0, import_yaml3.isMap)(item) && (mapHasFnKey(item) || mapHasMergeKey(item)));
+  return seq.items.some((item) => (0, import_yaml2.isMap)(item) && (mapHasFnKey(item) || mapHasMergeKey(item)));
 }
 
 // src/lib/resolve/source-selector.ts
@@ -48439,10 +48505,9 @@ async function stageAndSwapServiceDirectory(options) {
 }
 
 // src/lib/spec/oas-derivation.ts
-var import_yaml4 = __toESM(require_dist3(), 1);
 function parseDocument(content) {
   try {
-    const parsed = content.trim().startsWith("{") ? JSON.parse(content) : (0, import_yaml4.parse)(content);
+    const parsed = content.trim().startsWith("{") ? JSON.parse(content) : parseUntrustedYaml(content);
     return parsed && typeof parsed === "object" ? parsed : void 0;
   } catch {
     return void 0;
@@ -50780,7 +50845,7 @@ async function defaultWriteSpecFile(outputPath, content) {
   await (0, import_promises7.writeFile)(outputPath, content, "utf8");
 }
 function projectFolderName(projectName) {
-  const safe = projectName.trim().replace(/[\\/]+/g, "-").replace(/^\.+$/, "service").replace(/[^A-Za-z0-9._-]+/g, "-").replace(/^-+|-+$/g, "");
+  const safe = projectName.trim().replace(/[\\/]+/g, "-").replace(/[^A-Za-z0-9._-]+/g, "-").replace(/^-+|-+$/g, "").replace(/^\.+$/, "service");
   return safe || "service";
 }
 function resolveServiceName(candidate, serviceMapping) {
@@ -50816,6 +50881,8 @@ async function writeSpecExport(inputs, serviceName, exportResult, dependencies) 
   const folder = projectFolderName(serviceName);
   const outputDirPosix = inputs.outputDir.split(import_node_path9.default.sep).join("/");
   const serviceDirRelative = import_node_path9.default.posix.join(outputDirPosix, folder);
+  const outputRoot = resolvePathWithinRoot(inputs.repoRoot, inputs.outputDir, "output-dir");
+  const serviceRoot = resolvePathWithinRoot(outputRoot, folder, "output-dir");
   const writeSpecFile = dependencies.writeSpecFile;
   let relativeSpecPath;
   let specFilesJson;
@@ -50823,11 +50890,11 @@ async function writeSpecExport(inputs, serviceName, exportResult, dependencies) 
     const artifacts = exportResult.artifacts;
     const rootPath = exportResult.rootPath;
     relativeSpecPath = import_node_path9.default.posix.join(serviceDirRelative, rootPath);
-    resolvePathWithinRoot(inputs.repoRoot, relativeSpecPath, "output-dir");
+    resolvePathWithinRoot(serviceRoot, rootPath, "output-dir");
     for (const artifact of artifacts) {
       resolvePathWithinRoot(
-        inputs.repoRoot,
-        import_node_path9.default.posix.join(serviceDirRelative, artifact.path),
+        serviceRoot,
+        artifact.path,
         "output-dir"
       );
     }
@@ -50856,7 +50923,7 @@ async function writeSpecExport(inputs, serviceName, exportResult, dependencies) 
     }
   } else {
     relativeSpecPath = import_node_path9.default.posix.join(serviceDirRelative, exportResult.filename);
-    const absoluteSpecPath = resolvePathWithinRoot(inputs.repoRoot, relativeSpecPath, "output-dir");
+    const absoluteSpecPath = resolvePathWithinRoot(serviceRoot, exportResult.filename, "output-dir");
     if (!inputs.dryRun) {
       await writeSpecFile(absoluteSpecPath, exportResult.content);
     }
@@ -50878,7 +50945,7 @@ async function writeSpecExport(inputs, serviceName, exportResult, dependencies) 
       };
     } else {
       const derivedRelative = import_node_path9.default.posix.join(serviceDirRelative, "openapi.derived.json");
-      const derivedAbsolute = resolvePathWithinRoot(inputs.repoRoot, derivedRelative, "output-dir");
+      const derivedAbsolute = resolvePathWithinRoot(serviceRoot, "openapi.derived.json", "output-dir");
       if (!inputs.dryRun) {
         await writeSpecFile(derivedAbsolute, derivation.content);
       }
@@ -51287,7 +51354,7 @@ async function runDiscoverMany(inputs, dependencies) {
   const capped = partitioned.slice(0, inputs.maxCandidates);
   const summary = { attempted: 0, exported: 0, failed: 0, skipped: enumerated.length - capped.length };
   const discovered = [];
-  const writtenPaths = /* @__PURE__ */ new Map();
+  const writtenDirectories = /* @__PURE__ */ new Map();
   for (const candidate of capped) {
     if (!isExportableCandidate(candidate)) {
       summary.skipped += 1;
@@ -51302,13 +51369,16 @@ async function runDiscoverMany(inputs, dependencies) {
     try {
       const exportResult = await provider.exportSpec(candidate);
       const serviceName = resolveServiceName(candidate, inputs.serviceMapping);
-      const targetPath = import_node_path9.default.posix.join(inputs.outputDir.split(import_node_path9.default.sep).join("/"), projectFolderName(serviceName), exportResult.filename);
-      const priorOwner = writtenPaths.get(targetPath);
-      if (priorOwner && priorOwner !== candidate.id) {
-        throw new Error(`Spec path collision at ${targetPath}: already written by ${priorOwner}`);
+      const targetDirectory = import_node_path9.default.posix.join(inputs.outputDir.split(import_node_path9.default.sep).join("/"), projectFolderName(serviceName));
+      const targetIdentity = targetDirectory.normalize("NFC").toLocaleLowerCase("en-US");
+      const priorOwner = writtenDirectories.get(targetIdentity);
+      if (priorOwner && priorOwner.candidateId !== candidate.id) {
+        throw new Error(
+          `Service directory collision at ${targetDirectory} (${priorOwner.path}): already written by ${priorOwner.candidateId}`
+        );
       }
       const written = await writeSpecExport(inputs, serviceName, exportResult, dependencies);
-      writtenPaths.set(written.specPath, candidate.id);
+      writtenDirectories.set(targetIdentity, { candidateId: candidate.id, path: targetDirectory });
       discovered.push({
         serviceName,
         specPath: written.specPath,

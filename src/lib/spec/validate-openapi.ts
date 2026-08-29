@@ -1,4 +1,4 @@
-import { parse } from 'yaml';
+import { parseUntrustedYaml } from './parse-untrusted-yaml.js';
 
 export interface ValidatedOpenApi {
   document: Record<string, unknown>;
@@ -26,7 +26,7 @@ export function parseAndValidateOpenApi(content: string): ValidatedOpenApi {
   const isJson = trimmed.startsWith('{');
   let parsed: unknown;
   try {
-    parsed = isJson ? JSON.parse(trimmed) : parse(trimmed);
+    parsed = isJson ? JSON.parse(trimmed) : parseUntrustedYaml(trimmed);
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
     throw new Error(`Specification is not parseable JSON or YAML: ${detail}`, { cause: error });

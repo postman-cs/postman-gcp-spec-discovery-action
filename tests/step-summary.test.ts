@@ -52,4 +52,30 @@ describe('ambiguity step summary', () => {
     // Subscription UUID must be redacted out of the resource column
     expect(markdown).not.toContain('aaaaaaaa-1111-2222-3333-444444444444');
   });
+
+  it('keeps attacker-controlled backticks and Unicode separators inside code spans', () => {
+    const markdown = renderAmbiguityStepSummary({
+      status: 'unresolved',
+      sourceType: 'manual-review',
+      narrowingTier: 'label-prefilter',
+      candidates: [
+        {
+          rank: 1,
+          serviceName: '` [review](https://evil.example)\u2028next',
+          resourceId: 'candidate',
+          providerType: 'api-gateway',
+          authority: 'stored-authoritative',
+          confidence: 30,
+          supported: true,
+          evidence: []
+        }
+      ],
+      probes: []
+    });
+
+    const candidateLine = markdown.split('\n').find((line) => line.includes('evil.example'));
+    expect(candidateLine).toContain('`  [review](https://evil.example) next`');
+    expect(candidateLine).not.toContain('` [review](https://evil.example)');
+    expect(candidateLine).not.toContain('\u2028');
+  });
 });

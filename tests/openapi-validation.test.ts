@@ -112,6 +112,29 @@ describe('OpenAPI export validation', () => {
     expect(yaml.isJson).toBe(false);
   });
 
+  it('rejects recursive YAML 1.1 merge bombs before expansion', () => {
+    const layers = Array.from(
+      { length: 8 },
+      (_, index) =>
+        `layer${index + 1}: &layer${index + 1} { <<: [*layer${index}, *layer${index}, *layer${index}, *layer${index}] }`
+    );
+    const yaml = [
+      '%YAML 1.1',
+      '---',
+      'layer0: &layer0 { expanded: true }',
+      ...layers,
+      'openapi: 3.0.3',
+      'info: { title: safe, version: "1" }',
+      'paths:',
+      '  /safe:',
+      '    get:',
+      '      responses:',
+      '        "200": { description: ok }'
+    ].join('\n');
+
+    expect(() => parseAndValidateOpenApi(yaml)).toThrow(/Excessive alias count/);
+  });
+
   it('GCP-APIM-005: parameters plus an operation and case-insensitive methods are accepted', () => {
     const withParams = parseAndValidateOpenApi(
       JSON.stringify({

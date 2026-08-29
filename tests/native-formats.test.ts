@@ -150,6 +150,26 @@ describe('native format validation', () => {
     ).toThrow(/MCP|mcpServers|remotes|packages/i);
   });
 
+  it('rejects recursive YAML 1.1 merge bombs during native detection and validation', () => {
+    const layers = Array.from(
+      { length: 8 },
+      (_, index) =>
+        `layer${index + 1}: &layer${index + 1} { <<: [*layer${index}, *layer${index}, *layer${index}, *layer${index}] }`
+    );
+    const yaml = [
+      '%YAML 1.1',
+      '---',
+      'layer0: &layer0 { expanded: true }',
+      ...layers,
+      'asyncapi: 3.0.0',
+      'info: { title: safe, version: "1" }',
+      'channels: { safe: { address: safe } }'
+    ].join('\n');
+
+    expect(detectNativeFormat(yaml)).toBeUndefined();
+    expect(() => parseAndValidateNativeSpec(yaml)).toThrow(/Excessive alias count/);
+  });
+
   it('validates each bootstrap-native family and materializes exact decoded text', () => {
     const asyncapi = parseAndValidateNativeSpec(
       JSON.stringify({
