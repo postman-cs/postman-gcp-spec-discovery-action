@@ -298,9 +298,9 @@ function projectFolderName(projectName: string): string {
   const safe = projectName
     .trim()
     .replace(/[\\/]+/g, '-')
-    .replace(/^\.+$/, 'service')
     .replace(/[^A-Za-z0-9._-]+/g, '-')
-    .replace(/^-+|-+$/g, '');
+    .replace(/^-+|-+$/g, '')
+    .replace(/^\.+$/, 'service');
   return safe || 'service';
 }
 
@@ -368,6 +368,8 @@ async function writeSpecExport(
   const folder = projectFolderName(serviceName);
   const outputDirPosix = inputs.outputDir.split(path.sep).join('/');
   const serviceDirRelative = path.posix.join(outputDirPosix, folder);
+  const outputRoot = resolvePathWithinRoot(inputs.repoRoot, inputs.outputDir, 'output-dir');
+  const serviceRoot = resolvePathWithinRoot(outputRoot, folder, 'output-dir');
   const writeSpecFile = dependencies.writeSpecFile;
 
   let relativeSpecPath: string;
@@ -378,11 +380,11 @@ async function writeSpecExport(
     const rootPath = exportResult.rootPath!;
     relativeSpecPath = path.posix.join(serviceDirRelative, rootPath);
     // Ensure root path resolves inside the service directory.
-    resolvePathWithinRoot(inputs.repoRoot, relativeSpecPath, 'output-dir');
+    resolvePathWithinRoot(serviceRoot, rootPath, 'output-dir');
     for (const artifact of artifacts) {
       resolvePathWithinRoot(
-        inputs.repoRoot,
-        path.posix.join(serviceDirRelative, artifact.path),
+        serviceRoot,
+        artifact.path,
         'output-dir'
       );
     }
@@ -413,7 +415,7 @@ async function writeSpecExport(
     }
   } else {
     relativeSpecPath = path.posix.join(serviceDirRelative, exportResult.filename);
-    const absoluteSpecPath = resolvePathWithinRoot(inputs.repoRoot, relativeSpecPath, 'output-dir');
+    const absoluteSpecPath = resolvePathWithinRoot(serviceRoot, exportResult.filename, 'output-dir');
     if (!inputs.dryRun) {
       await writeSpecFile(absoluteSpecPath, exportResult.content);
     }
@@ -438,7 +440,7 @@ async function writeSpecExport(
       };
     } else {
       const derivedRelative = path.posix.join(serviceDirRelative, 'openapi.derived.json');
-      const derivedAbsolute = resolvePathWithinRoot(inputs.repoRoot, derivedRelative, 'output-dir');
+      const derivedAbsolute = resolvePathWithinRoot(serviceRoot, 'openapi.derived.json', 'output-dir');
       if (!inputs.dryRun) {
         await writeSpecFile(derivedAbsolute, derivation.content);
       }
@@ -925,7 +927,7 @@ async function runDiscoverMany(inputs: ResolvedInputs, dependencies: GCPDependen
   const capped = partitioned.slice(0, inputs.maxCandidates);
   const summary: ExportSummary = { attempted: 0, exported: 0, failed: 0, skipped: enumerated.length - capped.length };
   const discovered: DiscoveredService[] = [];
-  const writtenPaths = new Map<string, string>();
+  const writtenDirectories = new Map<string, { candidateId: string; path: string }>();
 
   for (const candidate of capped) {
     if (!isExportableCandidate(candidate)) {
@@ -941,16 +943,18 @@ async function runDiscoverMany(inputs: ResolvedInputs, dependencies: GCPDependen
     try {
       const exportResult = await provider.exportSpec(candidate);
       const serviceName = resolveServiceName(candidate, inputs.serviceMapping);
-      const targetPath = path.posix.join(inputs.outputDir.split(path.sep).join('/'), projectFolderName(serviceName), exportResult.filename);
-      const priorOwner = writtenPaths.get(targetPath);
-      if (priorOwner && priorOwner !== candidate.id) {
-        // Two distinct candidates resolved to the same on-disk path; writing
-        // would silently overwrite the earlier export while summary.exported
-        // still counted both. Fail this one loudly instead.
-        throw new Error(`Spec path collision at ${targetPath}: already written by ${priorOwner}`);
+      const targetDirectory = path.posix.join(inputs.outputDir.split(path.sep).join('/'), projectFolderName(serviceName));
+      const targetIdentity = targetDirectory.normalize('NFC').toLocaleLowerCase('en-US');
+      const priorOwner = writtenDirectories.get(targetIdentity);
+      if (priorOwner && priorOwner.candidateId !== candidate.id) {
+        // A full export owns and atomically replaces the entire service
+        // directory, so different root filenames are still a collision.
+        throw new Error(
+          `Service directory collision at ${targetDirectory} (${priorOwner.path}): already written by ${priorOwner.candidateId}`
+        );
       }
       const written = await writeSpecExport(inputs, serviceName, exportResult, dependencies);
-      writtenPaths.set(written.specPath, candidate.id);
+      writtenDirectories.set(targetIdentity, { candidateId: candidate.id, path: targetDirectory });
       discovered.push({
         serviceName,
         specPath: written.specPath,

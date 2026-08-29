@@ -15,7 +15,8 @@ export interface GcpRequestOptions {
   method: 'GET' | 'POST';
   timeout: number;
   retry: false;
-  responseType?: 'arraybuffer';
+  responseType?: 'arraybuffer' | 'text';
+  maxContentLength?: number;
   data?: unknown;
 }
 
@@ -370,6 +371,36 @@ const CLOUD_PLATFORM_SCOPE = 'https://www.googleapis.com/auth/cloud-platform';
 const MAX_LIST_PAGES = 100;
 /** Matches source-document OpenAPI byte bound for authenticated GCS reads. */
 const MAX_STORAGE_OBJECT_BYTES = 10 * 1024 * 1024;
+/** Accommodates a 10 MiB source after base64/JSON encoding while bounding heap use. */
+const MAX_JSON_RESPONSE_BYTES = 32 * 1024 * 1024;
+/** Bound bytes retained across all pages in one list operation. */
+const MAX_COLLECTED_LIST_BYTES = 64 * 1024 * 1024;
+
+function decodeJsonResponse<T>(data: unknown, operation: string): { data: T; bytes: number } {
+  if (typeof data === 'string') {
+    const bytes = Buffer.byteLength(data, 'utf8');
+    if (bytes > MAX_JSON_RESPONSE_BYTES) {
+      throw new Error(`${operation} exceeds ${MAX_JSON_RESPONSE_BYTES} response bytes`);
+    }
+    try {
+      return { data: JSON.parse(data) as T, bytes };
+    } catch (error) {
+      throw new Error(`${operation} returned invalid JSON`, { cause: error });
+    }
+  }
+
+  // Injected requesters in tests may return already-decoded JSON. Production
+  // requests use responseType:text so the byte ceiling is enforced pre-parse.
+  const encoded = JSON.stringify(data);
+  if (encoded === undefined) {
+    throw new Error(`${operation} returned invalid JSON`);
+  }
+  const bytes = Buffer.byteLength(encoded, 'utf8');
+  if (bytes > MAX_JSON_RESPONSE_BYTES) {
+    throw new Error(`${operation} exceeds ${MAX_JSON_RESPONSE_BYTES} response bytes`);
+  }
+  return { data: data as T, bytes };
+}
 
 const CRC32C_TABLE = (() => {
   const polynomial = 0x82f63b78;
@@ -1305,14 +1336,16 @@ export class GcpSdkClient implements GcpDiscoveryClient {
     const requester = await this.requester();
     for (let attempt = 1; attempt <= this.options.maxAttempts; attempt += 1) {
       try {
-        const response = await requester.request<T>({
+        const response = await requester.request<unknown>({
           url: url.toString(),
           method: 'POST',
           timeout: this.options.requestTimeoutMs,
           retry: false,
+          responseType: 'text',
+          maxContentLength: MAX_JSON_RESPONSE_BYTES,
           data
         });
-        return response.data;
+        return decodeJsonResponse<T>(response.data, operation).data;
       } catch (error) {
         if (!isTransient(error) || attempt === this.options.maxAttempts) {
           const status = errorStatus(error);
@@ -1337,7 +1370,8 @@ export class GcpSdkClient implements GcpDiscoveryClient {
           method: 'GET',
           timeout: this.options.requestTimeoutMs,
           retry: false,
-          responseType: 'arraybuffer'
+          responseType: 'arraybuffer',
+          maxContentLength: MAX_STORAGE_OBJECT_BYTES
         });
         const bytes = Buffer.from(response.data as ArrayBuffer);
         if (bytes.byteLength > MAX_STORAGE_OBJECT_BYTES) {
@@ -1364,11 +1398,17 @@ export class GcpSdkClient implements GcpDiscoveryClient {
     const results: T[] = [];
     const seenTokens = new Set<string>();
     let pageToken: string | undefined;
+    let collectedBytes = 0;
     for (let page = 1; page <= MAX_LIST_PAGES; page += 1) {
       const url = createUrl();
       url.searchParams.set('pageSize', String(pageSize));
       if (pageToken) url.searchParams.set('pageToken', pageToken);
-      const selected = select(await this.getJson<B>(url, operation));
+      const response = await this.getJsonResponse<B>(url, operation);
+      collectedBytes += response.bytes;
+      if (collectedBytes > MAX_COLLECTED_LIST_BYTES) {
+        throw new Error(`${operation} exceeds ${MAX_COLLECTED_LIST_BYTES} accumulated response bytes`);
+      }
+      const selected = select(response.data);
       results.push(...selected.items);
       const next = selected.nextPageToken?.trim() || undefined;
       if (!next) return results;
@@ -1382,16 +1422,22 @@ export class GcpSdkClient implements GcpDiscoveryClient {
   }
 
   private async getJson<T>(url: URL, operation: string): Promise<T> {
+    return (await this.getJsonResponse<T>(url, operation)).data;
+  }
+
+  private async getJsonResponse<T>(url: URL, operation: string): Promise<{ data: T; bytes: number }> {
     const requester = await this.requester();
     for (let attempt = 1; attempt <= this.options.maxAttempts; attempt += 1) {
       try {
-        const response = await requester.request<T>({
+        const response = await requester.request<unknown>({
           url: url.toString(),
           method: 'GET',
           timeout: this.options.requestTimeoutMs,
-          retry: false
+          retry: false,
+          responseType: 'text',
+          maxContentLength: MAX_JSON_RESPONSE_BYTES
         });
-        return response.data;
+        return decodeJsonResponse<T>(response.data, operation);
       } catch (error) {
         if (!isTransient(error) || attempt === this.options.maxAttempts) {
           const status = errorStatus(error);

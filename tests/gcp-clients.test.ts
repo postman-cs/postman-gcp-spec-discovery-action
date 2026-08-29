@@ -42,7 +42,9 @@ describe('GCP authenticated REST client', () => {
     expect(request.mock.calls[0]?.[0]).toMatchObject({
       url: 'https://cloudresourcemanager.googleapis.com/v3/projects/sample-project-123',
       timeout: 1234,
-      retry: false
+      retry: false,
+      responseType: 'text',
+      maxContentLength: 32 * 1024 * 1024
     });
   });
 
@@ -107,6 +109,23 @@ describe('GCP authenticated REST client', () => {
     await expect(client.downloadApigeeRevisionBundle('sample-project-123', 'proxy name', '2')).resolves.toEqual(Buffer.from([1, 2, 3]));
     expect(request.mock.calls[0]?.[0].url).toContain('/organizations/sample-project-123/apis/proxy%20name/revisions');
     expect(request.mock.calls[1]?.[0]).toMatchObject({ responseType: 'arraybuffer' });
+    expect(request.mock.calls[1]?.[0]).toMatchObject({ maxContentLength: 10 * 1024 * 1024 });
+  });
+
+  it('bounds JSON bodies returned by authenticated POST requests', async () => {
+    const { client, request } = clientWith(async () => ({ data: { openApiSpec: 'openapi: 3.0.3' } }));
+    await expect(
+      client.generateAppIntegrationOpenApiSpec(
+        'us-central1',
+        'projects/sample-project-123/locations/us-central1/integrations/payments',
+        ['api_trigger/payments']
+      )
+    ).resolves.toBe('openapi: 3.0.3');
+    expect(request.mock.calls[0]?.[0]).toMatchObject({
+      method: 'POST',
+      responseType: 'text',
+      maxContentLength: 32 * 1024 * 1024
+    });
   });
   it('lists Apigee environments without resourcefiles/oas calls', async () => {
     const { client, request } = clientWith(async () => ({ data: ['test env'] }));

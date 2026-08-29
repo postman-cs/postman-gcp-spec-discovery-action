@@ -11,9 +11,9 @@ export interface AmbiguityStepSummaryInput {
   probes: ProviderProbeResult[];
 }
 
-/** Markdown table cells must never break the table: collapse pipes and newlines to spaces. */
+/** Markdown table cells must never break the table or its enclosing code span. */
 function tableCell(value: string | number | boolean): string {
-  return String(value).replace(/[|\r\n]/g, ' ');
+  return String(value).replace(/[|`\r\n\u2028\u2029]/g, ' ');
 }
 
 /** Redact full Google resource names down to terminal segments. */

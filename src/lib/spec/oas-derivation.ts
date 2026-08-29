@@ -1,6 +1,5 @@
-import { parse } from 'yaml';
-
 import type { SpecFormat } from '../../contracts.js';
+import { parseUntrustedYaml } from './parse-untrusted-yaml.js';
 
 export interface OpenApiDerivationInput {
   content: string;
@@ -35,7 +34,7 @@ interface ParsedDocument {
 
 function parseDocument(content: string): ParsedDocument | undefined {
   try {
-    const parsed = content.trim().startsWith('{') ? JSON.parse(content) : parse(content);
+    const parsed = content.trim().startsWith('{') ? JSON.parse(content) : parseUntrustedYaml(content);
     return parsed && typeof parsed === 'object' ? (parsed as ParsedDocument) : undefined;
   } catch {
     return undefined;

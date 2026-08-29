@@ -183,6 +183,50 @@ describe('GCP runtime execute', () => {
     expect(many.outputs['resolution-status']).toBe('unresolved');
   });
 
+  it('confines dot-only service labels beneath output-dir after complete normalization', async () => {
+    const poisoned = candidate('payments', { tags: { 'postman-project-name': '../' } });
+    const result = await execute(inputs({ apiId: poisoned.id }), dependencies(provider([poisoned])));
+
+    expect(result.resolution?.specPath).toBe('discovered-specs/service/index.json');
+    await expect(readFile(path.join(repoRoot, 'discovered-specs', 'service', 'index.json'), 'utf8')).resolves.toBe(
+      VALID_OPENAPI
+    );
+    await expect(stat(path.join(repoRoot, 'index.json'))).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+
+  it('treats the entire normalized service directory as the discover-many collision key', async () => {
+    const first = candidate('first', { tags: { 'postman-project-name': 'shared service' } });
+    const second = candidate('second', { tags: { 'postman-project-name': 'SHARED/SERVICE' } });
+    const colliding = provider([first, second]);
+    colliding.exportSpec = vi.fn(async (selected) => {
+      const stem = selected.id === first.id ? 'first' : 'second';
+      const rootContent = `syntax = "proto3";\nservice ${stem} { rpc Get(Req) returns (Req); }\n`;
+      return {
+        content: rootContent,
+        format: 'protobuf' as const,
+        filename: `${stem}.proto`,
+        rootPath: `${stem}.proto`,
+        completeness: 'full' as const,
+        evidence: ['stub multi-file export'],
+        artifacts: [
+          { path: `${stem}.proto`, role: 'root' as const, content: rootContent, originalPath: `${stem}.proto` },
+          {
+            path: `${stem}-types.proto`,
+            role: 'dependency' as const,
+            content: 'syntax = "proto3";\nmessage Req {}\n',
+            originalPath: `${stem}-types.proto`
+          }
+        ]
+      };
+    });
+
+    const result = await execute(inputs({ mode: 'discover-many' }), dependencies(colliding));
+    expect(result.exportSummary).toMatchObject({ exported: 1, failed: 1 });
+    const serviceDir = path.join(repoRoot, 'discovered-specs', 'shared-service');
+    await expect(readFile(path.join(serviceDir, 'first.proto'), 'utf8')).resolves.toContain('service first');
+    await expect(stat(path.join(serviceDir, 'second.proto'))).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+
   it('GCP-RESOLVE-001: explicit api-id overrides a committed repo spec (precedence: api-id wins)', async () => {
     // A repo that both carries a committed spec AND passes api-id must resolve
     // the caller-selected cloud resource, not the local file.

@@ -1,7 +1,6 @@
-import { parse } from 'yaml';
-
 import type { SpecFormat } from '../../contracts.js';
 import { parseAndValidateOpenApi, type ValidatedOpenApi } from './validate-openapi.js';
+import { parseUntrustedYaml } from './parse-untrusted-yaml.js';
 
 /** Bound content inspection to avoid unbounded YAML/XML walks on huge files. */
 const MAX_INSPECT_CHARS = 256_000;
@@ -84,7 +83,7 @@ function parseObjectDocument(content: string): { document: Record<string, unknow
   if (!trimmed) return undefined;
   const isJson = looksLikeJson(trimmed);
   try {
-    const parsed = isJson ? JSON.parse(trimmed) : parse(trimmed);
+    const parsed = isJson ? JSON.parse(trimmed) : parseUntrustedYaml(trimmed);
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return undefined;
     return { document: parsed as Record<string, unknown>, isJson };
   } catch {
@@ -285,7 +284,7 @@ function validateAsyncApi(content: string, expected?: SpecFormat): NativeValidat
   const isJson = looksLikeJson(trimmed);
   let parsed: unknown;
   try {
-    parsed = isJson ? JSON.parse(trimmed) : parse(trimmed);
+    parsed = isJson ? JSON.parse(trimmed) : parseUntrustedYaml(trimmed);
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
     throw new Error(`Specification is not parseable JSON or YAML: ${detail}`, { cause: error });
@@ -461,7 +460,7 @@ export function parseAndValidateNativeSpec(content: string, expectedFormat?: Spe
     if (looksLikeJson(trimmed) || /:\s*\S/.test(trimmed)) {
       try {
         if (looksLikeJson(trimmed)) JSON.parse(trimmed);
-        else parse(trimmed);
+        else parseUntrustedYaml(trimmed);
       } catch (error) {
         const detail = error instanceof Error ? error.message : String(error);
         throw new Error(`Specification is not parseable JSON or YAML: ${detail}`, { cause: error });
