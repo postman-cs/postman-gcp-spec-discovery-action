@@ -39,7 +39,7 @@ describe('GCP spoke template contract', () => {
   it('GCP-TEMPLATE-003: pins the composite onboarding action to its current major alias', () => {
     // The spoke consumes the composite by rolling-major ref; keep it aligned with
     // the composite's published major so distributed workflows resolve.
-    expect(template).toContain('postman-cs/postman-api-onboarding-action@v2');
+    expect(template).toContain('postman-cs/postman-api-onboarding-action@v3');
     expect(template).toContain('postman-cs/postman-gcp-spec-discovery-action@v1');
   });
 });

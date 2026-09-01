@@ -109,6 +109,7 @@ describe('CI workflow contract', () => {
       'test',
       'dist-shape',
       'actionlint',
+      'docs-pins',
       'docs',
       'commitlint',
     ]);
@@ -117,6 +118,7 @@ describe('CI workflow contract', () => {
     expect(runGates).toContain('run test       npm test');
     expect(runGates).toContain('run dist-shape npm run verify:dist:shape');
     expect(runGates).toContain('run actionlint "$ACTIONLINT_BIN"');
+    expect(runGates).toContain('run docs-pins  npm run docs:pins');
     expect(runGates).toContain('run docs       node scripts/render-action-tables.mjs --check');
     expect(runGates).toContain('if [ "${{ github.event_name }}" = "pull_request" ]; then');
     expect(runGates).toContain('run commitlint npx --no-install commitlint \\');

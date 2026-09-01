@@ -73,6 +73,7 @@ jobs:
           run test       npm test
           run dist-shape npm run verify:dist:shape
           run actionlint "$ACTIONLINT_BIN"
+          run docs-pins  npm run docs:pins
           run docs       node scripts/render-action-tables.mjs --check
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             run commitlint npx --no-install commitlint \
