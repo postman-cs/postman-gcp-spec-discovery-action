@@ -83,7 +83,7 @@ jobs:
           exit 1
 
       - name: Onboard into the Postman API Catalog (+ drift check)
-        uses: postman-cs/postman-api-onboarding-action@v2
+        uses: postman-cs/postman-api-onboarding-action@v3
         with:
           project-name: ${{ steps.spec.outputs.service-name }}
           spec-path: ${{ steps.spec.outputs.spec-path }}
